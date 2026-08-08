@@ -17,6 +17,26 @@ fail() {
     exit 1
 }
 
+history_continuation() {
+    awk '
+        /^## Continuación recomendada$/ { section = 1; next }
+        section && /^## / { exit }
+        section && /^- / {
+            sub(/^- /, "")
+            text = $0
+            collecting = 1
+            next
+        }
+        section && collecting && /^  / {
+            sub(/^  /, "")
+            text = text " " $0
+            next
+        }
+        section && collecting { exit }
+        END { print text }
+    ' "$1"
+}
+
 if [ "$#" -eq 0 ]; then
     usage
     exit 0
@@ -91,4 +111,114 @@ command -v "$agent_command" >/dev/null 2>&1 || \
     fail "el ejecutable '$agent_command' no está instalado o no está disponible en PATH"
 
 cd -- "$project_dir"
+
+project_name=${project_dir##*/}
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD)
+
+if [ -n "$(git status --porcelain)" ]; then
+    git_state="cambios locales"
+else
+    git_state="limpio"
+fi
+
+active_changes=
+if [ -d "$project_dir/openspec/changes" ]; then
+    for change_dir in "$project_dir"/openspec/changes/*; do
+        [ -d "$change_dir" ] || continue
+        change_name=${change_dir##*/}
+        [ "$change_name" = "archive" ] && continue
+
+        if [ -z "$active_changes" ]; then
+            active_changes=$change_name
+        else
+            active_changes="$active_changes, $change_name"
+        fi
+    done
+fi
+
+if [ -n "$active_changes" ]; then
+    openspec_state=$active_changes
+else
+    openspec_state="sin cambios activos"
+fi
+
+latest_history=
+history_dir="$project_dir/.agent/history"
+if [ -d "$history_dir" ]; then
+    for history_file in "$history_dir"/*.md; do
+        [ -f "$history_file" ] || continue
+        latest_history=$history_file
+    done
+fi
+
+history_date=
+history_status=
+history_title=
+history_next=
+
+if [ -n "$latest_history" ]; then
+    history_title=$(sed -n '1{s/^# //;p;}' "$latest_history")
+    history_date=$(sed -n 's/^Fecha: //p' "$latest_history")
+    history_status=$(sed -n 's/^Estado: //p' "$latest_history")
+    history_next=$(history_continuation "$latest_history")
+
+    [ -n "$history_title" ] || history_title=${latest_history##*/}
+    [ -n "$history_date" ] || history_date="fecha desconocida"
+    [ -n "$history_status" ] || history_status="estado desconocido"
+fi
+
+if [ "$history_status" = "bloqueada" ]; then
+    session_mode="BLOCKED"
+elif [ "$git_state" = "cambios locales" ]; then
+    session_mode="REVIEW"
+elif [ -n "$active_changes" ] || [ "$history_status" = "en curso" ]; then
+    session_mode="CONTINUE"
+elif [ -n "$latest_history" ]; then
+    session_mode="READY"
+else
+    session_mode="NEW"
+fi
+
+if [ "$git_state" = "cambios locales" ] && [ -n "$active_changes" ]; then
+    current_signal="Hay cambios locales y OpenSpec activo: $active_changes."
+elif [ "$git_state" = "cambios locales" ]; then
+    current_signal="Hay cambios locales sin commit."
+elif [ -n "$active_changes" ]; then
+    current_signal="OpenSpec activo: $active_changes."
+else
+    current_signal="Sin trabajo técnico pendiente detectado."
+fi
+
+if [ -z "$history_next" ]; then
+    if [ "$git_state" = "cambios locales" ]; then
+        history_next="Revisa los cambios locales antes de iniciar otra tarea."
+    elif [ -n "$active_changes" ]; then
+        history_next="Continúa el cambio OpenSpec activo."
+    else
+        history_next="Describe una tarea nueva o pide al agente que proponga el siguiente paso."
+    fi
+fi
+
+printf '\n%s\n' '+------------------------------------------------------------+'
+printf '%s\n' '| JDEV-AI // AGENT SESSION                                  |'
+printf '%s\n' '+------------------------------------------------------------+'
+printf '  project   : %s\n' "$project_name"
+printf '  agent     : %s\n' "$agent_command"
+printf '  branch    : %s\n' "$branch"
+printf '  git       : %s\n' "$git_state"
+printf '  openspec  : %s\n' "$openspec_state"
+printf '  mode      : %s\n' "$session_mode"
+
+if [ -n "$latest_history" ]; then
+    printf '  history   : %s [%s]\n' "$history_date" "$history_status"
+    printf '  last      : %s\n' "$history_title"
+else
+    printf '  history   : sin entradas\n'
+fi
+
+printf '%s\n' '+------------------------------------------------------------+'
+printf '  signal    : %s\n' "$current_signal"
+printf '  next      : %s\n' "$history_next"
+printf '%s\n\n' '+------------------------------------------------------------+'
+
 exec "$agent_command"

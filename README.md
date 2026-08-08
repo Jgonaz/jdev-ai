@@ -30,7 +30,15 @@ bin/agent mi-proyecto --opencode
 bin/agent .                       # repositorio Git actual dentro de projects/
 ```
 
-El launcher solo cambia al directorio del proyecto y ejecuta el agente. No modifica archivos, instala dependencias ni inicializa OpenSpec. El ejecutable elegido (`codex`, `claude`, `copilot` u `opencode`) debe estar instalado y disponible en `PATH`.
+Antes de ejecutar el agente, el launcher muestra un panel con el proyecto, la
+rama, el estado de Git, los cambios OpenSpec activos y la última entrada del
+historial local cuando exista. Combina esos metadatos para orientar la sesión:
+Git y OpenSpec señalan trabajo técnico pendiente, mientras que el historial
+aporta el cierre anterior y su continuación recomendada. Las comprobaciones se
+ejecutan localmente antes de iniciar el agente; no analizan código o specs ni se
+envían como prompt. El launcher no modifica archivos, instala dependencias ni
+inicializa OpenSpec. El ejecutable elegido (`codex`, `claude`, `copilot` u
+`opencode`) debe estar instalado y disponible en `PATH`.
 
 Opcionalmente, añade el directorio `bin/` a tu `PATH` para poder usar `agent` desde cualquier lugar:
 
