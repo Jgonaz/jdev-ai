@@ -13,7 +13,8 @@ El harness define **cómo trabajan los agentes**. Cada repositorio situado en `p
 1. Mueve o clona el repositorio a `jdev-ai/projects/<nombre-proyecto>/`, conservando su `.git`.
 2. Crea o adapta su `AGENTS.md` con el contexto y las reglas propias del proyecto.
 3. Cuando corresponda, instala OpenSpec e inicialízalo **dentro de ese proyecto**. Antes, consulta `openspec --help` y la documentación de la versión instalada; el harness no asume comandos ni estructuras concretas.
-4. Abre el proyecto con `bin/agent <nombre-proyecto>`.
+4. Si quieres habilitar memoria auxiliar, crea `.agent/memory/index.md` dentro del proyecto siguiendo [`rules/memory.md`](rules/memory.md).
+5. Abre el proyecto con `bin/agent <nombre-proyecto>`.
 
 Las instrucciones específicas del proyecto prevalecen sobre las globales de `AGENTS.md`. El idioma predeterminado es castellano de España, aunque cada proyecto puede sobrescribirlo.
 
@@ -39,3 +40,7 @@ export PATH="$HOME/proyectos/jdev-ai/bin:$PATH"
 ## OpenSpec
 
 OpenSpec es la herramienta principal de Spec Driven Development para cambios grandes o con impacto funcional relevante. Los cambios pequeños y claramente acotados no necesitan artefactos por defecto. Las proposals, specs y tasks pertenecen siempre al `openspec/` del proyecto afectado; nunca al harness. Consulta `workflows/feature.md` antes de abordar una feature de alcance significativo.
+
+## Memoria por proyecto
+
+Cada proyecto puede versionar conocimiento histórico auxiliar bajo `.agent/memory/`. Esta memoria se consulta de forma selectiva, no funciona como diario de actividad y nunca sustituye a `AGENTS.md`, OpenSpec, la documentación oficial ni el código. La política completa está en [`rules/memory.md`](rules/memory.md).

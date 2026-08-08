@@ -4,6 +4,7 @@
 - Antes de trabajar en un proyecto, lee su `AGENTS.md` si existe. Sus instrucciones específicas prevalecen sobre estas.
 - Este harness contiene procesos compartidos; cada proyecto contiene su dominio, arquitectura, stack y reglas.
 - Para cambios grandes o funcionalmente relevantes, revisa `workflows/feature.md` y utiliza OpenSpec dentro del proyecto afectado.
+- Usa la memoria auxiliar de cada proyecto según `rules/memory.md`; consúltala o actualízala solo cuando exista contexto histórico relevante y nunca como sustituto de las fuentes autoritativas.
 - No modifiques otros proyectos de `projects/` distintos del solicitado.
 - No asumas un stack, gestor de paquetes ni comandos de validación comunes.
 - Preserva los cambios locales del usuario; no los sobrescribas ni reviertas sin permiso.
