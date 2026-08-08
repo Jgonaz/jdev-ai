@@ -9,12 +9,30 @@ Uso: agent <proyecto|.> [--codex|--claude|--copilot|--opencode]
 Abre un repositorio de jdev-ai/projects/ con Codex (por defecto) o con
 el agente indicado. Usa «agent .» desde un repositorio Git situado dentro
 de projects/.
+
+Codex usa por defecto Sol/medium como orquestador y un único implementador
+Luna/max definido por el harness. Puedes sobrescribirlos con las variables
+JDEV_CODEX_ORCHESTRATOR_MODEL, JDEV_CODEX_ORCHESTRATOR_EFFORT,
+JDEV_CODEX_IMPLEMENTER_MODEL y JDEV_CODEX_IMPLEMENTER_EFFORT.
 EOF
 }
 
 fail() {
     printf 'Error: %s\n' "$1" >&2
     exit 1
+}
+
+validate_codex_model() {
+    case "$2" in
+        ""|*[!A-Za-z0-9._:/-]*) fail "$1 contiene un modelo no válido: $2" ;;
+    esac
+}
+
+validate_codex_effort() {
+    case "$2" in
+        none|low|medium|high|xhigh|max) ;;
+        *) fail "$1 debe ser none, low, medium, high, xhigh o max: $2" ;;
+    esac
 }
 
 history_continuation() {
@@ -71,9 +89,22 @@ if [ "$#" -eq 1 ]; then
     esac
 fi
 
+if [ "$agent_command" = "codex" ]; then
+    codex_orchestrator_model=${JDEV_CODEX_ORCHESTRATOR_MODEL:-gpt-5.6-sol}
+    codex_orchestrator_effort=${JDEV_CODEX_ORCHESTRATOR_EFFORT:-medium}
+    codex_implementer_model=${JDEV_CODEX_IMPLEMENTER_MODEL:-gpt-5.6-luna}
+    codex_implementer_effort=${JDEV_CODEX_IMPLEMENTER_EFFORT:-max}
+
+    validate_codex_model JDEV_CODEX_ORCHESTRATOR_MODEL "$codex_orchestrator_model"
+    validate_codex_effort JDEV_CODEX_ORCHESTRATOR_EFFORT "$codex_orchestrator_effort"
+    validate_codex_model JDEV_CODEX_IMPLEMENTER_MODEL "$codex_implementer_model"
+    validate_codex_effort JDEV_CODEX_IMPLEMENTER_EFFORT "$codex_implementer_effort"
+fi
+
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 harness_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 projects_root="$harness_root/projects"
+codex_implementer_config="$harness_root/adapters/codex/implementer.toml"
 
 if [ "$project" = "." ]; then
     command -v git >/dev/null 2>&1 || fail "Git no está instalado o no está disponible en PATH"
@@ -109,6 +140,11 @@ repo_root=$(CDPATH= cd -- "$repo_root" && pwd -P)
 
 command -v "$agent_command" >/dev/null 2>&1 || \
     fail "el ejecutable '$agent_command' no está instalado o no está disponible en PATH"
+
+if [ "$agent_command" = "codex" ]; then
+    [ -f "$codex_implementer_config" ] || \
+        fail "no se encuentra el adaptador del implementador: $codex_implementer_config"
+fi
 
 cd -- "$project_dir"
 
@@ -204,6 +240,10 @@ printf '%s\n' '| JDEV-AI // AGENT SESSION                                  |'
 printf '%s\n' '+------------------------------------------------------------+'
 printf '  project   : %s\n' "$project_name"
 printf '  agent     : %s\n' "$agent_command"
+if [ "$agent_command" = "codex" ]; then
+    printf '  orchestr. : %s [%s]\n' "$codex_orchestrator_model" "$codex_orchestrator_effort"
+    printf '  implement.: %s [%s]\n' "$codex_implementer_model" "$codex_implementer_effort"
+fi
 printf '  branch    : %s\n' "$branch"
 printf '  git       : %s\n' "$git_state"
 printf '  openspec  : %s\n' "$openspec_state"
@@ -220,5 +260,17 @@ printf '%s\n' '+------------------------------------------------------------+'
 printf '  signal    : %s\n' "$current_signal"
 printf '  next      : %s\n' "$history_next"
 printf '%s\n\n' '+------------------------------------------------------------+'
+
+if [ "$agent_command" = "codex" ]; then
+    exec "$agent_command" \
+        --model "$codex_orchestrator_model" \
+        --config "model_reasoning_effort=\"$codex_orchestrator_effort\"" \
+        --config 'agents.enabled=true' \
+        --config 'agents.max_concurrent_threads_per_session=1' \
+        --config "agents.default_subagent_model=\"$codex_implementer_model\"" \
+        --config "agents.default_subagent_reasoning_effort=\"$codex_implementer_effort\"" \
+        --config 'agents.implementer.description="Implementa tareas planificadas, concretas y delimitadas por el orquestador."' \
+        --config "agents.implementer.config_file=\"$codex_implementer_config\""
+fi
 
 exec "$agent_command"

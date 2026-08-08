@@ -40,6 +40,36 @@ envían como prompt. El launcher no modifica archivos, instala dependencias ni
 inicializa OpenSpec. El ejecutable elegido (`codex`, `claude`, `copilot` u
 `opencode`) debe estar instalado y disponible en `PATH`.
 
+### Orquestación y delegación
+
+Para tareas que requieran planificación e implementación relevante, el agente
+principal actúa como orquestador y puede delegar una tarea acotada a un único
+implementador. La política común y agnóstica al proveedor está en
+[`rules/delegation.md`](rules/delegation.md). Si una herramienta no admite
+subagentes compatibles, el agente principal desempeña ambos roles de forma
+secuencial.
+
+Al lanzar Codex mediante `agent`, el harness utiliza la sesión principal con
+GPT-5.6 Sol y esfuerzo `medium`, y registra el implementador definido en
+`adapters/codex/implementer.toml` con GPT-5.6 Luna y esfuerzo `max`. Esta
+configuración se inyecta desde el launcher y no añade archivos `.codex/` a los
+proyectos. También limita la sesión a un único subagente concurrente.
+
+Los defaults de Codex pueden sobrescribirse para una ejecución mediante
+variables de entorno:
+
+```sh
+JDEV_CODEX_ORCHESTRATOR_MODEL=gpt-5.6-terra \
+JDEV_CODEX_ORCHESTRATOR_EFFORT=high \
+JDEV_CODEX_IMPLEMENTER_MODEL=gpt-5.6-luna \
+JDEV_CODEX_IMPLEMENTER_EFFORT=max \
+agent mi-proyecto
+```
+
+Estas preferencias solo se aplican al entrar mediante el launcher. Claude,
+Copilot y OpenCode mantienen su ejecución actual; podrán mapear los mismos roles
+a sus mecanismos nativos sin cambiar la política común ni los proyectos.
+
 Opcionalmente, añade el directorio `bin/` a tu `PATH` para poder usar `agent` desde cualquier lugar:
 
 ```sh
