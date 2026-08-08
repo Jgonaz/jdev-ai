@@ -16,6 +16,12 @@ El agente debe conducir activamente los checkpoints: plantea las decisiones cuan
 10. Actualiza la documentación afectada cuando corresponda.
 11. Resume qué se ha hecho, qué se ha validado y qué riesgos quedan pendientes.
 
-Antes de publicar, presenta el alcance final, la documentación actualizada, las validaciones y los commits preparados o propuestos. El `push` y la apertura de una PR requieren autorización explícita del usuario.
+Si el cambio usa OpenSpec y el usuario autoriza commits, alinéalos con los hitos
+de sus tareas salvo que un cambio pequeño justifique agruparlos.
+
+Antes de publicar, presenta el alcance final, los artefactos OpenSpec cuando
+existan, la documentación actualizada, los commits, las validaciones, los
+riesgos y los pasos operativos pendientes. El `push` y la apertura de una PR
+requieren autorización explícita del usuario.
 
 No crees proposals, specs, planes o tasks paralelos que dupliquen OpenSpec.
