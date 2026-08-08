@@ -14,6 +14,14 @@
 - Antes de terminar, ejecuta únicamente las validaciones definidas por el proyecto afectado.
 - Evita documentación, abstracciones y procesos sin un valor claro.
 - No hagas commits, pushes, merges ni acciones destructivas sin petición explícita del usuario.
+- Crea o cambia de rama y abre una Pull Request únicamente cuando el usuario lo
+  solicite de forma explícita; en caso contrario, conserva la rama actual.
+- Cuando el usuario solicite un commit, usa Conventional Commits y redacta el
+  mensaje en castellano salvo que el proyecto indique otro idioma. En el cuerpo,
+  añade un bullet por cada archivo modificado indicando qué cambió y por qué.
+- Antes de cerrar un cambio grande o relevante, actualiza el changelog que
+  defina el proyecto afectado. No registres cambios de un proyecto en el
+  changelog del harness ni crees uno nuevo si el proyecto no lo contempla.
 - Usa `--no-verify` solo cuando esté justificado y deja constancia del motivo.
 - Mantén actualizada la documentación afectada por cada cambio.
 - Al acabar cada iteración, termina la respuesta con `Siguiente paso recomendado: ...`.
