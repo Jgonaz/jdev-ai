@@ -14,7 +14,8 @@ El harness define **cómo trabajan los agentes**. Cada repositorio situado en `p
 2. Crea o adapta su `AGENTS.md` con el contexto y las reglas propias del proyecto.
 3. Cuando corresponda, instala OpenSpec e inicialízalo **dentro de ese proyecto**. Antes, consulta `openspec --help` y la documentación de la versión instalada; el harness no asume comandos ni estructuras concretas.
 4. Si quieres habilitar memoria auxiliar, crea `.agent/memory/index.md` dentro del proyecto siguiendo [`rules/memory.md`](rules/memory.md).
-5. Abre el proyecto con `bin/agent <nombre-proyecto>`.
+5. Ignora `/.agent/history/` en el Git del proyecto; el agente creará la carpeta cuando registre la primera iteración relevante.
+6. Abre el proyecto con `bin/agent <nombre-proyecto>`.
 
 Las instrucciones específicas del proyecto prevalecen sobre las globales de `AGENTS.md`. El idioma predeterminado es castellano de España, aunque cada proyecto puede sobrescribirlo.
 
@@ -37,6 +38,21 @@ Opcionalmente, añade el directorio `bin/` a tu `PATH` para poder usar `agent` d
 export PATH="$HOME/proyectos/jdev-ai/bin:$PATH"
 ```
 
+## Fuentes de contexto y continuidad
+
+Cada mecanismo resuelve una necesidad distinta y evita convertir un único
+documento en fuente de todo:
+
+| Mecanismo | Objetivo | Contenido | Por qué es necesario |
+| --- | --- | --- | --- |
+| OpenSpec | Definir cambios funcionales relevantes antes de implementarlos | Requisitos, escenarios, proposals y tasks | Reduce ambigüedad y evita un SDD paralelo |
+| Memoria | Conservar conocimiento duradero difícil de redescubrir | Causas de bugs, workarounds, limitaciones y enfoques descartados | Evita repetir investigaciones costosas |
+| Historial | Recordar cómo terminó una iteración y por dónde continuar | Resumen, estado, decisiones, referencias y siguiente paso | Permite retomar el trabajo días después sin releer el chat |
+| Git y changelog | Mostrar qué cambió realmente y qué hitos se publicaron | Código, commits e hitos relevantes | Aporta evidencia técnica e historial oficial |
+
+OpenSpec, `AGENTS.md`, la documentación oficial, el código y Git prevalecen
+sobre memoria e historial cuando exista una contradicción.
+
 ## OpenSpec
 
 OpenSpec es la herramienta principal de Spec Driven Development para cambios grandes o con impacto funcional relevante. Los cambios pequeños y claramente acotados no necesitan artefactos por defecto. Las proposals, specs y tasks pertenecen siempre al `openspec/` del proyecto afectado; nunca al harness. Consulta `workflows/feature.md` antes de abordar una feature de alcance significativo.
@@ -44,3 +60,12 @@ OpenSpec es la herramienta principal de Spec Driven Development para cambios gra
 ## Memoria por proyecto
 
 Cada proyecto puede versionar conocimiento histórico auxiliar bajo `.agent/memory/`. Esta memoria se consulta de forma selectiva, no funciona como diario de actividad y nunca sustituye a `AGENTS.md`, OpenSpec, la documentación oficial ni el código. La política completa está en [`rules/memory.md`](rules/memory.md).
+
+## Historial de iteraciones
+
+Cada proyecto mantiene bajo `.agent/history/` resúmenes locales de las
+iteraciones relevantes. No son transcripciones ni documentación oficial: sirven
+para recordar qué se hizo, cómo quedó el trabajo y qué conviene hacer después.
+Se ignoran en Git para evitar ruido, conflictos y la publicación accidental de
+contexto conversacional. La política completa está en
+[`rules/history.md`](rules/history.md).

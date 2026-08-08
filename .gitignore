@@ -1,6 +1,9 @@
 # Los proyectos son repositorios independientes y nunca pertenecen a este Git.
 /projects/
 
+# Historial local de conversaciones con agentes.
+/.agent/history/
+
 # Archivos locales habituales del sistema o editor.
 .DS_Store
 Thumbs.db
