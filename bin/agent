@@ -1,0 +1,94 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+    cat <<'EOF'
+Uso: agent <proyecto|.> [--codex|--claude|--copilot|--opencode]
+
+Abre un repositorio de jdev-ai/projects/ con Codex (por defecto) o con
+el agente indicado. Usa «agent .» desde un repositorio Git situado dentro
+de projects/.
+EOF
+}
+
+fail() {
+    printf 'Error: %s\n' "$1" >&2
+    exit 1
+}
+
+if [ "$#" -eq 0 ]; then
+    usage
+    exit 0
+fi
+
+case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+esac
+
+project=$1
+shift
+agent_command=codex
+
+if [ "$#" -gt 1 ]; then
+    fail "demasiados argumentos"
+fi
+
+if [ "$#" -eq 1 ]; then
+    case "$1" in
+        --codex) agent_command=codex ;;
+        --claude) agent_command=claude ;;
+        --copilot) agent_command=copilot ;;
+        --opencode) agent_command=opencode ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *) fail "agente desconocido: $1" ;;
+    esac
+fi
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+harness_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+projects_root="$harness_root/projects"
+
+if [ "$project" = "." ]; then
+    command -v git >/dev/null 2>&1 || fail "Git no está instalado o no está disponible en PATH"
+    project_dir=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null) || \
+        fail "el directorio actual no pertenece a un repositorio Git"
+    project_dir=$(CDPATH= cd -- "$project_dir" && pwd -P)
+
+    case "$project_dir/" in
+        "$projects_root/"*) ;;
+        *) fail "el repositorio actual no está dentro de $projects_root" ;;
+    esac
+else
+    case "$project" in
+        ""|/*|.|..|*/*) fail "indica un nombre de proyecto directo dentro de projects/" ;;
+    esac
+
+    candidate="$projects_root/$project"
+    [ -d "$candidate" ] || fail "el proyecto no existe: $candidate"
+    project_dir=$(CDPATH= cd -- "$candidate" && pwd -P)
+
+    case "$project_dir/" in
+        "$projects_root/"*) ;;
+        *) fail "el proyecto resuelto no está dentro de $projects_root" ;;
+    esac
+fi
+
+command -v git >/dev/null 2>&1 || fail "Git no está instalado o no está disponible en PATH"
+repo_root=$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null) || \
+    fail "el proyecto no parece un repositorio Git válido: $project_dir"
+repo_root=$(CDPATH= cd -- "$repo_root" && pwd -P)
+[ "$repo_root" = "$project_dir" ] || \
+    fail "el directorio seleccionado no es la raíz de su repositorio Git: $project_dir"
+
+command -v "$agent_command" >/dev/null 2>&1 || \
+    fail "el ejecutable '$agent_command' no está instalado o no está disponible en PATH"
+
+cd -- "$project_dir"
+exec "$agent_command"
