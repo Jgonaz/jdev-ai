@@ -7,6 +7,7 @@
 - Para tareas que requieran planificación y una implementación relevante, aplica `rules/delegation.md`; evita delegar trabajo trivial.
 - Usa la memoria auxiliar de cada proyecto según `rules/memory.md`; consúltala o actualízala solo cuando exista contexto histórico relevante y nunca como sustituto de las fuentes autoritativas.
 - Antes de terminar una iteración relevante, registra un resumen compacto en el historial local del proyecto afectado según `rules/history.md`; omite las interacciones triviales.
+- Valora crear o actualizar guías didácticas para personas según `rules/user-guides.md` cuando una funcionalidad necesite explicarse o recordarse sin contexto previo.
 - No modifiques otros proyectos de `projects/` distintos del solicitado.
 - No asumas un stack, gestor de paquetes ni comandos de validación comunes.
 - Preserva los cambios locales del usuario; no los sobrescribas ni reviertas sin permiso.

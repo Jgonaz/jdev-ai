@@ -84,6 +84,7 @@ documento en fuente de todo:
 | Mecanismo | Objetivo | Contenido | Por qué es necesario |
 | --- | --- | --- | --- |
 | OpenSpec | Definir cambios funcionales relevantes antes de implementarlos | Requisitos, escenarios, proposals y tasks | Reduce ambigüedad y evita un SDD paralelo |
+| Guías de uso | Explicar una funcionalidad a una persona sin asumir contexto previo | Propósito, conceptos, pasos, ejemplos y limitaciones | Permite entender o recordar cómo se utiliza una parte del proyecto |
 | Memoria | Conservar conocimiento duradero difícil de redescubrir | Causas de bugs, workarounds, limitaciones y enfoques descartados | Evita repetir investigaciones costosas |
 | Historial | Recordar cómo terminó una iteración y por dónde continuar | Resumen, estado, decisiones, referencias y siguiente paso | Permite retomar el trabajo días después sin releer el chat |
 | Git y changelog | Mostrar qué cambió realmente y qué hitos se publicaron | Código, commits e hitos relevantes | Aporta evidencia técnica e historial oficial |
@@ -94,6 +95,15 @@ sobre memoria e historial cuando exista una contradicción.
 ## OpenSpec
 
 OpenSpec es la herramienta principal de Spec Driven Development para cambios grandes o con impacto funcional relevante. Los cambios pequeños y claramente acotados no necesitan artefactos por defecto. Las proposals, specs y tasks pertenecen siempre al `openspec/` del proyecto afectado; nunca al harness. Consulta `workflows/feature.md` antes de abordar una feature de alcance significativo.
+
+## Guías de uso por proyecto
+
+Cuando una funcionalidad necesite explicarse de forma sencilla y sin asumir
+contexto previo, el proyecto puede versionar guías para desarrolladores y
+usuarios bajo `docs/user-guides/`. El agente valora su necesidad al crear o
+modificar funcionalidades y mantiene actualizadas las guías afectadas, pero no
+documenta automáticamente cambios triviales, internos o autoevidentes. La
+política completa está en [`rules/user-guides.md`](rules/user-guides.md).
 
 ## Memoria por proyecto
 

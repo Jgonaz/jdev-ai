@@ -13,7 +13,7 @@ El agente debe conducir activamente los checkpoints: plantea las decisiones cuan
 7. Si el cambio afecta contratos públicos, datos, seguridad o una decisión arquitectónica relevante, explica el impacto y abre un checkpoint específico antes de modificar esa parte.
 8. Implementa el alcance acordado sin acoplar otros proyectos. Si aparece una decisión sustancial no prevista, detente, presenta opciones y recomienda una.
 9. Ejecuta únicamente las validaciones definidas por el proyecto.
-10. Actualiza la documentación afectada cuando corresponda.
+10. Actualiza la documentación afectada y valora si la funcionalidad necesita crear o actualizar una guía bajo `docs/user-guides/`, siguiendo `rules/user-guides.md`.
 11. Resume qué se ha hecho, qué se ha validado y qué riesgos quedan pendientes.
 
 Si el cambio usa OpenSpec y el usuario autoriza commits, alinéalos con los hitos
