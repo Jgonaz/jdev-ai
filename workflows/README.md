@@ -2,4 +2,4 @@
 
 Este directorio describe procesos comunes y agnósticos respecto al stack y al agente. No sustituye la documentación ni los comandos propios de cada proyecto.
 
-- `feature.md`: guía para cambios funcionales de alcance relevante.
+- `feature.md`: criterios para decidir entre flujo normal y OpenSpec, y guía para cambios funcionales de alcance relevante.

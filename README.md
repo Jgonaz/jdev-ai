@@ -12,7 +12,7 @@ El harness define **cómo trabajan los agentes**. Cada repositorio situado en `p
 
 1. Mueve o clona el repositorio a `jdev-ai/projects/<nombre-proyecto>/`, conservando su `.git`.
 2. Crea o adapta su `AGENTS.md` con el contexto y las reglas propias del proyecto.
-3. Cuando corresponda, instala OpenSpec e inicialízalo **dentro de ese proyecto**. Antes, consulta `openspec --help` y la documentación de la versión instalada; el harness no asume comandos ni estructuras concretas.
+3. Cuando el flujo determine que un cambio merece OpenSpec y el desarrollador haya aprobado su uso, instálalo e inicialízalo **dentro de ese proyecto**. Antes, consulta `openspec --help` y la documentación de la versión instalada; el harness no asume comandos ni estructuras concretas.
 4. Si quieres habilitar memoria auxiliar, crea `.agent/memory/index.md` dentro del proyecto siguiendo [`rules/memory.md`](rules/memory.md).
 5. Ignora `/.agent/history/` en el Git del proyecto; el agente creará la carpeta cuando registre la primera iteración relevante.
 6. Abre el proyecto con `bin/agent <nombre-proyecto>`.
@@ -94,7 +94,11 @@ sobre memoria e historial cuando exista una contradicción.
 
 ## OpenSpec
 
-OpenSpec es la herramienta principal de Spec Driven Development para cambios grandes o con impacto funcional relevante. Los cambios pequeños y claramente acotados no necesitan artefactos por defecto. Las proposals, specs y tasks pertenecen siempre al `openspec/` del proyecto afectado; nunca al harness. Consulta `workflows/feature.md` antes de abordar una feature de alcance significativo.
+OpenSpec es la herramienta principal de Spec Driven Development para cambios grandes o con impacto funcional relevante. No se activa por el hecho de crear un commit, subir una rama o abrir una PR: el agente debe inferir si aporta valor según el alcance, el riesgo y la ambigüedad del cambio.
+
+Suele merecer OpenSpec cuando el cambio introduce comportamiento o reglas de negocio visibles, modifica contratos públicos, datos, permisos o seguridad, requiere una decisión arquitectónica, afecta a varias partes o integraciones, tiene un despliegue o rollback delicado, o necesita coordinar varias iteraciones o personas. Los cambios pequeños, internos, reversibles y claramente acotados siguen el flujo normal. Las proposals, specs y tasks pertenecen siempre al `openspec/` del proyecto afectado; nunca al harness.
+
+Cuando el agente determine que OpenSpec puede ser adecuado, debe proponerlo antes de instalarlo, inicializarlo o crear/modificar cualquier proposal, spec o task. La propuesta debe resumir el motivo, el alcance, los riesgos y los artefactos previstos. El agente debe esperar el visto bueno explícito del desarrollador; una petición genérica de implementar el cambio no equivale a esa aprobación. Sin aprobación, continúa por el flujo normal o solicita la aclaración necesaria. Consulta `workflows/feature.md` para los criterios y checkpoints completos.
 
 ## Guías de uso por proyecto
 
