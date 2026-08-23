@@ -84,6 +84,7 @@ documento en fuente de todo:
 | Mecanismo | Objetivo | Contenido | Por qué es necesario |
 | --- | --- | --- | --- |
 | OpenSpec | Definir cambios funcionales relevantes antes de implementarlos | Requisitos, escenarios, proposals y tasks | Reduce ambigüedad y evita un SDD paralelo |
+| Backlog | Conservar trabajo futuro específico de un proyecto | Findings, TODOs, fixes y features organizados por estado | Evita perder hallazgos que no se pueden abordar ahora |
 | Guías de uso | Explicar una funcionalidad a una persona sin asumir contexto previo | Propósito, conceptos, pasos, ejemplos y limitaciones | Permite entender o recordar cómo se utiliza una parte del proyecto |
 | Memoria | Conservar conocimiento duradero difícil de redescubrir | Causas de bugs, workarounds, limitaciones y enfoques descartados | Evita repetir investigaciones costosas |
 | Historial | Recordar cómo terminó una iteración y por dónde continuar | Resumen, estado, decisiones, referencias y siguiente paso | Permite retomar el trabajo días después sin releer el chat |
@@ -99,6 +100,21 @@ OpenSpec es la herramienta principal de Spec Driven Development para cambios gra
 Suele merecer OpenSpec cuando el cambio introduce comportamiento o reglas de negocio visibles, modifica contratos públicos, datos, permisos o seguridad, requiere una decisión arquitectónica, afecta a varias partes o integraciones, tiene un despliegue o rollback delicado, o necesita coordinar varias iteraciones o personas. Los cambios pequeños, internos, reversibles y claramente acotados siguen el flujo normal. Las proposals, specs y tasks pertenecen siempre al `openspec/` del proyecto afectado; nunca al harness.
 
 Cuando el agente determine que OpenSpec puede ser adecuado, debe proponerlo antes de instalarlo, inicializarlo o crear/modificar cualquier proposal, spec o task. La propuesta debe resumir el motivo, el alcance, los riesgos y los artefactos previstos. El agente debe esperar el visto bueno explícito del desarrollador; una petición genérica de implementar el cambio no equivale a esa aprobación. Sin aprobación, continúa por el flujo normal o solicita la aclaración necesaria. Consulta `workflows/feature.md` para los criterios y checkpoints completos.
+
+## Backlog de trabajo futuro
+
+Cada proyecto puede conservar sus pendientes en `docs/backlog/`, con un archivo
+Markdown por elemento dentro de `pending/`, `in-progress/`, `done/` o
+`discarded/`. Sirve para registrar explícitamente findings, TODOs, fixes o
+features que no se van a abordar durante la tarea actual. La persona puede
+decir, por ejemplo, «apunta un finding» y el agente debe documentarlo, informar
+de su identificador y continuar con el trabajo en curso. Si detecta un hallazgo
+claro y accionable por iniciativa propia, puede proponer registrarlo, pero no
+creará el documento sin confirmación explícita.
+
+El backlog pertenece al repositorio del proyecto y no sustituye la memoria, el
+historial ni OpenSpec. La convención completa está en
+[`rules/backlog.md`](rules/backlog.md).
 
 ## Guías de uso por proyecto
 
