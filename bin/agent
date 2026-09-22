@@ -10,7 +10,7 @@ Abre un repositorio de jdev-ai/projects/ con Codex (por defecto) o con
 el agente indicado. Usa «agent .» desde un repositorio Git situado dentro
 de projects/.
 
-Codex usa por defecto Sol/medium como orquestador y un único implementador
+Codex usa por defecto Astra/medium como orquestador y un único implementador
 Luna/max definido por el harness. Puedes sobrescribirlos con las variables
 JDEV_CODEX_ORCHESTRATOR_MODEL, JDEV_CODEX_ORCHESTRATOR_EFFORT,
 JDEV_CODEX_IMPLEMENTER_MODEL y JDEV_CODEX_IMPLEMENTER_EFFORT.
@@ -90,9 +90,9 @@ if [ "$#" -eq 1 ]; then
 fi
 
 if [ "$agent_command" = "codex" ]; then
-    codex_orchestrator_model=${JDEV_CODEX_ORCHESTRATOR_MODEL:-gpt-5.6-sol}
+    codex_orchestrator_model=${JDEV_CODEX_ORCHESTRATOR_MODEL:-gpt-6-astra}
     codex_orchestrator_effort=${JDEV_CODEX_ORCHESTRATOR_EFFORT:-medium}
-    codex_implementer_model=${JDEV_CODEX_IMPLEMENTER_MODEL:-gpt-5.6-luna}
+    codex_implementer_model=${JDEV_CODEX_IMPLEMENTER_MODEL:-gpt-6-luna}
     codex_implementer_effort=${JDEV_CODEX_IMPLEMENTER_EFFORT:-max}
 
     validate_codex_model JDEV_CODEX_ORCHESTRATOR_MODEL "$codex_orchestrator_model"

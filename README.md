@@ -50,8 +50,8 @@ subagentes compatibles, el agente principal desempeña ambos roles de forma
 secuencial.
 
 Al lanzar Codex mediante `agent`, el harness utiliza la sesión principal con
-GPT-5.6 Sol y esfuerzo `medium`, y registra el implementador definido en
-`adapters/codex/implementer.toml` con GPT-5.6 Luna y esfuerzo `max`. Esta
+GPT-6 Astra y esfuerzo `medium`, y registra el implementador definido en
+`adapters/codex/implementer.toml` con GPT-6 Luna y esfuerzo `max`. Esta
 configuración se inyecta desde el launcher y no añade archivos `.codex/` a los
 proyectos. También limita la sesión a un único subagente concurrente.
 
@@ -61,7 +61,7 @@ variables de entorno:
 ```sh
 JDEV_CODEX_ORCHESTRATOR_MODEL=gpt-5.6-terra \
 JDEV_CODEX_ORCHESTRATOR_EFFORT=high \
-JDEV_CODEX_IMPLEMENTER_MODEL=gpt-5.6-luna \
+JDEV_CODEX_IMPLEMENTER_MODEL=gpt-6-luna \
 JDEV_CODEX_IMPLEMENTER_EFFORT=max \
 agent mi-proyecto
 ```
