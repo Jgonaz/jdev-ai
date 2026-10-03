@@ -1,7 +1,8 @@
 #!/bin/sh
 
-# Panel de estado de la sesión de jdev-ai para el repositorio del directorio
-# actual. Sin argumentos imprime el panel; con --hook lo devuelve como JSON
+# Resumen de inicio de sesión de jdev-ai para el repositorio del directorio
+# actual: qué se hizo la última vez, qué ha pasado desde entonces y por dónde
+# seguir. Sin argumentos imprime el resumen; con --hook lo devuelve como JSON
 # «systemMessage» para que el hook SessionStart del agente lo muestre dentro de
 # la sesión. El agente y sus modelos llegan del launcher por variables
 # JDEV_SESSION_*, para que el comando del hook sea idéntico en todos los
@@ -19,30 +20,9 @@ case "${1:-}" in
         ;;
 esac
 
-history_continuation() {
-    awk '
-        /^## Continuación recomendada$/ { section = 1; next }
-        section && /^## / { exit }
-        section && /^- / {
-            count++
-            if (count > 1) { collecting = 0; next }
-            sub(/^- /, "")
-            text = $0
-            collecting = 1
-            next
-        }
-        section && collecting && /^  / {
-            sub(/^  /, "")
-            text = text " " $0
-            next
-        }
-        section { collecting = 0 }
-        END {
-            if (count > 1) text = text " (+" count - 1 " más)"
-            print text
-        }
-    ' "$1"
-}
+summary_points=2
+continuation_points=3
+wrap_width=74
 
 json_string() {
     awk '
@@ -59,125 +39,299 @@ json_string() {
     '
 }
 
+# Imprime los puntos de primer nivel de una sección del historial, uno por
+# línea, uniendo sus líneas de continuación.
+section_points() {
+    awk -v wanted="## $2" '
+        $0 == wanted { section = 1; next }
+        section && /^## / { exit }
+        section && /^- / {
+            if (text != "") print text
+            text = substr($0, 3)
+            next
+        }
+        section && text != "" && /^  +[^ ]/ {
+            sub(/^ +/, "")
+            text = text " " $0
+            next
+        }
+        section && text != "" { print text; text = "" }
+        END { if (text != "") print text }
+    ' "$1"
+}
+
+# Ajusta un texto al ancho del panel con una sangría para la primera línea y
+# otra para las siguientes.
+wrap() {
+    printf '%s\n' "$3" | awk -v first="$1" -v rest="$2" -v width="$wrap_width" '
+        {
+            prefix = first
+            line = ""
+            n = split($0, words, " ")
+            for (i = 1; i <= n; i++) {
+                if (line != "" && length(prefix line " " words[i]) > width) {
+                    print prefix line
+                    prefix = rest
+                    line = words[i]
+                } else {
+                    line = (line == "" ? words[i] : line " " words[i])
+                }
+            }
+            if (line != "") print prefix line
+        }
+    '
+}
+
+# Convierte «YYYY-MM-DD» en «18 sep 2026» sin depender del locale.
+human_date() {
+    set -- $(printf '%s' "$1" | tr '-' ' ')
+    case "$2" in
+        01) month=ene ;; 02) month=feb ;; 03) month=mar ;; 04) month=abr ;;
+        05) month=may ;; 06) month=jun ;; 07) month=jul ;; 08) month=ago ;;
+        09) month=sep ;; 10) month=oct ;; 11) month=nov ;; 12) month=dic ;;
+        *) printf '%s-%s-%s' "$1" "$2" "$3"; return ;;
+    esac
+    printf '%s %s %s' "${3#0}" "$month" "$1"
+}
+
+# Días naturales transcurridos desde «YYYY-MM-DD» expresados en lenguaje
+# natural. Necesita la date de GNU; sin ella no imprime nada.
+relative_day() {
+    then_s=$(date -d "$1" +%s 2>/dev/null) || return 0
+    today_s=$(date -d "$(date +%Y-%m-%d)" +%s 2>/dev/null) || return 0
+    # El margen de medio día absorbe los cambios de horario de verano.
+    days=$(( (today_s - then_s + 43200) / 86400 ))
+    if [ "$days" -le 0 ]; then
+        printf 'hoy'
+    elif [ "$days" -eq 1 ]; then
+        printf 'ayer'
+    elif [ "$days" -lt 60 ]; then
+        printf 'hace %s días' "$days"
+    else
+        printf 'hace %s meses' "$((days / 30))"
+    fi
+}
+
+# Elige la entrada más reciente y la imprime como «día<TAB>HHMM<TAB>ruta». El
+# día y la hora salen de «Fecha:», del nombre (YYYY-MM-DD-HHMM) o, si faltan,
+# de la fecha de modificación. Ordenar solo por nombre no basta: hay entradas
+# sin hora que quedarían por delante de otras posteriores del mismo día.
+latest_history() {
+    [ -d .agent/history ] || return 0
+    for file in .agent/history/*.md; do
+        [ -f "$file" ] || continue
+        stamp=$(sed -n 's/^Fecha: *//p' "$file" | head -n 1)
+        name=${file##*/}
+        case "$stamp" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*) day=$(printf '%s' "$stamp" | cut -c 1-10) ;;
+            *)
+                case "$name" in
+                    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*) day=$(printf '%s' "$name" | cut -c 1-10) ;;
+                    *) day=$(date -r "$file" +%Y-%m-%d 2>/dev/null || echo 0000-00-00) ;;
+                esac
+                ;;
+        esac
+        case "$stamp" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]" "[0-9][0-9]:[0-9][0-9]*) clock=$(printf '%s' "$stamp" | cut -c 12-16 | tr -d ':') ;;
+            *)
+                case "$name" in
+                    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]-*) clock=$(printf '%s' "$name" | cut -c 12-15) ;;
+                    *) clock=$(date -r "$file" +%H%M 2>/dev/null || echo 0000) ;;
+                esac
+                ;;
+        esac
+        printf '%s\t%s\t%s\n' "$day" "$clock" "$file"
+    done | LC_ALL=C sort | tail -n 1
+}
+
+count_matches() {
+    grep -c "$1" "$2" 2>/dev/null || true
+}
+
 panel() {
     project_dir=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
     cd -- "$project_dir"
-
     project_name=${project_dir##*/}
-    branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "sin Git")
 
-    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-        git_state="cambios locales"
+    has_git=0
+    git rev-parse --git-dir >/dev/null 2>&1 && has_git=1
+
+    header="jdev-ai · $project_name"
+    [ -z "${JDEV_SESSION_AGENT:-}" ] || header="$header · $JDEV_SESSION_AGENT"
+    printf '┌ %s\n' "$header"
+    if [ -n "${JDEV_SESSION_ORCHESTRATOR:-}" ]; then
+        printf '│ Orquestador %s · implementador %s\n' "$JDEV_SESSION_ORCHESTRATOR" "${JDEV_SESSION_IMPLEMENTER:-}"
+    fi
+    [ -z "${JDEV_SESSION_WARNING:-}" ] || wrap '│ ⚠ ' '│   ' "$JDEV_SESSION_WARNING"
+    printf '│\n'
+
+    latest=$(latest_history)
+    history_file=$(printf '%s' "$latest" | cut -f 3)
+    history_day=
+    history_since=
+    history_status=
+
+    if [ -n "$history_file" ]; then
+        history_title=$(sed -n '1{s/^# *//;p;}' "$history_file")
+        [ -n "$history_title" ] || history_title=${history_file##*/}
+        history_stamp=$(sed -n 's/^Fecha: *//p' "$history_file" | head -n 1)
+        history_status=$(sed -n 's/^Estado: *//p' "$history_file" | head -n 1)
+        history_day=$(printf '%s' "$history_stamp" | cut -c 1-10)
+        # Sin «Fecha:» válida se usa el día deducido del nombre o del archivo.
+        case "$history_day" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+            *)
+                history_day=$(printf '%s' "$latest" | cut -f 1)
+                history_stamp=$history_day
+                ;;
+        esac
+
+        # Se compara por prefijo porque algunas entradas añaden detalles tras
+        # el estado («bloqueada por …»).
+        case "$history_status" in
+            finalizada*|terminada*|cerrad*) status_text="terminada" ;;
+            "en curso"*) status_text="quedó a medias" ;;
+            bloqueada*) status_text="quedó bloqueada" ;;
+            "") status_text="estado sin indicar" ;;
+            *) status_text="estado: $(printf '%s' "$history_status" | cut -c 1-40)" ;;
+        esac
+
+        case "$history_day" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])
+                when=$(human_date "$history_day")
+                ago=$(relative_day "$history_day")
+                [ -z "$ago" ] || when="$when ($ago)"
+                # Sin hora, la sesión cubre todo su día: «desde entonces»
+                # empieza al día siguiente.
+                case "$history_stamp" in
+                    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]" "[0-9][0-9]:[0-9][0-9]*) history_since=$(printf '%s' "$history_stamp" | cut -c 1-16) ;;
+                    *) history_since="$history_day 23:59:59" ;;
+                esac
+                ;;
+            *) when="fecha sin indicar" ;;
+        esac
+
+        printf '│ ÚLTIMA SESIÓN — %s · %s\n' "$when" "$status_text"
+        wrap '│ «' '│  ' "$history_title»"
+
+        points=$(section_points "$history_file" Resumen)
+        total=0
+        shown=0
+        if [ -n "$points" ]; then
+            total=$(printf '%s\n' "$points" | wc -l | tr -d ' ')
+            printf '%s\n' "$points" | head -n "$summary_points" | while IFS= read -r point; do
+                wrap '│   • ' '│     ' "$point"
+            done
+            shown=$(( total < summary_points ? total : summary_points ))
+        fi
+        hidden=$((total - shown))
+        if [ "$hidden" -eq 1 ]; then
+            printf '│   (+1 punto más en %s)\n' "${history_file##*/}"
+        elif [ "$hidden" -gt 1 ]; then
+            printf '│   (+%s puntos más en %s)\n' "$hidden" "${history_file##*/}"
+        fi
     else
-        git_state="limpio"
+        printf '│ ÚLTIMA SESIÓN — no hay sesiones registradas en este proyecto.\n'
+    fi
+    printf '│\n'
+
+    if [ -n "$history_file" ]; then
+        printf '│ DESDE ENTONCES\n'
+    else
+        printf '│ ESTADO ACTUAL\n'
     fi
 
+    changed=0
     active_changes=
+    if [ "$has_git" -eq 1 ]; then
+        branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "sin commits")
+
+        if [ -n "$history_since" ]; then
+            new_commits=$(git log --since="$history_since" --format=%h 2>/dev/null | wc -l | tr -d ' ')
+            if [ "$new_commits" -eq 0 ]; then
+                printf '│   • Ningún commit nuevo.\n'
+            else
+                [ "$new_commits" -eq 1 ] && commit_word="commit nuevo" || commit_word="commits nuevos"
+                last_day=$(git log -1 --format=%cd --date=short 2>/dev/null)
+                last_subject=$(git log -1 --format=%s 2>/dev/null)
+                printf '│   • %s %s, el último %s:\n' "$new_commits" "$commit_word" "$(relative_day "$last_day")"
+                wrap '│     «' '│      ' "$last_subject»"
+            fi
+        elif last_day=$(git log -1 --format=%cd --date=short 2>/dev/null) && [ -n "$last_day" ]; then
+            printf '│   • Último commit %s:\n' "$(relative_day "$last_day")"
+            wrap '│     «' '│      ' "$(git log -1 --format=%s)»"
+        fi
+
+        changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$changed" -eq 0 ]; then
+            printf '│   • Sin cambios locales en %s.\n' "$branch"
+        elif [ "$changed" -eq 1 ]; then
+            printf '│   • Tienes 1 archivo con cambios sin commit en %s.\n' "$branch"
+        else
+            printf '│   • Tienes %s archivos con cambios sin commit en %s.\n' "$changed" "$branch"
+        fi
+    else
+        printf '│   • El directorio no es un repositorio Git.\n'
+    fi
+
     if [ -d openspec/changes ]; then
         for change_dir in openspec/changes/*; do
             [ -d "$change_dir" ] || continue
             change_name=${change_dir##*/}
             [ "$change_name" = "archive" ] && continue
+            active_changes="$active_changes $change_name"
 
-            if [ -z "$active_changes" ]; then
-                active_changes=$change_name
-            else
-                active_changes="$active_changes, $change_name"
+            progress=
+            if [ -f "$change_dir/tasks.md" ]; then
+                done_tasks=$(count_matches '^[[:space:]]*- \[[xX]\]' "$change_dir/tasks.md")
+                open_tasks=$(count_matches '^[[:space:]]*- \[ \]' "$change_dir/tasks.md")
+                all_tasks=$((done_tasks + open_tasks))
+                [ "$all_tasks" -eq 0 ] || progress=" ($done_tasks de $all_tasks tareas hechas)"
             fi
+            wrap '│   • OpenSpec abierto: ' '│     ' "$change_name$progress"
         done
     fi
+    [ -n "$active_changes" ] || printf '│   • Sin cambios OpenSpec abiertos.\n'
+    printf '│\n'
 
-    if [ -n "$active_changes" ]; then
-        openspec_state=$active_changes
-    else
-        openspec_state="sin cambios activos"
-    fi
-
-    latest_history=
-    if [ -d .agent/history ]; then
-        for history_file in .agent/history/*.md; do
-            [ -f "$history_file" ] || continue
-            latest_history=$history_file
+    pending_points=
+    [ -z "$history_file" ] || pending_points=$(section_points "$history_file" "Pendiente de ti")
+    if [ -n "$pending_points" ]; then
+        printf '│ PENDIENTE DE TI\n'
+        printf '%s\n' "$pending_points" | while IFS= read -r point; do
+            wrap '│   ! ' '│     ' "$point"
         done
+        printf '│\n'
     fi
 
-    history_date=
-    history_status=
-    history_title=
-    history_next=
-
-    if [ -n "$latest_history" ]; then
-        history_title=$(sed -n '1{s/^# //;p;}' "$latest_history")
-        history_date=$(sed -n 's/^Fecha: //p' "$latest_history")
-        history_status=$(sed -n 's/^Estado: //p' "$latest_history")
-        history_next=$(history_continuation "$latest_history")
-
-        [ -n "$history_title" ] || history_title=${latest_history##*/}
-        [ -n "$history_date" ] || history_date="fecha desconocida"
-        [ -n "$history_status" ] || history_status="estado desconocido"
-    fi
-
-    if [ "$history_status" = "bloqueada" ]; then
-        session_mode="BLOCKED"
-    elif [ "$git_state" = "cambios locales" ]; then
-        session_mode="REVIEW"
-    elif [ -n "$active_changes" ] || [ "$history_status" = "en curso" ]; then
-        session_mode="CONTINUE"
-    elif [ -n "$latest_history" ]; then
-        session_mode="READY"
-    else
-        session_mode="NEW"
-    fi
-
-    if [ "$git_state" = "cambios locales" ] && [ -n "$active_changes" ]; then
-        current_signal="Hay cambios locales y OpenSpec activo: $active_changes."
-    elif [ "$git_state" = "cambios locales" ]; then
-        current_signal="Hay cambios locales sin commit."
+    printf '│ POR DÓNDE SEGUIR\n'
+    next_points=
+    [ -z "$history_file" ] || next_points=$(section_points "$history_file" "Continuación recomendada")
+    if [ -n "$next_points" ]; then
+        printf '%s\n' "$next_points" | head -n "$continuation_points" | while IFS= read -r point; do
+            wrap '│   → ' '│     ' "$point"
+        done
+    elif [ "$changed" -gt 0 ]; then
+        printf '│   → Revisa los cambios locales antes de empezar otra tarea.\n'
     elif [ -n "$active_changes" ]; then
-        current_signal="OpenSpec activo: $active_changes."
+        printf '│   → Continúa el cambio OpenSpec abierto.\n'
     else
-        current_signal="Sin trabajo técnico pendiente detectado."
+        printf '│   → Describe una tarea nueva o pide al agente que proponga el siguiente paso.\n'
     fi
 
-    if [ -z "$history_next" ]; then
-        if [ "$git_state" = "cambios locales" ]; then
-            history_next="Revisa los cambios locales antes de iniciar otra tarea."
-        elif [ -n "$active_changes" ]; then
-            history_next="Continúa el cambio OpenSpec activo."
-        else
-            history_next="Describe una tarea nueva o pide al agente que proponga el siguiente paso."
-        fi
-    fi
-
-    printf '%s\n' '+------------------------------------------------------------+'
-    printf '%s\n' '| JDEV-AI // AGENT SESSION                                   |'
-    printf '%s\n' '+------------------------------------------------------------+'
-    printf '  project   : %s\n' "$project_name"
-    [ -z "${JDEV_SESSION_AGENT:-}" ] || printf '  agent     : %s\n' "$JDEV_SESSION_AGENT"
-    [ -z "${JDEV_SESSION_ORCHESTRATOR:-}" ] || printf '  orchestr. : %s\n' "$JDEV_SESSION_ORCHESTRATOR"
-    [ -z "${JDEV_SESSION_IMPLEMENTER:-}" ] || printf '  implement.: %s\n' "$JDEV_SESSION_IMPLEMENTER"
-    printf '  branch    : %s\n' "$branch"
-    printf '  git       : %s\n' "$git_state"
-    printf '  openspec  : %s\n' "$openspec_state"
-    printf '  mode      : %s\n' "$session_mode"
-
-    if [ -n "$latest_history" ]; then
-        printf '  history   : %s [%s]\n' "$history_date" "$history_status"
-        printf '  last      : %s\n' "$history_title"
+    printf '│\n'
+    if [ "$mode" = "hook" ]; then
+        printf '│ ¿Hace tiempo que no lo tocas? Pide «ponme al día» para un resumen detallado.\n'
+        printf '└ Usa /clear para volver a ver este resumen.\n'
     else
-        printf '  history   : sin entradas\n'
+        printf '└ ¿Hace tiempo que no lo tocas? Pide «ponme al día» para un resumen detallado.\n'
     fi
-
-    printf '%s\n' '+------------------------------------------------------------+'
-    printf '  signal    : %s\n' "$current_signal"
-    [ -z "${JDEV_SESSION_WARNING:-}" ] || printf '  warning   : %s\n' "$JDEV_SESSION_WARNING"
-    printf '  next      : %s\n' "$history_next"
-    printf '%s\n' '+------------------------------------------------------------+'
 }
 
 if [ "$mode" = "hook" ]; then
-    # El agente envía por stdin el evento en JSON; el panel no lo necesita.
-    cat >/dev/null 2>&1 || true
+    # El agente envía por stdin el evento en JSON; el resumen no lo necesita.
+    # Si se ejecuta a mano desde una terminal, no espera a que se escriba nada.
+    [ -t 0 ] || cat >/dev/null 2>&1 || true
     printf '{"systemMessage":%s}\n' "$(panel | json_string)"
 else
     panel

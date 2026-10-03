@@ -32,22 +32,32 @@ bin/agent .                       # repositorio Git actual dentro de projects/ o
 bin/agent mi-proyecto -- resume   # lo que sigue a «--» se pasa tal cual al agente
 ```
 
-Al iniciar la sesión se muestra un panel con el proyecto, la rama, el estado
-de Git, los cambios OpenSpec activos y la última entrada del historial local
-cuando exista. Combina esos metadatos para orientar la sesión: Git y OpenSpec
-señalan trabajo técnico pendiente, mientras que el historial aporta el cierre
-anterior y su continuación recomendada. Lo genera `bin/session-status`, que solo
-lee metadatos locales: no analiza código ni specs, y el panel se muestra a la
-persona sin enviarse como contexto al modelo.
+Al iniciar la sesión se muestra un resumen pensado para retomar un proyecto
+tras días sin tocarlo:
+
+- **Última sesión**: título, fecha, hace cuánto fue, cómo quedó y los primeros
+  puntos de su resumen en `.agent/history/`.
+- **Desde entonces**: commits posteriores a esa sesión, cambios locales sin
+  commit y cambios OpenSpec abiertos con su progreso de tareas.
+- **Pendiente de ti**: decisiones o acciones que esperan a la persona, si la
+  última sesión las registró.
+- **Por dónde seguir**: la continuación recomendada de la última sesión o, si
+  no existe, una sugerencia según el estado de Git y OpenSpec.
+
+Lo genera `bin/session-status`, que solo lee metadatos locales: no analiza
+código ni specs, y el resumen se muestra a la persona sin enviarse como
+contexto al modelo. La última sesión se elige por su fecha y hora, no por el
+nombre del archivo. Para retomar con más detalle, pide al agente «ponme al
+día»: sigue el apartado «Puesta al día» de [`rules/history.md`](rules/history.md).
 
 - **Claude**: el launcher registra con `--settings` un hook `SessionStart`
-  (`startup` y `clear`) que muestra el panel dentro de la sesión al arrancar y
+  (`startup` y `clear`) que muestra el resumen dentro de la sesión al arrancar y
   tras `/clear`. No requiere confirmación.
 - **Codex**: registra el mismo hook con `--config`. Codex exige revisar y
   confiar una vez en él desde `/hooks`; hasta entonces lo omite. El comando es
   idéntico en todos los proyectos, así que basta confiar una vez mientras no
   cambie la ruta del harness.
-- **Copilot y OpenCode**: el panel se imprime en la terminal antes de abrirlos.
+- **Copilot y OpenCode**: el resumen se imprime en la terminal antes de abrirlos.
 
 El launcher no modifica archivos, instala dependencias ni inicializa OpenSpec,
 y no añade configuración a los proyectos. El ejecutable elegido (`codex`,
@@ -79,7 +89,7 @@ directorios y carga el `CLAUDE.md` del harness por sí solo.
 Codex acepta claves `--config` desconocidas sin error, así que el launcher no
 puede confirmar que las claves `agents.*` registren el implementador. La
 variable `codex_verified_version` de `bin/agent` indica la versión de
-codex-cli con la que se comprobó a mano; si la instalada es otra, el panel
+codex-cli con la que se comprobó a mano; si la instalada es otra, el resumen
 muestra un aviso. Para verificarla, pide en una sesión que delegue una tarea
 trivial en `implementer` y, si funciona, actualiza esa variable.
 

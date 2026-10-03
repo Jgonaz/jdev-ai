@@ -23,11 +23,23 @@ cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
 git init -q "$work/h"
 git init -q "$work/h/projects/demo"
-cat > "$work/h/projects/demo/.agent/history/2026-01-01-0000-prueba.md" <<'EOF'
+cat > "$work/h/projects/demo/.agent/history/2026-01-01-1000-prueba.md" <<'EOF'
 # Prueba
 
-Fecha: 2026-01-01 00:00
+Fecha: 2026-01-01 10:00
 Estado: en curso
+
+## Resumen
+
+- Primer punto
+  en dos líneas.
+- Segundo punto.
+- Tercer punto.
+
+## Pendiente de ti
+
+- Decidir el nombre
+  definitivo.
 
 ## Continuación recomendada
 
@@ -35,6 +47,11 @@ Estado: en curso
   en dos líneas.
 - Segunda.
 EOF
+# Entrada anterior del mismo día sin hora: ordenada por nombre quedaría delante.
+printf '# Antigua\n\nFecha: 2026-01-01\nEstado: finalizada\n' > "$work/h/projects/demo/.agent/history/2026-01-01-sin-hora.md"
+touch -d '2026-01-01 09:00' "$work/h/projects/demo/.agent/history/2026-01-01-sin-hora.md"
+mkdir -p "$work/h/projects/demo/openspec/changes/cambio-x" "$work/h/projects/demo/openspec/changes/archive/viejo"
+printf -- '- [x] Hecha\n- [ ] Pendiente\n  - [ ] Subtarea\n' > "$work/h/projects/demo/openspec/changes/cambio-x/tasks.md"
 
 # Agentes simulados: guardan sus argumentos separados por NUL, seguidos del
 # aviso que el launcher exporta para el panel.
@@ -65,22 +82,28 @@ check "error sin proyecto" '! run --claude && grep -q "indica un proyecto" "$wor
 check "error con dos proyectos" '! run demo otro && grep -q "demasiados argumentos" "$work/out"'
 check "error con opción desconocida" '! run demo --foo && grep -q "opción desconocida" "$work/out"'
 check "error con proyecto inexistente" '! run nada && grep -q "no existe" "$work/out"'
-check "proyecto sin distinguir mayúsculas" 'run DeMo --copilot && grep -q "project   : demo$" "$work/out"'
+check "proyecto sin distinguir mayúsculas" 'run DeMo --copilot && grep -q "^┌ jdev-ai · demo · copilot$" "$work/out"'
 check "nombre ambiguo por mayúsculas falla" 'git init -q "$work/h/projects/Doble" && git init -q "$work/h/projects/doble" && ! run DOBLE && grep -q "es ambiguo" "$work/out"'
 check "coincidencia exacta tiene prioridad" 'run doble && [ -f "$work/claude.args" ]'
 check "error con rutas" '! run ../x && grep -q "nombre de proyecto directo" "$work/out"'
 
-check "«agent .» desde el harness" '(cd "$work/h" && run . --copilot) && grep -q "project   : h$" "$work/out"'
+check "«agent .» desde el harness" '(cd "$work/h" && run . --copilot) && grep -q "^┌ jdev-ai · h · copilot$" "$work/out"'
 check "«agent .» fuera del harness falla" '! (cd "$work" && git init -q fuera && cd fuera && run .)'
 
-check "panel con bordes alineados" '(cd "$work/h/projects/demo" && "$status") > "$work/out" && [ "$(grep "^[+|]" "$work/out" | awk "{ print length(\$0) }" | sort -u | wc -l)" -eq 1 ]'
-check "continuación con varias entradas" 'grep -q "next      : Primera acción en dos líneas. (+1 más)" "$work/out"'
-check "panel como systemMessage en una línea" '(cd "$work/h/projects/demo" && echo "{}" | "$status" --hook) > "$work/out" && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"systemMessage\":\"+-.*\\\\n  project   : demo\\\\n.*(+1 más).*\"}$" "$work/out"'
-check "el panel muestra el agente del launcher" '(cd "$work/h/projects/demo" && JDEV_SESSION_AGENT=claude "$status") | grep -q "agent     : claude"'
+summary() { (cd "$work/h/projects/demo" && "$status" "$@") > "$work/out"; }
+check "resumen: última sesión por día y hora" 'summary && grep -q "^│ ÚLTIMA SESIÓN — 1 ene 2026 (.*) · quedó a medias$" "$work/out" && grep -q "^│ «Prueba»$" "$work/out"'
+check "resumen: primeros puntos y resto" 'grep -q "^│   • Primer punto en dos líneas.$" "$work/out" && grep -q "^│   • Segundo punto.$" "$work/out" && ! grep -q "Tercer punto" "$work/out" && grep -q "(+1 punto más en 2026-01-01-1000-prueba.md)" "$work/out"'
+check "resumen: OpenSpec con progreso y sin archivados" 'grep -q "OpenSpec abierto: cambio-x (1 de 3 tareas hechas)" "$work/out" && ! grep -q "viejo" "$work/out"'
+check "resumen: pendiente de ti antes de seguir" 'grep -q "^│ PENDIENTE DE TI$" "$work/out" && grep -q "^│   ! Decidir el nombre definitivo.$" "$work/out" && [ "$(grep -n "PENDIENTE DE TI" "$work/out" | cut -d: -f1)" -lt "$(grep -n "POR DÓNDE SEGUIR" "$work/out" | cut -d: -f1)" ]'
+check "resumen: todas las continuaciones" 'grep -q "^│   → Primera acción en dos líneas.$" "$work/out" && grep -q "^│   → Segunda.$" "$work/out"'
+check "resumen: recuerda la puesta al día" 'grep -q "^└ .*«ponme al día»" "$work/out"'
+check "resumen: todas las líneas con borde izquierdo" '[ "$(grep -vc "^[┌│└]" "$work/out")" -eq 0 ]'
+check "resumen como systemMessage en una línea" 'echo "{}" | summary --hook && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"systemMessage\":\"┌ jdev-ai · demo\\\\n.*\\\\n│ «Prueba»\\\\n.*/clear.*\"}$" "$work/out"'
+check "resumen con el agente y los modelos del launcher" 'JDEV_SESSION_AGENT=codex JDEV_SESSION_ORCHESTRATOR="a [b]" JDEV_SESSION_IMPLEMENTER="c [d]" JDEV_SESSION_WARNING="aviso" summary && grep -q "^┌ jdev-ai · demo · codex$" "$work/out" && grep -q "^│ Orquestador a \[b\] · implementador c \[d\]$" "$work/out" && grep -q "^│ ⚠ aviso$" "$work/out"'
 
-check "claude recibe el hook y no imprime el panel" 'run demo && args claude | grep -q "^{\"hooks\":{\"SessionStart\":.*startup|clear.*session-status. --hook" && ! grep -q "JDEV-AI" "$work/out"'
-check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "JDEV-AI" "$work/out"'
-check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "agent     : copilot" "$work/out"'
+check "claude recibe el hook y no imprime el resumen" 'run demo && args claude | grep -q "^{\"hooks\":{\"SessionStart\":.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
+check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
+check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "^┌ jdev-ai · demo · copilot$" "$work/out"'
 
 check "codex recibe las reglas del harness" 'run demo --codex && args codex | grep -q "^developer_instructions=" && args codex | grep -q "<harness> es $work/h"'
 check "codex no duplica las reglas en el harness" '(cd "$work/h" && run . --codex) && ! args codex | grep -q "^developer_instructions="'
