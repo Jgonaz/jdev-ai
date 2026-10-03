@@ -4,14 +4,15 @@ set -eu
 
 usage() {
     cat <<'EOF'
-Uso: agent <proyecto|.> [--codex|--claude|--copilot|--opencode]
+Uso: agent <proyecto|.> [--codex|--claude|--copilot|--opencode] [-- <args del agente>]
 
-Abre un repositorio de jdev-ai/projects/ con Codex (por defecto) o con
+Abre un repositorio de jdev-ai/projects/ con Claude (por defecto) o con
 el agente indicado. Usa «agent .» desde un repositorio Git situado dentro
-de projects/.
+de projects/ o desde el propio harness. Los argumentos posteriores a «--» se
+pasan sin cambios al agente (por ejemplo, un prompt inicial o «resume»).
 
-Codex usa por defecto Astra/medium como orquestador y un único implementador
-Luna/max definido por el harness. Puedes sobrescribirlos con las variables
+Con --codex, se usa por defecto Astra/medium como orquestador y un único
+implementador Luna/max definido por el harness. Puedes sobrescribirlos con las variables
 JDEV_CODEX_ORCHESTRATOR_MODEL, JDEV_CODEX_ORCHESTRATOR_EFFORT,
 JDEV_CODEX_IMPLEMENTER_MODEL y JDEV_CODEX_IMPLEMENTER_EFFORT.
 EOF
@@ -40,6 +41,8 @@ history_continuation() {
         /^## Continuación recomendada$/ { section = 1; next }
         section && /^## / { exit }
         section && /^- / {
+            count++
+            if (count > 1) { collecting = 0; next }
             sub(/^- /, "")
             text = $0
             collecting = 1
@@ -50,8 +53,11 @@ history_continuation() {
             text = text " " $0
             next
         }
-        section && collecting { exit }
-        END { print text }
+        section { collecting = 0 }
+        END {
+            if (count > 1) text = text " (+" count - 1 " más)"
+            print text
+        }
     ' "$1"
 }
 
@@ -67,15 +73,12 @@ case "$1" in
         ;;
 esac
 
-project=$1
-shift
-agent_command=codex
+project=
+agent_command=claude
 
-if [ "$#" -gt 1 ]; then
-    fail "demasiados argumentos"
-fi
-
-if [ "$#" -eq 1 ]; then
+# El proyecto y el agente pueden indicarse en cualquier orden; lo que siga a
+# «--» queda en "$@" para reenviarlo al agente.
+while [ "$#" -gt 0 ]; do
     case "$1" in
         --codex) agent_command=codex ;;
         --claude) agent_command=claude ;;
@@ -85,9 +88,20 @@ if [ "$#" -eq 1 ]; then
             usage
             exit 0
             ;;
-        *) fail "agente desconocido: $1" ;;
+        --)
+            shift
+            break
+            ;;
+        -*) fail "opción desconocida: $1" ;;
+        *)
+            [ -z "$project" ] || fail "demasiados argumentos: $1"
+            project=$1
+            ;;
     esac
-fi
+    shift
+done
+
+[ -n "$project" ] || fail "indica un proyecto de projects/ o «.»"
 
 if [ "$agent_command" = "codex" ]; then
     codex_orchestrator_model=${JDEV_CODEX_ORCHESTRATOR_MODEL:-gpt-6-astra}
@@ -105,6 +119,11 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 harness_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 projects_root="$harness_root/projects"
 codex_implementer_config="$harness_root/adapters/codex/implementer.toml"
+harness_instructions="$harness_root/AGENTS.md"
+# Versión de codex-cli con la que se comprobó a mano que las claves agents.*
+# registran el implementador. Codex acepta claves -c desconocidas sin error, así
+# que el launcher solo puede avisar cuando la versión instalada es otra.
+codex_verified_version=0.160.0
 
 if [ "$project" = "." ]; then
     command -v git >/dev/null 2>&1 || fail "Git no está instalado o no está disponible en PATH"
@@ -113,8 +132,8 @@ if [ "$project" = "." ]; then
     project_dir=$(CDPATH= cd -- "$project_dir" && pwd -P)
 
     case "$project_dir/" in
-        "$projects_root/"*) ;;
-        *) fail "el repositorio actual no está dentro de $projects_root" ;;
+        "$projects_root/"*|"$harness_root/") ;;
+        *) fail "el repositorio actual no es el harness ni está dentro de $projects_root" ;;
     esac
 else
     case "$project" in
@@ -141,9 +160,32 @@ repo_root=$(CDPATH= cd -- "$repo_root" && pwd -P)
 command -v "$agent_command" >/dev/null 2>&1 || \
     fail "el ejecutable '$agent_command' no está instalado o no está disponible en PATH"
 
+codex_instructions_arg=
+codex_version_warning=
 if [ "$agent_command" = "codex" ]; then
     [ -f "$codex_implementer_config" ] || \
         fail "no se encuentra el adaptador del implementador: $codex_implementer_config"
+
+    # Codex solo descubre AGENTS.md hasta la raíz Git del proyecto, así que las
+    # reglas del harness se inyectan como instrucciones de desarrollador. En el
+    # propio harness ya las carga de forma nativa.
+    if [ "$project_dir" != "$harness_root" ]; then
+        [ -f "$harness_instructions" ] || \
+            fail "no se encuentra el AGENTS.md del harness: $harness_instructions"
+        harness_rules=$(cat -- "$harness_instructions")
+        case "$harness_rules" in
+            *"'''"*) fail "$harness_instructions no puede contener ''' para inyectarse en Codex" ;;
+        esac
+        codex_instructions_arg="developer_instructions='''
+Instrucciones globales del harness jdev-ai. En ellas, <harness> es $harness_root.
+
+$harness_rules'''"
+    fi
+
+    codex_installed_version=$("$agent_command" --version 2>/dev/null | awk '{ print $NF; exit }') || true
+    if [ "$codex_installed_version" != "$codex_verified_version" ]; then
+        codex_version_warning="codex ${codex_installed_version:-desconocido} no verificado (última verificación: $codex_verified_version); comprueba que el implementador funciona."
+    fi
 fi
 
 cd -- "$project_dir"
@@ -236,7 +278,7 @@ if [ -z "$history_next" ]; then
 fi
 
 printf '\n%s\n' '+------------------------------------------------------------+'
-printf '%s\n' '| JDEV-AI // AGENT SESSION                                  |'
+printf '%s\n' '| JDEV-AI // AGENT SESSION                                   |'
 printf '%s\n' '+------------------------------------------------------------+'
 printf '  project   : %s\n' "$project_name"
 printf '  agent     : %s\n' "$agent_command"
@@ -258,6 +300,7 @@ fi
 
 printf '%s\n' '+------------------------------------------------------------+'
 printf '  signal    : %s\n' "$current_signal"
+[ -z "$codex_version_warning" ] || printf '  warning   : %s\n' "$codex_version_warning"
 printf '  next      : %s\n' "$history_next"
 printf '%s\n\n' '+------------------------------------------------------------+'
 
@@ -270,7 +313,9 @@ if [ "$agent_command" = "codex" ]; then
         --config "agents.default_subagent_model=\"$codex_implementer_model\"" \
         --config "agents.default_subagent_reasoning_effort=\"$codex_implementer_effort\"" \
         --config 'agents.implementer.description="Implementa tareas planificadas, concretas y delimitadas por el orquestador."' \
-        --config "agents.implementer.config_file=\"$codex_implementer_config\""
+        --config "agents.implementer.config_file=\"$codex_implementer_config\"" \
+        ${codex_instructions_arg:+--config} ${codex_instructions_arg:+"$codex_instructions_arg"} \
+        "$@"
 fi
 
-exec "$agent_command"
+exec "$agent_command" "$@"

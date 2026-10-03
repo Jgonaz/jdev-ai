@@ -18,7 +18,7 @@ Usa el flujo normal para correcciones que restauran el comportamiento esperado, 
 
 ## Aprobación previa de OpenSpec
 
-Si el agente considera que OpenSpec puede ser adecuado, debe detenerse antes de instalarlo, inicializarlo o crear/modificar cualquier artefacto dentro de `openspec/`. Primero presentará una propuesta breve con:
+Si el agente considera que OpenSpec puede ser adecuado, debe detenerse antes de instalarlo, inicializarlo o crear/modificar cualquier artefacto dentro del `openspec/` del proyecto afectado. Primero presentará una propuesta breve con:
 
 - por qué el cambio supera el umbral del flujo normal;
 - alcance y unidad de cambio que propone;
@@ -31,18 +31,18 @@ Solo después del visto bueno explícito del desarrollador puede continuar con O
 
 Para cambios que no justifican OpenSpec:
 
-1. Lee el contexto, `AGENTS.md` y la documentación del proyecto afectado.
+1. Lee el contexto, el `AGENTS.md` y la documentación del proyecto afectado.
 2. Comprueba la documentación y las specs existentes que puedan verse afectadas.
 3. Implementa el alcance acotado sin crear artefactos OpenSpec.
 4. Ejecuta únicamente las validaciones definidas por el proyecto.
-5. Actualiza la documentación afectada y valora si corresponde una guía bajo `docs/user-guides/`, siguiendo `rules/user-guides.md`.
+5. Actualiza la documentación afectada y valora si corresponde una guía bajo `docs/user-guides/`, siguiendo [`rules/user-guides.md`](../rules/user-guides.md).
 6. Resume el cambio, las validaciones y los riesgos pendientes.
 
 ## Flujo con OpenSpec
 
 Después de la aprobación:
 
-1. Lee el contexto, `AGENTS.md` y la documentación del proyecto afectado.
+1. Lee el contexto, el `AGENTS.md` y la documentación del proyecto afectado.
 2. Entiende el cambio solicitado, sus usuarios y sus límites.
 3. Comprueba la documentación y las specs existentes.
 4. Confirma que constituye una unidad de cambio coherente o divídelo si procede.
@@ -51,7 +51,7 @@ Después de la aprobación:
 7. Si el cambio afecta contratos públicos, datos, seguridad o una decisión arquitectónica relevante, explica el impacto y abre un checkpoint específico antes de modificar esa parte.
 8. Implementa el alcance acordado sin acoplar otros proyectos. Si aparece una decisión sustancial no prevista, detente, presenta opciones y recomienda una.
 9. Ejecuta únicamente las validaciones definidas por el proyecto.
-10. Actualiza la documentación afectada y valora si la funcionalidad necesita crear o actualizar una guía bajo `docs/user-guides/`, siguiendo `rules/user-guides.md`.
+10. Actualiza la documentación afectada y valora si la funcionalidad necesita crear o actualizar una guía bajo `docs/user-guides/`, siguiendo [`rules/user-guides.md`](../rules/user-guides.md).
 11. Resume qué se ha hecho, qué se ha validado y qué riesgos quedan pendientes.
 
 Si el cambio usa OpenSpec y el usuario autoriza commits, alinéalos con los hitos

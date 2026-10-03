@@ -1,0 +1,84 @@
+#!/bin/sh
+
+# Validación del harness: comprueba bin/agent sobre un harness temporal con
+# agentes simulados, sin lanzar ningún agente real ni tocar projects/.
+
+set -eu
+
+harness_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT HUP INT TERM
+
+failures=0
+pass() { printf 'ok   %s\n' "$1"; }
+fail() { printf 'FAIL %s\n' "$1"; failures=$((failures + 1)); }
+check() {
+    if eval "$2"; then pass "$1"; else fail "$1"; fi
+}
+
+# Harness temporal con un proyecto de prueba y su historial.
+mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/projects/demo/.agent/history" "$work/bin"
+cp "$harness_root/bin/agent" "$work/h/bin/agent"
+cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
+cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
+git init -q "$work/h"
+git init -q "$work/h/projects/demo"
+cat > "$work/h/projects/demo/.agent/history/2026-01-01-0000-prueba.md" <<'EOF'
+# Prueba
+
+Fecha: 2026-01-01 00:00
+Estado: en curso
+
+## Continuación recomendada
+
+- Primera acción
+  en dos líneas.
+- Segunda.
+EOF
+
+# Agentes simulados: guardan sus argumentos separados por NUL.
+verified=$(sed -n 's/^codex_verified_version=//p' "$harness_root/bin/agent")
+for name in codex claude; do
+    cat > "$work/bin/$name" <<EOF
+#!/bin/sh
+[ "\${1:-}" = "--version" ] && { echo "codex-cli \${FAKE_CODEX_VERSION:-$verified}"; exit 0; }
+for x in "\$@"; do printf '%s\\0' "\$x"; done > "$work/$name.args"
+EOF
+    chmod +x "$work/bin/$name"
+done
+
+agent="$work/h/bin/agent"
+run() { PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
+args() { tr '\0' '\n' < "$work/$1.args"; }
+
+check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
+check "sin argumentos muestra la ayuda" 'run && grep -q "^Uso:" "$work/out"'
+
+check "claude por defecto" 'run demo && [ -f "$work/claude.args" ] && [ ! -f "$work/codex.args" ]'
+check "agente antes del proyecto" 'run --claude demo && [ -f "$work/claude.args" ]'
+check "reenvío tras --" 'run demo --claude -- "hola mundo" --resume && [ "$(args claude)" = "hola mundo
+--resume" ]'
+
+check "error sin proyecto" '! run --claude && grep -q "indica un proyecto" "$work/out"'
+check "error con dos proyectos" '! run demo otro && grep -q "demasiados argumentos" "$work/out"'
+check "error con opción desconocida" '! run demo --foo && grep -q "opción desconocida" "$work/out"'
+check "error con proyecto inexistente" '! run nada && grep -q "no existe" "$work/out"'
+check "error con rutas" '! run ../x && grep -q "nombre de proyecto directo" "$work/out"'
+
+check "«agent .» desde el harness" '(cd "$work/h" && run . --claude) && grep -q "project   : h$" "$work/out"'
+check "«agent .» fuera del harness falla" '! (cd "$work" && git init -q fuera && cd fuera && run .)'
+
+check "panel con bordes alineados" 'run demo --claude && [ "$(grep "^[+|]" "$work/out" | awk "{ print length(\$0) }" | sort -u | wc -l)" -eq 1 ]'
+check "continuación con varias entradas" 'grep -q "next      : Primera acción en dos líneas. (+1 más)" "$work/out"'
+
+check "codex recibe las reglas del harness" 'run demo --codex && args codex | grep -q "^developer_instructions=" && args codex | grep -q "<harness> es $work/h"'
+check "codex no duplica las reglas en el harness" '(cd "$work/h" && run . --codex) && ! args codex | grep -q "^developer_instructions="'
+check "codex reenvía tras --" 'run demo --codex -- resume && [ "$(args codex | tail -n 1)" = "resume" ]'
+check "sin aviso con la versión verificada" 'run demo --codex && ! grep -q "warning" "$work/out"'
+check "aviso con otra versión de codex" 'FAKE_CODEX_VERSION=0.0.1 run demo --codex && grep -q "warning   : codex 0.0.1 no verificado" "$work/out"'
+
+if [ "$failures" -gt 0 ]; then
+    printf '\n%s comprobaciones fallidas\n' "$failures"
+    exit 1
+fi
+printf '\nTodas las comprobaciones han pasado\n'

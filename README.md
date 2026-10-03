@@ -22,12 +22,14 @@ Las instrucciones específicas del proyecto prevalecen sobre las globales de `AG
 ## Lanzar un agente
 
 ```sh
-bin/agent mi-proyecto             # Codex, por defecto
-bin/agent mi-proyecto --codex
+bin/agent mi-proyecto             # Claude, por defecto
 bin/agent mi-proyecto --claude
+bin/agent mi-proyecto --codex
 bin/agent mi-proyecto --copilot
 bin/agent mi-proyecto --opencode
-bin/agent .                       # repositorio Git actual dentro de projects/
+bin/agent --codex mi-proyecto     # el orden de proyecto y agente es indiferente
+bin/agent .                       # repositorio Git actual dentro de projects/ o el propio harness
+bin/agent mi-proyecto -- resume   # lo que sigue a «--» se pasa tal cual al agente
 ```
 
 Antes de ejecutar el agente, el launcher muestra un panel con el proyecto, la
@@ -55,6 +57,21 @@ GPT-6 Astra y esfuerzo `medium`, y registra el implementador definido en
 configuración se inyecta desde el launcher y no añade archivos `.codex/` a los
 proyectos. También limita la sesión a un único subagente concurrente.
 
+Codex solo descubre `AGENTS.md` hasta la raíz Git del proyecto, por lo que no
+vería las reglas del harness. Por eso el launcher inyecta `AGENTS.md` del
+harness como `developer_instructions`, indicando la ruta real de `<harness>`.
+Esto sustituye cualquier `developer_instructions` definido en
+`~/.codex/config.toml` durante esa sesión. Al abrir el propio harness no se
+inyecta, porque Codex ya lo carga. Claude Code no lo necesita: sube por los
+directorios y carga el `CLAUDE.md` del harness por sí solo.
+
+Codex acepta claves `--config` desconocidas sin error, así que el launcher no
+puede confirmar que las claves `agents.*` registren el implementador. La
+variable `codex_verified_version` de `bin/agent` indica la versión de
+codex-cli con la que se comprobó a mano; si la instalada es otra, el panel
+muestra un aviso. Para verificarla, pide en una sesión que delegue una tarea
+trivial en `implementer` y, si funciona, actualiza esa variable.
+
 Los defaults de Codex pueden sobrescribirse para una ejecución mediante
 variables de entorno:
 
@@ -75,6 +92,17 @@ Opcionalmente, añade el directorio `bin/` a tu `PATH` para poder usar `agent` d
 ```sh
 export PATH="$HOME/proyectos/jdev-ai/bin:$PATH"
 ```
+
+## Validación del harness
+
+Tras modificar `bin/agent` o los archivos que inyecta, ejecuta:
+
+```sh
+bin/check
+```
+
+Prueba el launcher sobre un harness temporal con agentes simulados: no lanza
+agentes reales ni toca `projects/`.
 
 ## Fuentes de contexto y continuidad
 
@@ -97,7 +125,7 @@ sobre memoria e historial cuando exista una contradicción.
 
 OpenSpec es la herramienta principal de Spec Driven Development para cambios grandes o con impacto funcional relevante. No se activa por el hecho de crear un commit, subir una rama o abrir una PR: el agente debe inferir si aporta valor según el alcance, el riesgo y la ambigüedad del cambio.
 
-Suele merecer OpenSpec cuando el cambio introduce comportamiento o reglas de negocio visibles, modifica contratos públicos, datos, permisos o seguridad, requiere una decisión arquitectónica, afecta a varias partes o integraciones, tiene un despliegue o rollback delicado, o necesita coordinar varias iteraciones o personas. Los cambios pequeños, internos, reversibles y claramente acotados siguen el flujo normal. Las proposals, specs y tasks pertenecen siempre al `openspec/` del proyecto afectado; nunca al harness.
+Suele merecer OpenSpec cuando el cambio introduce comportamiento o reglas de negocio visibles, modifica contratos públicos, datos, permisos o seguridad, requiere una decisión arquitectónica, afecta a varias partes o integraciones, tiene un despliegue o rollback delicado, o necesita coordinar varias iteraciones o personas. Los cambios pequeños, internos, reversibles y claramente acotados siguen el flujo normal. Las proposals, specs y tasks pertenecen siempre al `openspec/` del proyecto afectado: al trabajar en `projects/<nombre>/` se crean en ese proyecto y nunca en el `openspec/` del harness, que solo documenta cambios del propio harness.
 
 Cuando el agente determine que OpenSpec puede ser adecuado, debe proponerlo antes de instalarlo, inicializarlo o crear/modificar cualquier proposal, spec o task. La propuesta debe resumir el motivo, el alcance, los riesgos y los artefactos previstos. El agente debe esperar el visto bueno explícito del desarrollador; una petición genérica de implementar el cambio no equivale a esa aprobación. Sin aprobación, continúa por el flujo normal o solicita la aclaración necesaria. Consulta `workflows/feature.md` para los criterios y checkpoints completos.
 
