@@ -7,7 +7,7 @@ usage() {
 Uso: agent <proyecto|.> [--codex|--claude|--copilot|--opencode] [-- <args del agente>]
 
 Abre un repositorio de jdev-ai/projects/ con Claude (por defecto) o con
-el agente indicado. Usa «agent .» desde un repositorio Git situado dentro
+el agente indicado. El nombre del proyecto no distingue mayúsculas. Usa «agent .» desde un repositorio Git situado dentro
 de projects/ o desde el propio harness. Los argumentos posteriores a «--» se
 pasan sin cambios al agente (por ejemplo, un prompt inicial o «resume»).
 
@@ -34,31 +34,6 @@ validate_codex_effort() {
         none|low|medium|high|xhigh|max) ;;
         *) fail "$1 debe ser none, low, medium, high, xhigh o max: $2" ;;
     esac
-}
-
-history_continuation() {
-    awk '
-        /^## Continuación recomendada$/ { section = 1; next }
-        section && /^## / { exit }
-        section && /^- / {
-            count++
-            if (count > 1) { collecting = 0; next }
-            sub(/^- /, "")
-            text = $0
-            collecting = 1
-            next
-        }
-        section && collecting && /^  / {
-            sub(/^  /, "")
-            text = text " " $0
-            next
-        }
-        section { collecting = 0 }
-        END {
-            if (count > 1) text = text " (+" count - 1 " más)"
-            print text
-        }
-    ' "$1"
 }
 
 if [ "$#" -eq 0 ]; then
@@ -141,7 +116,21 @@ else
     esac
 
     candidate="$projects_root/$project"
-    [ -d "$candidate" ] || fail "el proyecto no existe: $candidate"
+    if [ ! -d "$candidate" ]; then
+        # Sin coincidencia exacta, busca el proyecto sin distinguir mayúsculas
+        # y falla si el nombre es ambiguo en lugar de elegir uno.
+        wanted=$(printf '%s' "$project" | tr '[:upper:]' '[:lower:]')
+        candidate=
+        for dir in "$projects_root"/*; do
+            [ -d "$dir" ] || continue
+            name=$(printf '%s' "${dir##*/}" | tr '[:upper:]' '[:lower:]')
+            [ "$name" = "$wanted" ] || continue
+            [ -z "$candidate" ] || \
+                fail "el nombre «$project» es ambiguo: ${candidate##*/} y ${dir##*/}"
+            candidate=$dir
+        done
+        [ -n "$candidate" ] || fail "el proyecto no existe: $projects_root/$project"
+    fi
     project_dir=$(CDPATH= cd -- "$candidate" && pwd -P)
 
     case "$project_dir/" in
@@ -190,119 +179,31 @@ fi
 
 cd -- "$project_dir"
 
-project_name=${project_dir##*/}
-branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD)
-
-if [ -n "$(git status --porcelain)" ]; then
-    git_state="cambios locales"
-else
-    git_state="limpio"
-fi
-
-active_changes=
-if [ -d "$project_dir/openspec/changes" ]; then
-    for change_dir in "$project_dir"/openspec/changes/*; do
-        [ -d "$change_dir" ] || continue
-        change_name=${change_dir##*/}
-        [ "$change_name" = "archive" ] && continue
-
-        if [ -z "$active_changes" ]; then
-            active_changes=$change_name
-        else
-            active_changes="$active_changes, $change_name"
-        fi
-    done
-fi
-
-if [ -n "$active_changes" ]; then
-    openspec_state=$active_changes
-else
-    openspec_state="sin cambios activos"
-fi
-
-latest_history=
-history_dir="$project_dir/.agent/history"
-if [ -d "$history_dir" ]; then
-    for history_file in "$history_dir"/*.md; do
-        [ -f "$history_file" ] || continue
-        latest_history=$history_file
-    done
-fi
-
-history_date=
-history_status=
-history_title=
-history_next=
-
-if [ -n "$latest_history" ]; then
-    history_title=$(sed -n '1{s/^# //;p;}' "$latest_history")
-    history_date=$(sed -n 's/^Fecha: //p' "$latest_history")
-    history_status=$(sed -n 's/^Estado: //p' "$latest_history")
-    history_next=$(history_continuation "$latest_history")
-
-    [ -n "$history_title" ] || history_title=${latest_history##*/}
-    [ -n "$history_date" ] || history_date="fecha desconocida"
-    [ -n "$history_status" ] || history_status="estado desconocido"
-fi
-
-if [ "$history_status" = "bloqueada" ]; then
-    session_mode="BLOCKED"
-elif [ "$git_state" = "cambios locales" ]; then
-    session_mode="REVIEW"
-elif [ -n "$active_changes" ] || [ "$history_status" = "en curso" ]; then
-    session_mode="CONTINUE"
-elif [ -n "$latest_history" ]; then
-    session_mode="READY"
-else
-    session_mode="NEW"
-fi
-
-if [ "$git_state" = "cambios locales" ] && [ -n "$active_changes" ]; then
-    current_signal="Hay cambios locales y OpenSpec activo: $active_changes."
-elif [ "$git_state" = "cambios locales" ]; then
-    current_signal="Hay cambios locales sin commit."
-elif [ -n "$active_changes" ]; then
-    current_signal="OpenSpec activo: $active_changes."
-else
-    current_signal="Sin trabajo técnico pendiente detectado."
-fi
-
-if [ -z "$history_next" ]; then
-    if [ "$git_state" = "cambios locales" ]; then
-        history_next="Revisa los cambios locales antes de iniciar otra tarea."
-    elif [ -n "$active_changes" ]; then
-        history_next="Continúa el cambio OpenSpec activo."
-    else
-        history_next="Describe una tarea nueva o pide al agente que proponga el siguiente paso."
-    fi
-fi
-
-printf '\n%s\n' '+------------------------------------------------------------+'
-printf '%s\n' '| JDEV-AI // AGENT SESSION                                   |'
-printf '%s\n' '+------------------------------------------------------------+'
-printf '  project   : %s\n' "$project_name"
-printf '  agent     : %s\n' "$agent_command"
+# El panel se pinta dentro de la sesión mediante un hook SessionStart: si se
+# imprimiera aquí, la interfaz del agente lo borraría al arrancar. El comando
+# del hook es el mismo en todos los proyectos; lo variable viaja por entorno.
+JDEV_SESSION_AGENT=$agent_command
+JDEV_SESSION_ORCHESTRATOR=
+JDEV_SESSION_IMPLEMENTER=
+JDEV_SESSION_WARNING=$codex_version_warning
 if [ "$agent_command" = "codex" ]; then
-    printf '  orchestr. : %s [%s]\n' "$codex_orchestrator_model" "$codex_orchestrator_effort"
-    printf '  implement.: %s [%s]\n' "$codex_implementer_model" "$codex_implementer_effort"
+    JDEV_SESSION_ORCHESTRATOR="$codex_orchestrator_model [$codex_orchestrator_effort]"
+    JDEV_SESSION_IMPLEMENTER="$codex_implementer_model [$codex_implementer_effort]"
 fi
-printf '  branch    : %s\n' "$branch"
-printf '  git       : %s\n' "$git_state"
-printf '  openspec  : %s\n' "$openspec_state"
-printf '  mode      : %s\n' "$session_mode"
+export JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING
 
-if [ -n "$latest_history" ]; then
-    printf '  history   : %s [%s]\n' "$history_date" "$history_status"
-    printf '  last      : %s\n' "$history_title"
-else
-    printf '  history   : sin entradas\n'
+session_status="$harness_root/bin/session-status"
+[ -x "$session_status" ] || fail "no se encuentra el panel de sesión: $session_status"
+case "$session_status" in
+    *[\'\"\\]*) fail "la ruta del harness no puede contener comillas ni barras invertidas: $harness_root" ;;
+esac
+hook_command="'$session_status' --hook"
+
+if [ "$agent_command" = "claude" ]; then
+    exec claude \
+        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]}]}}" \
+        "$@"
 fi
-
-printf '%s\n' '+------------------------------------------------------------+'
-printf '  signal    : %s\n' "$current_signal"
-[ -z "$codex_version_warning" ] || printf '  warning   : %s\n' "$codex_version_warning"
-printf '  next      : %s\n' "$history_next"
-printf '%s\n\n' '+------------------------------------------------------------+'
 
 if [ "$agent_command" = "codex" ]; then
     exec "$agent_command" \
@@ -314,8 +215,13 @@ if [ "$agent_command" = "codex" ]; then
         --config "agents.default_subagent_reasoning_effort=\"$codex_implementer_effort\"" \
         --config 'agents.implementer.description="Implementa tareas planificadas, concretas y delimitadas por el orquestador."' \
         --config "agents.implementer.config_file=\"$codex_implementer_config\"" \
+        --config "hooks.SessionStart=[{matcher=\"startup|clear\",hooks=[{type=\"command\",command=\"$hook_command\"}]}]" \
         ${codex_instructions_arg:+--config} ${codex_instructions_arg:+"$codex_instructions_arg"} \
         "$@"
 fi
 
+# Copilot y OpenCode no reciben el hook: el panel se muestra antes de abrirlos.
+printf '\n'
+"$session_status"
+printf '\n'
 exec "$agent_command" "$@"

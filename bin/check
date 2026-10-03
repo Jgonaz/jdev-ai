@@ -18,7 +18,7 @@ check() {
 
 # Harness temporal con un proyecto de prueba y su historial.
 mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/projects/demo/.agent/history" "$work/bin"
-cp "$harness_root/bin/agent" "$work/h/bin/agent"
+cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$work/h/bin/"
 cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
 git init -q "$work/h"
@@ -36,46 +36,57 @@ Estado: en curso
 - Segunda.
 EOF
 
-# Agentes simulados: guardan sus argumentos separados por NUL.
+# Agentes simulados: guardan sus argumentos separados por NUL, seguidos del
+# aviso que el launcher exporta para el panel.
 verified=$(sed -n 's/^codex_verified_version=//p' "$harness_root/bin/agent")
-for name in codex claude; do
+for name in codex claude copilot; do
     cat > "$work/bin/$name" <<EOF
 #!/bin/sh
 [ "\${1:-}" = "--version" ] && { echo "codex-cli \${FAKE_CODEX_VERSION:-$verified}"; exit 0; }
-for x in "\$@"; do printf '%s\\0' "\$x"; done > "$work/$name.args"
+for x in "\$@" "JDEV_SESSION_WARNING=\${JDEV_SESSION_WARNING:-}"; do printf '%s\\0' "\$x"; done > "$work/$name.args"
 EOF
     chmod +x "$work/bin/$name"
 done
 
 agent="$work/h/bin/agent"
-run() { PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
+status="$work/h/bin/session-status"
+run() { rm -f "$work"/*.args; PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
 args() { tr '\0' '\n' < "$work/$1.args"; }
 
 check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
+check "sintaxis de bin/session-status" 'sh -n "$harness_root/bin/session-status"'
 check "sin argumentos muestra la ayuda" 'run && grep -q "^Uso:" "$work/out"'
 
 check "claude por defecto" 'run demo && [ -f "$work/claude.args" ] && [ ! -f "$work/codex.args" ]'
 check "agente antes del proyecto" 'run --claude demo && [ -f "$work/claude.args" ]'
-check "reenvío tras --" 'run demo --claude -- "hola mundo" --resume && [ "$(args claude)" = "hola mundo
---resume" ]'
+check "reenvío tras --" 'run demo --claude -- "hola mundo" --resume && args claude | grep -qx "hola mundo" && args claude | grep -qx -- "--resume"'
 
 check "error sin proyecto" '! run --claude && grep -q "indica un proyecto" "$work/out"'
 check "error con dos proyectos" '! run demo otro && grep -q "demasiados argumentos" "$work/out"'
 check "error con opción desconocida" '! run demo --foo && grep -q "opción desconocida" "$work/out"'
 check "error con proyecto inexistente" '! run nada && grep -q "no existe" "$work/out"'
+check "proyecto sin distinguir mayúsculas" 'run DeMo --copilot && grep -q "project   : demo$" "$work/out"'
+check "nombre ambiguo por mayúsculas falla" 'git init -q "$work/h/projects/Doble" && git init -q "$work/h/projects/doble" && ! run DOBLE && grep -q "es ambiguo" "$work/out"'
+check "coincidencia exacta tiene prioridad" 'run doble && [ -f "$work/claude.args" ]'
 check "error con rutas" '! run ../x && grep -q "nombre de proyecto directo" "$work/out"'
 
-check "«agent .» desde el harness" '(cd "$work/h" && run . --claude) && grep -q "project   : h$" "$work/out"'
+check "«agent .» desde el harness" '(cd "$work/h" && run . --copilot) && grep -q "project   : h$" "$work/out"'
 check "«agent .» fuera del harness falla" '! (cd "$work" && git init -q fuera && cd fuera && run .)'
 
-check "panel con bordes alineados" 'run demo --claude && [ "$(grep "^[+|]" "$work/out" | awk "{ print length(\$0) }" | sort -u | wc -l)" -eq 1 ]'
+check "panel con bordes alineados" '(cd "$work/h/projects/demo" && "$status") > "$work/out" && [ "$(grep "^[+|]" "$work/out" | awk "{ print length(\$0) }" | sort -u | wc -l)" -eq 1 ]'
 check "continuación con varias entradas" 'grep -q "next      : Primera acción en dos líneas. (+1 más)" "$work/out"'
+check "panel como systemMessage en una línea" '(cd "$work/h/projects/demo" && echo "{}" | "$status" --hook) > "$work/out" && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"systemMessage\":\"+-.*\\\\n  project   : demo\\\\n.*(+1 más).*\"}$" "$work/out"'
+check "el panel muestra el agente del launcher" '(cd "$work/h/projects/demo" && JDEV_SESSION_AGENT=claude "$status") | grep -q "agent     : claude"'
+
+check "claude recibe el hook y no imprime el panel" 'run demo && args claude | grep -q "^{\"hooks\":{\"SessionStart\":.*startup|clear.*session-status. --hook" && ! grep -q "JDEV-AI" "$work/out"'
+check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "JDEV-AI" "$work/out"'
+check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "agent     : copilot" "$work/out"'
 
 check "codex recibe las reglas del harness" 'run demo --codex && args codex | grep -q "^developer_instructions=" && args codex | grep -q "<harness> es $work/h"'
 check "codex no duplica las reglas en el harness" '(cd "$work/h" && run . --codex) && ! args codex | grep -q "^developer_instructions="'
-check "codex reenvía tras --" 'run demo --codex -- resume && [ "$(args codex | tail -n 1)" = "resume" ]'
-check "sin aviso con la versión verificada" 'run demo --codex && ! grep -q "warning" "$work/out"'
-check "aviso con otra versión de codex" 'FAKE_CODEX_VERSION=0.0.1 run demo --codex && grep -q "warning   : codex 0.0.1 no verificado" "$work/out"'
+check "codex reenvía tras --" 'run demo --codex -- resume && [ "$(args codex | tail -n 2 | head -n 1)" = "resume" ]'
+check "sin aviso con la versión verificada" 'run demo --codex && ! args codex | grep -q "^JDEV_SESSION_WARNING=."'
+check "aviso con otra versión de codex" 'FAKE_CODEX_VERSION=0.0.1 run demo --codex && args codex | grep -q "^JDEV_SESSION_WARNING=codex 0.0.1 no verificado"'
 
 if [ "$failures" -gt 0 ]; then
     printf '\n%s comprobaciones fallidas\n' "$failures"

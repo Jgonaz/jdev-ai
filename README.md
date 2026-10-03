@@ -22,7 +22,7 @@ Las instrucciones específicas del proyecto prevalecen sobre las globales de `AG
 ## Lanzar un agente
 
 ```sh
-bin/agent mi-proyecto             # Claude, por defecto
+bin/agent mi-proyecto             # Claude, por defecto (el nombre no distingue mayúsculas)
 bin/agent mi-proyecto --claude
 bin/agent mi-proyecto --codex
 bin/agent mi-proyecto --copilot
@@ -32,15 +32,26 @@ bin/agent .                       # repositorio Git actual dentro de projects/ o
 bin/agent mi-proyecto -- resume   # lo que sigue a «--» se pasa tal cual al agente
 ```
 
-Antes de ejecutar el agente, el launcher muestra un panel con el proyecto, la
-rama, el estado de Git, los cambios OpenSpec activos y la última entrada del
-historial local cuando exista. Combina esos metadatos para orientar la sesión:
-Git y OpenSpec señalan trabajo técnico pendiente, mientras que el historial
-aporta el cierre anterior y su continuación recomendada. Las comprobaciones se
-ejecutan localmente antes de iniciar el agente; no analizan código o specs ni se
-envían como prompt. El launcher no modifica archivos, instala dependencias ni
-inicializa OpenSpec. El ejecutable elegido (`codex`, `claude`, `copilot` u
-`opencode`) debe estar instalado y disponible en `PATH`.
+Al iniciar la sesión se muestra un panel con el proyecto, la rama, el estado
+de Git, los cambios OpenSpec activos y la última entrada del historial local
+cuando exista. Combina esos metadatos para orientar la sesión: Git y OpenSpec
+señalan trabajo técnico pendiente, mientras que el historial aporta el cierre
+anterior y su continuación recomendada. Lo genera `bin/session-status`, que solo
+lee metadatos locales: no analiza código ni specs, y el panel se muestra a la
+persona sin enviarse como contexto al modelo.
+
+- **Claude**: el launcher registra con `--settings` un hook `SessionStart`
+  (`startup` y `clear`) que muestra el panel dentro de la sesión al arrancar y
+  tras `/clear`. No requiere confirmación.
+- **Codex**: registra el mismo hook con `--config`. Codex exige revisar y
+  confiar una vez en él desde `/hooks`; hasta entonces lo omite. El comando es
+  idéntico en todos los proyectos, así que basta confiar una vez mientras no
+  cambie la ruta del harness.
+- **Copilot y OpenCode**: el panel se imprime en la terminal antes de abrirlos.
+
+El launcher no modifica archivos, instala dependencias ni inicializa OpenSpec,
+y no añade configuración a los proyectos. El ejecutable elegido (`codex`,
+`claude`, `copilot` u `opencode`) debe estar instalado y disponible en `PATH`.
 
 ### Orquestación y delegación
 
@@ -95,7 +106,7 @@ export PATH="$HOME/proyectos/jdev-ai/bin:$PATH"
 
 ## Validación del harness
 
-Tras modificar `bin/agent` o los archivos que inyecta, ejecuta:
+Tras modificar `bin/agent`, `bin/session-status` o los archivos que inyectan, ejecuta:
 
 ```sh
 bin/check
