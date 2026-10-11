@@ -35,5 +35,20 @@ ambos roles de forma secuencial.
 - Devuelve un resumen compacto de los cambios, las validaciones, los riesgos y
   los asuntos pendientes, sin volcar trazas o contexto intermedio innecesario.
 
+## Auxiliares de solo lectura
+
+Cuando el proveedor lo permita, el orquestador puede delegar en auxiliares sin
+capacidad de escritura que usen un modelo más ligero:
+
+- **Explorador**: localiza código, recorre el repositorio o lee documentación
+  cuando haría falta leer mucho y solo importa la conclusión.
+- **Validador**: ejecuta las validaciones del proyecto, reproduce cada fallo
+  antes de diagnosticarlo y devuelve solo los fallos con su causa, marcada como
+  confirmada o como hipótesis, para no cargar logs largos en el orquestador.
+
+No modifican archivos del proyecto ni toman decisiones; el orquestador interpreta lo que
+devuelven. Pueden ejecutarse en paralelo entre sí, pero no sustituyen la
+revisión final del orquestador.
+
 Usa un solo implementador con capacidad de escritura cada vez. Añade más roles
 o paralelismo únicamente cuando una necesidad real lo justifique.

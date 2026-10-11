@@ -67,7 +67,8 @@ y no añade configuración a los proyectos. El ejecutable elegido (`codex`,
 
 Para tareas que requieran planificación e implementación relevante, el agente
 principal actúa como orquestador y puede delegar una tarea acotada a un único
-implementador. La política común y agnóstica al proveedor está en
+implementador, además de exploraciones y validaciones a auxiliares de solo
+lectura. La política común y agnóstica al proveedor está en
 [`rules/delegation.md`](rules/delegation.md). Si una herramienta no admite
 subagentes compatibles, el agente principal desempeña ambos roles de forma
 secuencial.
@@ -104,9 +105,37 @@ JDEV_CODEX_IMPLEMENTER_EFFORT=max \
 agent mi-proyecto
 ```
 
-Estas preferencias solo se aplican al entrar mediante el launcher. Claude,
-Copilot y OpenCode mantienen su ejecución actual; podrán mapear los mismos roles
-a sus mecanismos nativos sin cambiar la política común ni los proyectos.
+Estas preferencias solo se aplican al entrar mediante el launcher.
+
+Al lanzar Claude mediante `agent`, la sesión principal (orquestador) usa el
+modelo y el esfuerzo que tengas configurados en Claude Code, y el launcher
+registra con `--agents` los subagentes de `adapters/claude/agents.json`:
+
+| Subagente | Modelo | Esfuerzo | Herramientas | Uso |
+| --- | --- | --- | --- | --- |
+| `Explore` | Haiku | `medium` | Lectura, búsqueda, Bash y web; sin edición | Sustituye al Explore integrado para búsquedas y lecturas amplias |
+| `implementer` | Sonnet | `high` | Todas | Implementador único de `rules/delegation.md` |
+| `validator` | Haiku | `medium` | Lectura, búsqueda y Bash; sin edición | Ejecuta las validaciones, reproduce los fallos y resume su causa |
+
+El reparto busca reservar el modelo principal (normalmente Opus) para
+planificar, decidir y revisar, y llevar a modelos más baratos la lectura masiva
+y la implementación acotada. Para cambiar modelos o esfuerzos, edita el
+adaptador; para la sesión principal, usa `/model` y `/effort` o pásalos tras
+`--` (por ejemplo, `agent mi-proyecto -- --model sonnet` para tareas sencillas).
+Ten en cuenta que:
+
+- Los subagentes de `--agents` tienen prioridad sobre los `.claude/agents/` de
+  un proyecto con el mismo nombre.
+- Cada subagente consume cuota propia y no comparte la caché de la sesión
+  principal; delegar trabajo trivial sale más caro que resolverlo directamente.
+  `/usage` muestra el consumo por subagente.
+- El modelo y el esfuerzo de cada subagente no se pueden comprobar desde el
+  launcher; revísalos con `/usage` tras una delegación.
+- `Explore` y `validator` no tienen herramientas de edición, pero sí Bash: que
+  no escriban en el proyecto depende de su prompt y de los permisos que apruebes.
+
+Copilot y OpenCode mantienen su ejecución actual; podrán mapear los mismos
+roles a sus mecanismos nativos sin cambiar la política común ni los proyectos.
 
 Opcionalmente, añade el directorio `bin/` a tu `PATH` para poder usar `agent` desde cualquier lugar:
 

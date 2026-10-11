@@ -5,6 +5,10 @@
 
 set -eu
 
+# Si bin/check se lanza desde una sesión abierta con bin/agent, hereda las
+# variables del panel y alteran la salida que se comprueba.
+unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING
+
 harness_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
@@ -17,10 +21,11 @@ check() {
 }
 
 # Harness temporal con un proyecto de prueba y su historial.
-mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/projects/demo/.agent/history" "$work/bin"
+mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/adapters/claude" "$work/h/projects/demo/.agent/history" "$work/bin"
 cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$work/h/bin/"
 cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
+cp "$harness_root/adapters/claude/agents.json" "$work/h/adapters/claude/"
 git init -q "$work/h"
 git init -q "$work/h/projects/demo"
 cat > "$work/h/projects/demo/.agent/history/2026-01-01-1000-prueba.md" <<'EOF'
@@ -102,6 +107,9 @@ check "resumen como systemMessage en una línea" 'echo "{}" | summary --hook && 
 check "resumen con el agente y los modelos del launcher" 'JDEV_SESSION_AGENT=codex JDEV_SESSION_ORCHESTRATOR="a [b]" JDEV_SESSION_IMPLEMENTER="c [d]" JDEV_SESSION_WARNING="aviso" summary && grep -q "^┌ jdev-ai · demo · codex$" "$work/out" && grep -q "^│ Orquestador a \[b\] · implementador c \[d\]$" "$work/out" && grep -q "^│ ⚠ aviso$" "$work/out"'
 
 check "claude recibe el hook y no imprime el resumen" 'run demo && args claude | grep -q "^{\"hooks\":{\"SessionStart\":.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
+check "claude recibe los subagentes del adaptador" 'run demo && args claude | grep -qx -- "--agents" && args claude | grep -q "\"implementer\": {" && args claude | grep -q "\"Explore\": {"'
+check "adaptador de claude es JSON válido" '! command -v python3 >/dev/null 2>&1 || python3 -m json.tool "$harness_root/adapters/claude/agents.json" >/dev/null'
+check "claude falla sin adaptador de subagentes" 'mv "$work/h/adapters/claude/agents.json" "$work/agents.json" && ! run demo; r=$?; mv "$work/agents.json" "$work/h/adapters/claude/agents.json"; [ $r -eq 0 ] && grep -q "adaptador de subagentes" "$work/out"'
 check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
 check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "^┌ jdev-ai · demo · copilot$" "$work/out"'
 

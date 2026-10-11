@@ -15,6 +15,10 @@ Con --codex, se usa por defecto Astra/medium como orquestador y un único
 implementador Luna/max definido por el harness. Puedes sobrescribirlos con las variables
 JDEV_CODEX_ORCHESTRATOR_MODEL, JDEV_CODEX_ORCHESTRATOR_EFFORT,
 JDEV_CODEX_IMPLEMENTER_MODEL y JDEV_CODEX_IMPLEMENTER_EFFORT.
+
+Con Claude, la sesión usa el modelo que tengas configurado y se registran los
+subagentes de adapters/claude/agents.json (Explore y validator con Haiku,
+implementer con Sonnet).
 EOF
 }
 
@@ -94,6 +98,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 harness_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 projects_root="$harness_root/projects"
 codex_implementer_config="$harness_root/adapters/codex/implementer.toml"
+claude_agents_config="$harness_root/adapters/claude/agents.json"
 harness_instructions="$harness_root/AGENTS.md"
 # Versión de codex-cli con la que se comprobó a mano que las claves agents.*
 # registran el implementador. Codex acepta claves -c desconocidas sin error, así
@@ -149,6 +154,15 @@ repo_root=$(CDPATH= cd -- "$repo_root" && pwd -P)
 command -v "$agent_command" >/dev/null 2>&1 || \
     fail "el ejecutable '$agent_command' no está instalado o no está disponible en PATH"
 
+claude_agents=
+if [ "$agent_command" = "claude" ]; then
+    [ -f "$claude_agents_config" ] || \
+        fail "no se encuentra el adaptador de subagentes: $claude_agents_config"
+    # Claude solo acepta --agents como ruta de archivo en modo --print; en
+    # interactivo hay que pasarle el JSON como texto.
+    claude_agents=$(cat -- "$claude_agents_config")
+fi
+
 codex_instructions_arg=
 codex_version_warning=
 if [ "$agent_command" = "codex" ]; then
@@ -202,6 +216,7 @@ hook_command="'$session_status' --hook"
 if [ "$agent_command" = "claude" ]; then
     exec claude \
         --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]}]}}" \
+        --agents "$claude_agents" \
         "$@"
 fi
 
