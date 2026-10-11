@@ -9,3 +9,4 @@ No añadas una regla compartida hasta que exista una necesidad real.
 - [`backlog.md`](backlog.md): convención para registrar y gestionar trabajo futuro por proyecto.
 - [`delegation.md`](delegation.md): roles y criterios compartidos para delegar trabajo entre agentes.
 - [`user-guides.md`](user-guides.md): criterios para crear documentación didáctica orientada a desarrolladores y usuarios.
+- [`images.md`](images.md): cuándo proponer imágenes generadas y cómo delegarlas en Codex.

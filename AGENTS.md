@@ -24,6 +24,7 @@
 - Antes de terminar una iteración relevante, registra un resumen compacto en el historial local del proyecto afectado según `<harness>/rules/history.md`. Una iteración es relevante cuando cumple los criterios de su apartado «Cuándo registrar»; omite las interacciones triviales. Si el usuario pide ponerse al día o retomar el proyecto, sigue su apartado «Puesta al día».
 - Detecta y, cuando exista evidencia clara, propone el trabajo futuro que no deba abordarse en la tarea actual según `<harness>/rules/backlog.md`; solo lo registra en `docs/backlog/` del proyecto afectado tras confirmación explícita y sin ampliar el alcance en curso.
 - Valora crear o actualizar guías didácticas para personas según `<harness>/rules/user-guides.md` cuando una funcionalidad necesite explicarse o recordarse sin contexto previo.
+- Cuando un desarrollo necesite imágenes que el proyecto no tenga, propón generarlas sin esperar a que te lo pidan, según `<harness>/rules/images.md`; genéralas solo tras confirmación explícita.
 - No modifiques otros proyectos de `<harness>/projects/` distintos del solicitado.
 - No asumas un stack, gestor de paquetes ni comandos de validación comunes.
 - Preserva los cambios locales del usuario; no los sobrescribas ni reviertas sin permiso.

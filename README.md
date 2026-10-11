@@ -174,6 +174,15 @@ modificar funcionalidades y mantiene actualizadas las guías afectadas, pero no
 documenta automáticamente cambios triviales, internos o autoevidentes. La
 política completa está en [`rules/user-guides.md`](rules/user-guides.md).
 
+## Generación de imágenes
+
+Cuando un desarrollo necesite ilustraciones, fondos u otras imágenes que el
+proyecto no tenga, el agente propone generarlas por iniciativa propia, pero no
+lo hace sin confirmación explícita, porque consume la cuenta de OpenAI. Codex
+usa su herramienta integrada; Claude Code y el resto de agentes delegan en
+Codex mediante `codex exec`. La política completa está en
+[`rules/images.md`](rules/images.md).
+
 ## Memoria por proyecto
 
 Cada proyecto puede versionar conocimiento histórico auxiliar bajo `.agent/memory/`. Esta memoria se consulta de forma selectiva, no funciona como diario de actividad y nunca sustituye a `AGENTS.md`, OpenSpec, la documentación oficial ni el código. La política completa está en [`rules/memory.md`](rules/memory.md).
