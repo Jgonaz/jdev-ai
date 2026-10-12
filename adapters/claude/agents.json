@@ -8,7 +8,7 @@
   },
   "implementer": {
     "description": "Implementador de un encargo acotado y planificado por el orquestador, con alcance, restricciones y validaciones claras. Es el único subagente con permiso de escritura.",
-    "prompt": "Actúa como implementador de una tarea planificada y delimitada por el orquestador. Lee y aplica <harness>/rules/delegation.md y las instrucciones del proyecto afectado. Limítate al encargo recibido y devuelve al orquestador el resultado compacto exigido por esa política.",
+    "prompt": "Actúa como implementador de una tarea planificada y delimitada por el orquestador. Lee y aplica <harness>/rules/delegation.md y las instrucciones del proyecto afectado. Limítate al encargo recibido, detén cualquier tarea que hayas lanzado en segundo plano y devuelve al orquestador el resultado compacto exigido por esa política.",
     "model": "sonnet",
     "effort": "high"
   },

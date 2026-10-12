@@ -24,6 +24,9 @@ ambos roles de forma secuencial.
   historial.
 - Revisa el resultado del implementador y ejecuta o confirma las validaciones
   necesarias antes de presentar el trabajo como terminado.
+- Al recibir el resultado de un subagente, comprueba que no deja tareas en
+  segundo plano (procesos, servidores o bucles de espera) y detén las que
+  queden antes de dar el trabajo por terminado.
 
 ## Implementador
 
@@ -32,6 +35,11 @@ ambos roles de forma secuencial.
 - Preserva cambios ajenos, evita ampliar el alcance y comunica cualquier bloqueo
   o decisión no prevista al orquestador.
 - No realiza commits, pushes, merges ni acciones destructivas.
+- Ejecuta las validaciones en primer plano con un tiempo límite explícito. Si
+  una debe ir en segundo plano, espera su final con el mecanismo de aviso de la
+  herramienta en lugar de bucles que sondeen una marca que podría no llegar.
+- Antes de devolver el resultado, detén toda tarea que haya lanzado en segundo
+  plano y que siga activa.
 - Devuelve un resumen compacto de los cambios, las validaciones, los riesgos y
   los asuntos pendientes, sin volcar trazas o contexto intermedio innecesario.
 
