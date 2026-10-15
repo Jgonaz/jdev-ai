@@ -134,6 +134,15 @@ Ten en cuenta que:
 - `Explore` y `validator` no tienen herramientas de edición, pero sí Bash: que
   no escriban en el proyecto depende de su prompt y de los permisos que apruebes.
 
+Para que sepas cuándo y para qué se usa cada modelo, el launcher registra
+también un hook `PreToolUse` sobre la herramienta `Agent` que ejecuta
+`bin/subagent-notice` antes de cada delegación y muestra un aviso como
+`⇢ Subagente implementer · sonnet [high] — Implementar validación del
+formulario`. El modelo sale del parámetro de la llamada o del adaptador; los
+subagentes que no están en él, como `fork`, aparecen con el modelo de la
+sesión. Además, `rules/delegation.md` pide al orquestador que explique en una
+línea por qué delega.
+
 Copilot y OpenCode mantienen su ejecución actual; podrán mapear los mismos
 roles a sus mecanismos nativos sin cambiar la política común ni los proyectos.
 
@@ -145,7 +154,7 @@ export PATH="$HOME/proyectos/jdev-ai/bin:$PATH"
 
 ## Validación del harness
 
-Tras modificar `bin/agent`, `bin/session-status` o los archivos que inyectan, ejecuta:
+Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice` o los archivos que inyectan, ejecuta:
 
 ```sh
 bin/check

@@ -212,10 +212,13 @@ case "$session_status" in
     *[\'\"\\]*) fail "la ruta del harness no puede contener comillas ni barras invertidas: $harness_root" ;;
 esac
 hook_command="'$session_status' --hook"
+subagent_notice="$harness_root/bin/subagent-notice"
 
 if [ "$agent_command" = "claude" ]; then
+    [ -x "$subagent_notice" ] || fail "no se encuentra el aviso de subagentes: $subagent_notice"
+    # PreToolUse sobre Agent avisa de cada delegación con su subagente y modelo.
     exec claude \
-        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]}]}}" \
+        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]}],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}]}}" \
         --agents "$claude_agents" \
         "$@"
 fi

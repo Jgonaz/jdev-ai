@@ -1,0 +1,90 @@
+#!/bin/sh
+
+# Hook PreToolUse de Claude para la herramienta Agent: antes de cada delegación
+# muestra a la persona qué subagente se usa, con qué modelo y para qué. Lee la
+# entrada JSON del hook por stdin y responde con un «systemMessage». El modelo
+# sale del parámetro «model» de la llamada o, si no lo trae, del adaptador
+# adapters/claude/agents.json. Nunca bloquea la delegación: ante cualquier
+# problema termina sin decir nada.
+
+set -u
+
+harness_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." 2>/dev/null && pwd -P) || exit 0
+adapter="$harness_root/adapters/claude/agents.json"
+
+input=$(cat) || exit 0
+case "$input" in
+    *'"tool_input"'*) ;;
+    *) exit 0 ;;
+esac
+# Solo interesan los parámetros de la llamada, no los campos de la sesión.
+input=${input#*'"tool_input"'}
+
+# Extrae el primer valor de cadena de una clave del JSON de entrada. Las claves
+# que aparecen dentro de otras cadenas (como el prompt) van precedidas de una
+# barra invertida y no coinciden con el patrón.
+json_field() {
+    printf '%s' "$input" | tr '\n' ' ' | awk -v key="$1" '
+        {
+            if (!match($0, "\"" key "\"[ ]*:[ ]*\"([^\"\\\\]|\\\\.)*\"")) exit
+            value = substr($0, RSTART, RLENGTH)
+            sub("^\"" key "\"[ ]*:[ ]*\"", "", value)
+            sub(/"$/, "", value)
+            gsub(/\\n/, " ", value)
+            gsub(/\\"/, "\"", value)
+            gsub(/\\\\/, "\\", value)
+            print value
+        }
+    '
+}
+
+# Lee un campo de la definición de un subagente en el adaptador, que guarda
+# cada subagente como un bloque «"nombre": { ... }» con un campo por línea.
+adapter_field() {
+    [ -f "$adapter" ] || return 0
+    awk -v name="$1" -v key="$2" '
+        $0 ~ "^[ ]*\"" name "\"[ ]*:[ ]*[{]" { inside = 1; next }
+        inside && /^[ ]*[}]/ { exit }
+        inside && $0 ~ "^[ ]*\"" key "\"[ ]*:" {
+            sub("^[ ]*\"" key "\"[ ]*:[ ]*\"", "")
+            sub(/".*/, "")
+            print
+            exit
+        }
+    ' "$adapter"
+}
+
+json_string() {
+    awk '
+        BEGIN { ORS = ""; print "\"" }
+        {
+            gsub(/\\/, "\\\\")
+            gsub(/"/, "\\\"")
+            gsub(/\t/, "\\t")
+            gsub(/\r/, "")
+            if (NR > 1) print "\\n"
+            print
+        }
+        END { print "\"" }
+    '
+}
+
+agent=$(json_field subagent_type)
+description=$(json_field description)
+model=$(json_field model)
+[ -n "$agent" ] || agent=general-purpose
+
+effort=$(adapter_field "$agent" effort)
+[ -n "$model" ] || model=$(adapter_field "$agent" model)
+if [ -z "$model" ]; then
+    case "$agent" in
+        fork|general-purpose|Plan) model="modelo de la sesión" ;;
+        *) model="modelo propio de Claude Code" ;;
+    esac
+fi
+[ -z "$effort" ] || model="$model [$effort]"
+
+message="⇢ Subagente $agent · $model"
+[ -z "$description" ] || message="$message — $description"
+
+printf '{"systemMessage":%s}\n' "$(printf '%s' "$message" | json_string)"

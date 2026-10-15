@@ -19,6 +19,8 @@ ambos roles de forma secuencial.
 - Conserva el contexto del usuario, aclara requisitos y decide el plan.
 - Lee las instrucciones del proyecto y entrega al implementador solo el contexto
   necesario para ejecutar una tarea delimitada.
+- Antes de cada delegación, anuncia a la persona en una línea en qué subagente
+  delega, para qué y por qué no lo resuelve directamente.
 - Mantiene bajo su responsabilidad las decisiones de producto, los checkpoints
   con el usuario, la revisión final, los commits, la publicación y el cierre del
   historial.

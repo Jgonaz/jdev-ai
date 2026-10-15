@@ -22,7 +22,7 @@ check() {
 
 # Harness temporal con un proyecto de prueba y su historial.
 mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/adapters/claude" "$work/h/projects/demo/.agent/history" "$work/bin"
-cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$work/h/bin/"
+cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$work/h/bin/"
 cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
 cp "$harness_root/adapters/claude/agents.json" "$work/h/adapters/claude/"
@@ -77,6 +77,7 @@ args() { tr '\0' '\n' < "$work/$1.args"; }
 
 check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
 check "sintaxis de bin/session-status" 'sh -n "$harness_root/bin/session-status"'
+check "sintaxis de bin/subagent-notice" 'sh -n "$harness_root/bin/subagent-notice"'
 check "sin argumentos muestra la ayuda" 'run && grep -q "^Uso:" "$work/out"'
 
 check "claude por defecto" 'run demo && [ -f "$work/claude.args" ] && [ ! -f "$work/codex.args" ]'
@@ -110,6 +111,12 @@ check "claude recibe el hook y no imprime el resumen" 'run demo && args claude |
 check "claude recibe los subagentes del adaptador" 'run demo && args claude | grep -qx -- "--agents" && args claude | grep -q "\"implementer\": {" && args claude | grep -q "\"Explore\": {"'
 check "adaptador de claude es JSON válido" '! command -v python3 >/dev/null 2>&1 || python3 -m json.tool "$harness_root/adapters/claude/agents.json" >/dev/null'
 check "claude falla sin adaptador de subagentes" 'mv "$work/h/adapters/claude/agents.json" "$work/agents.json" && ! run demo; r=$?; mv "$work/agents.json" "$work/h/adapters/claude/agents.json"; [ $r -eq 0 ] && grep -q "adaptador de subagentes" "$work/out"'
+check "claude recibe el aviso de subagentes" 'run demo && args claude | grep -q "\"PreToolUse\":\[{\"matcher\":\"Agent\".*subagent-notice"'
+notice() { printf '%s' "$1" | "$work/h/bin/subagent-notice"; }
+check "aviso: subagente del adaptador con modelo y esfuerzo" '[ "$(notice "{\"model\":\"opus\",\"tool_input\":{\"description\":\"Buscar \\\"x\\\"\",\"prompt\":\"\\\"subagent_type\\\": \\\"otro\\\"\",\"subagent_type\":\"implementer\"}}")" = "{\"systemMessage\":\"⇢ Subagente implementer · sonnet [high] — Buscar \\\"x\\\"\"}" ]'
+check "aviso: fork con el modelo de la sesión" 'notice "{\"tool_input\":{\"subagent_type\":\"fork\"}}" | grep -q "Subagente fork · modelo de la sesión\"}$"'
+check "aviso: modelo indicado en la llamada" 'notice "{\"tool_input\":{\"subagent_type\":\"Explore\",\"model\":\"sonnet\"}}" | grep -q "Subagente Explore · sonnet \[medium\]\"}$"'
+check "aviso: entrada no válida sin salida" '[ -z "$(notice basura)" ]'
 check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
 check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "^┌ jdev-ai · demo · copilot$" "$work/out"'
 
