@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-15
+goal: Let several agents work on the same project at once without overwriting
+  each other's changes.
