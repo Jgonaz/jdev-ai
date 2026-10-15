@@ -1,42 +1,44 @@
 ## Context
 
-`bin/agent` resuelve un proyecto de `projects/` (o el harness) y lanza el agente en la raíz del checkout con hooks del harness. Una sesión no puede cambiar su directorio de arranque. El sandbox de Codex (`workspace-write`) y los permisos de Claude solo dejan escribir sin fricción en ese directorio y en los que se añaden con `--add-dir`, y los subagentes heredan ese mismo directorio. Un worktree guarda sus objetos y refs en el `.git` del checkout principal. En los proyectos, `.agent/history/` está ignorado por Git y `.agent/memory/` está versionada.
+`bin/agent` resuelve un proyecto de `projects/` (o el harness) y lanza el agente en la raíz del checkout con hooks del harness. Codex no puede cambiar el directorio de arranque de una sesión; Claude Code sí, con `EnterWorktree`. El sandbox de Codex (`workspace-write`) y los permisos de Claude solo dejan escribir sin fricción en ese directorio y en los que se añaden con `--add-dir`, y los subagentes heredan ese mismo directorio. Un worktree guarda sus objetos y refs en el `.git` del checkout principal. En los proyectos, `.agent/history/` está ignorado por Git y `.agent/memory/` está versionada.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - Abrir sesiones como siempre y que el agente proponga el aislamiento cuando el cambio lo justifique.
-- Que la sesión que implementa un cambio grande no pueda modificar el checkout principal por accidente.
+- Hacer todo el ciclo en la misma sesión, sin abrir otra terminal.
+- Que el trabajo en el worktree no modifique el checkout principal: con garantía en Claude Code y por disciplina en Codex.
 - Que el flujo de crear, trabajar, integrar y limpiar sea idéntico en todas las CLIs.
 - Que el historial siga siendo único por proyecto.
 
 **Non-Goals:**
 
-- Mover una sesión ya abierta a un worktree.
 - Aislar puertos, bases de datos locales, cachés o servicios.
 - Instalar dependencias o ejecutar el setup del proyecto.
 - Hacer push, abrir PR o borrar ramas no integradas.
 
 ## Decisions
 
-### Una sesión por worktree, arrancada en él
+### Todo el ciclo en la misma sesión
 
-Cuando el agente infiere que el cambio es grande y el usuario acepta aislarlo, la sesión original no implementa nada. Propone un nombre de feature y le da al usuario el comando `agent <proyecto> --wt <feature> [--codex] -- "<prompt>"`. El prompt resume la tarea, las decisiones ya tomadas y los archivos relevantes. La nueva sesión arranca en el worktree, así que:
+Cuando el agente infiere que el cambio es grande y el usuario acepta aislarlo, la misma sesión ejecuta `bin/worktree create <feature>` y entra en el worktree:
 
-- las rutas relativas, los comandos, las validaciones y los subagentes trabajan sobre el worktree por defecto;
-- el árbol del checkout principal queda fuera de su directorio de trabajo, así que el sandbox de Codex o los permisos de Claude bloquean o piden confirmación ante cualquier escritura ahí.
+- **Claude Code**: `EnterWorktree` con `path` mueve el directorio de la sesión al worktree. Los comandos, las rutas relativas y los subagentes trabajan allí, así que el aislamiento es equivalente a haber abierto la sesión en el worktree. Al terminar, `ExitWorktree` con `keep` devuelve la sesión al checkout principal. El worktree lo elimina `bin/worktree`, para que la limpieza sea la misma en todas las CLIs.
+- **Codex y otras CLIs**: no pueden cambiar el directorio de la sesión. El agente usa rutas absolutas del worktree, ejecuta cada comando con el worktree como directorio de trabajo y pasa esa ruta a sus subagentes. Antes de cada commit, comprueba con `git status` que no ha modificado el checkout principal. Es un aislamiento por disciplina: el checkout principal sigue siendo escribible.
+
+El cierre lo hace la misma sesión tras confirmación: integra la rama destino en el worktree, valida, vuelve al checkout principal, ejecuta `bin/worktree merge` y, a continuación, `bin/worktree remove`.
 
 Alternativas descartadas:
 
-- Que la misma sesión trabaje en el worktree con rutas absolutas. Depende de la disciplina del agente y deja `main` escribible sin aviso.
-- El modo worktree nativo de Claude. Solo existe en una CLI y guarda los worktrees dentro del repositorio.
+- Exigir una sesión nueva en otra terminal para cada feature. Da un aislamiento fuerte en todas las CLIs, pero obliga a cambiar de terminal y a repetir el contexto. Se mantiene como opción con `--wt`.
+- Usar solo `EnterWorktree` con sus rutas propias (`.claude/worktrees/`). Solo sirve para Claude y deja los worktrees dentro del repositorio.
 
-Si además procede OpenSpec, se propone junto con el worktree y los artefactos se crean en la nueva sesión, porque forman parte del cambio.
+Si además procede OpenSpec, se propone junto con el worktree y los artefactos se crean dentro del worktree, porque forman parte del cambio.
 
 ### El launcher crea o reutiliza el worktree con `bin/worktree`
 
-`agent <proyecto> --wt <feature>` ejecuta `bin/worktree create <feature>` sobre el checkout principal y lanza el agente en la ruta resultante. Escribir `--wt` es la confirmación explícita de la rama, así que la sesión original no necesita permisos fuera de su directorio de trabajo. `agent .` dentro de un worktree resuelve el proyecto con el directorio padre de `git rev-parse --git-common-dir`, que tiene que estar dentro de `projects/`. `--wt` no se admite sobre el harness.
+`agent <proyecto> --wt <feature>` ejecuta `bin/worktree create <feature>` sobre el checkout principal y lanza el agente en la ruta resultante. Escribir `--wt` es la confirmación explícita de la rama. Sirve para retomar una feature a medias o para quien prefiera una sesión por worktree, y en ese caso Codex también queda aislado del checkout principal. `agent .` dentro de un worktree resuelve el proyecto con el directorio padre de `git rev-parse --git-common-dir`, que tiene que estar dentro de `projects/`. `--wt` no se admite sobre el harness.
 
 `bin/worktree`:
 - `create`: idempotente. Rama `feat/<feature>` y ruta `projects/<nombre>.worktrees/<feature>`, fuera del árbol del proyecto, para que los watchers, linters y búsquedas del checkout principal no la recorran. Crea la rama desde el `HEAD` del checkout principal y lo muestra. Falla sin tocar nada si la rama está en uso en otra ruta o si la ruta existe y no es ese worktree. El nombre solo admite `[a-z0-9._-]`, sin empezar por `.` ni `-` y sin `..`.
@@ -44,9 +46,11 @@ Si además procede OpenSpec, se propone junto con el worktree y los artefactos s
 - `merge`: ver más abajo.
 - `remove`: ver más abajo.
 
-### Permisos mínimos fuera del worktree
+### Permisos de escritura
 
-Para hacer commits y escribir el historial, el launcher pasa a Claude y a Codex dos directorios adicionales con `--add-dir`: el `.git` común (`git rev-parse --git-common-dir`) y `<checkout principal>/.agent/history/`, que crea si no existe. El árbol del checkout principal no se añade. Copilot y OpenCode no reciben la opción y aplican sus propios permisos.
+En el checkout principal de un proyecto, el launcher pasa a Codex `--add-dir projects/<nombre>.worktrees`, que crea si no existe, para que pueda crear y editar worktrees desde la misma sesión. Claude no lo necesita, porque `EnterWorktree` amplía el directorio de trabajo de la sesión.
+
+En una sesión abierta directamente en un worktree, para hacer commits y escribir el historial, el launcher pasa a Claude y a Codex dos directorios adicionales con `--add-dir`: el `.git` común (`git rev-parse --git-common-dir`) y `<checkout principal>/.agent/history/`, que crea si no existe. El árbol del checkout principal no se añade. Copilot y OpenCode no reciben la opción y aplican sus propios permisos.
 
 ### Commits en la rama, integración con confirmación
 
@@ -54,14 +58,14 @@ Abrir la sesión con `--wt` autoriza commits por hitos en `feat/<feature>`, con 
 
 1. El agente propone integrar cuando la feature está lista y validada, indicando la rama destino, que es el `HEAD` del checkout principal.
 2. Tras la confirmación, ejecuta `git merge <rama destino>` en el worktree, resuelve allí los conflictos y repite las validaciones.
-3. Ejecuta `bin/worktree merge <feature>`. El script exige el worktree limpio y hace `git merge --no-ff feat/<feature>` en el checkout principal. Como escribe fuera del directorio de trabajo, la CLI pedirá aprobación, que coincide con la confirmación ya dada.
+3. Ejecuta `bin/worktree merge <feature>`. El script exige el worktree limpio y hace `git merge --no-ff feat/<feature>` en el checkout principal. Antes, la sesión vuelve al checkout principal (`ExitWorktree` con `keep` en Claude Code). Si la sesión se abrió con `--wt`, el merge escribe fuera de su directorio de trabajo y la CLI pedirá aprobación, que coincide con la confirmación ya dada.
 4. Si aparece un conflicto, o un cambio local de otra sesión lo bloquea, el script aborta el merge, deja el checkout principal como estaba e indica que hay que volver al paso 2.
 
 `--no-ff` agrupa la feature en un commit de merge que se puede revertir entero.
 
-### Limpieza fuera de la sesión del worktree
+### Limpieza conservadora
 
-`bin/worktree remove <feature>` ejecuta `git worktree remove` sin `--force`, así que falla si hay cambios sin confirmar. Después borra la rama con `git branch -d`, que solo lo permite si está integrada. Si no lo está, conserva la rama y lo avisa. No se puede borrar el directorio en el que corre la propia sesión, así que el script rechaza ejecutarse desde dentro del worktree que va a eliminar. Tras el merge, el agente indica al usuario que cierre la sesión y ejecute `bin/worktree remove <feature>` desde el checkout principal, o que se lo pida a una sesión abierta allí.
+`bin/worktree remove <feature>` ejecuta `git worktree remove` sin `--force`, así que falla si hay cambios sin confirmar. Después borra la rama con `git branch -d`, que solo lo permite si está integrada. Si no lo está, conserva la rama y lo avisa. El script rechaza ejecutarse desde dentro del worktree que va a eliminar, así que el agente lo ejecuta después de volver al checkout principal. Si la sesión se abrió con `--wt`, no puede salir de su directorio, así que la limpieza se hace desde otra sesión o a mano.
 
 ### Archivos no versionados declarados por el proyecto
 
@@ -73,7 +77,7 @@ El historial se escribe en `<checkout principal>/.agent/history/`, incluso desde
 
 ## Risks / Trade-offs
 
-- [Una terminal más por feature grande] → Es el coste de un aislamiento real. El prompt inicial generado evita repetir el contexto.
+- [Codex puede escribir por error en el checkout principal] → Rutas absolutas, comprobación de `git status` en el principal antes de cada commit y la opción `--wt` cuando se quiera aislamiento fuerte.
 - [Inferencia errónea del tamaño] → El agente solo propone y el usuario decide. También se puede pedir directamente «en un worktree» o «hazlo en main».
 - [Permiso sobre el `.git` común] → Es necesario para hacer commits. Permite tocar refs de otras ramas, pero no archivos del checkout principal. Las reglas prohíben cambiar otras ramas salvo en el merge confirmado.
 - [El sandbox de Codex trata los `.git` como protegidos] → No se ha podido verificar fuera de una sesión real si un `.git` añadido con `--add-dir` es escribible (con el perfil `:workspace` sin raíces adicionales, Git falla con «Read-only file system»). Si no lo es, los commits pedirán aprobación, igual que en una sesión normal de Codex, sin cambiar el resto del diseño.

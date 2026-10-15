@@ -15,7 +15,9 @@ Con --wt <feature>, crea o reutiliza (con bin/worktree) la rama feat/<feature>
 y su worktree en projects/<proyecto>.worktrees/<feature>/ y abre el agente
 allí, de modo que la sesión no pueda modificar el checkout principal. Claude y
 Codex reciben además como directorios adicionales el .git común y el
-.agent/history/ del checkout principal. No se admite sobre el harness.
+.agent/history/ del checkout principal. No se admite sobre el harness. Sin
+--wt, Codex recibe además projects/<proyecto>.worktrees/ como directorio
+adicional para crear y usar worktrees desde la misma sesión.
 
 Con --codex, se usa por defecto Astra/medium como orquestador y un único
 implementador Luna/max definido por el harness. Puedes sobrescribirlos con las variables
@@ -259,6 +261,15 @@ if [ "$project_dir" != "$main_checkout" ]; then
     mkdir -p -- "$worktree_history_dir"
 fi
 
+# Codex no puede mover la sesión a un worktree como hace Claude, así que en el
+# checkout principal de un proyecto recibe el directorio de worktrees para
+# crearlos y trabajar en ellos desde la misma sesión (rules/worktrees.md).
+worktrees_root_dir=
+if [ "$agent_command" = "codex" ] && [ "$project_dir" = "$main_checkout" ] && [ "$main_checkout" != "$harness_root" ]; then
+    worktrees_root_dir="$projects_root/${main_checkout##*/}.worktrees"
+    mkdir -p -- "$worktrees_root_dir"
+fi
+
 cd -- "$project_dir"
 
 JDEV_MAIN_CHECKOUT=$main_checkout
@@ -303,6 +314,7 @@ if [ "$agent_command" = "codex" ]; then
     exec "$agent_command" \
         --model "$codex_orchestrator_model" \
         --config "model_reasoning_effort=\"$codex_orchestrator_effort\"" \
+        ${worktrees_root_dir:+--add-dir} ${worktrees_root_dir:+"$worktrees_root_dir"} \
         ${worktree_git_dir:+--add-dir} ${worktree_git_dir:+"$worktree_git_dir"} \
         ${worktree_history_dir:+--add-dir} ${worktree_history_dir:+"$worktree_history_dir"} \
         --config 'agents.enabled=true' \

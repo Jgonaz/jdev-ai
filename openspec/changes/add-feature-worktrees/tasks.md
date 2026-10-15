@@ -11,9 +11,11 @@
 - [x] 2.2 Pasar a Claude y Codex, en las sesiones de worktree, `--add-dir` con el `.git` común y el `.agent/history/` del checkout principal.
 - [x] 2.3 Hacer que `bin/session-status` lea el historial del checkout principal, muestre el worktree activo y liste los worktrees abiertos.
 
+- [x] 2.4 Pasar a Codex `projects/<nombre>.worktrees/` como directorio adicional en el checkout principal de un proyecto.
+
 ## 3. Reglas y documentación
 
-- [x] 3.1 Crear `rules/worktrees.md` y enlazarla desde `AGENTS.md` y `rules/README.md` con cuándo proponer el aislamiento, el comando con su prompt inicial, los límites de una sesión en un worktree, y ajustar la regla de ramas y commits.
+- [x] 3.1 Crear `rules/worktrees.md` y enlazarla desde `AGENTS.md` y `rules/README.md` con cuándo proponer el aislamiento, cómo entrar en el worktree en la misma sesión (`EnterWorktree` en Claude, rutas absolutas en Codex), los límites del trabajo en él y el cierre con merge y limpieza, y ajustar la regla de ramas y commits.
 - [x] 3.2 Añadir a `workflows/feature.md` el paso de aislar los cambios grandes y el cierre con merge y limpieza.
 - [x] 3.3 Indicar en `rules/history.md` que el historial va al checkout principal e incluye la feature.
 - [x] 3.4 Documentar en `README.md` el flujo, `--wt`, `bin/worktree`, `.agent/worktree-files` y los límites.

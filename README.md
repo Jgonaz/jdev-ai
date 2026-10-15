@@ -30,7 +30,7 @@ bin/agent mi-proyecto --opencode
 bin/agent --codex mi-proyecto     # el orden de proyecto y agente es indiferente
 bin/agent .                       # repositorio Git actual dentro de projects/ o el propio harness
 bin/agent mi-proyecto -- resume   # lo que sigue a «--» se pasa tal cual al agente
-bin/agent mi-proyecto --wt login  # sesión en el worktree de la feature «login»
+bin/agent mi-proyecto --wt login  # abre (o retoma) la sesión en el worktree «login»
 ```
 
 Al iniciar la sesión se muestra un resumen pensado para retomar un proyecto
@@ -156,32 +156,39 @@ export PATH="$HOME/proyectos/jdev-ai/bin:$PATH"
 ## Sesiones en paralelo con worktrees
 
 Si trabajas con varias sesiones a la vez en el mismo proyecto, los cambios
-grandes se aíslan en un worktree de Git con su propia rama para que no se
-pisen. No tienes que decidirlo al lanzar: abre `agent mi-proyecto` como siempre
-y, si el agente ve que el cambio es grande, te lo propondrá. Si aceptas:
+grandes se aíslan en un worktree de Git con su propia rama para que no se pisen.
+No tienes que decidirlo al lanzar ni abrir otra terminal. Abre
+`agent mi-proyecto` como siempre y, si el agente ve que el cambio es grande, te
+lo propondrá. Si aceptas, la misma sesión hace todo el ciclo:
 
-1. Te da un comando como `agent mi-proyecto --wt login -- "<resumen>"` para
-   abrir otra terminal. El launcher crea (o reutiliza) la rama `feat/login` y
-   el worktree `projects/mi-proyecto.worktrees/login/`, y abre allí el agente
-   con el resumen como primer mensaje.
-2. Esa sesión trabaja y hace commits solo en su rama. El checkout principal
-   queda fuera de su directorio de trabajo: Codex no puede escribir en él y
-   Claude pide permiso. Solo se le da acceso al `.git` común, para los commits,
-   y al historial del proyecto.
-3. Al terminar te propone integrar. Con tu confirmación, trae la rama principal
-   al worktree, resuelve allí los conflictos y hace `merge --no-ff` en el
-   checkout principal. Push y PR siguen pidiéndose aparte.
-4. Cierras esa sesión y limpias con `bin/worktree remove login` desde el
-   checkout principal. No fuerza nada: falla con cambios sin commit y solo
-   borra la rama si está integrada.
+1. Crea la rama `feat/login` y el worktree `projects/mi-proyecto.worktrees/login/`
+   con `bin/worktree create login`, y entra en él.
+2. Implementa y hace commits por hitos solo en esa rama.
+3. Al terminar, te propone integrar. Si confirmas, trae la rama principal al
+   worktree, resuelve allí los conflictos y valida. Después vuelve al checkout
+   principal, hace `merge --no-ff` y borra el worktree y la rama. El push y la PR
+   siguen pidiéndose aparte.
 
-`bin/worktree` (`create`, `list`, `merge`, `remove`) también se puede usar a
-mano desde el checkout principal o desde un worktree. El panel de inicio lista
-los worktrees abiertos del proyecto y, dentro de uno, muestra la feature y la
-rama activas; el historial es siempre el del checkout principal.
+El grado de aislamiento depende de la CLI:
+
+- **Claude Code** mueve la sesión dentro del worktree con su herramienta
+  `EnterWorktree`. Los comandos, las rutas relativas y los subagentes trabajan
+  allí, igual que si se hubiera abierto en él.
+- **Codex** no puede cambiar el directorio de la sesión, así que trabaja en el
+  worktree con rutas absolutas. El checkout principal sigue siendo escribible, y
+  el aislamiento depende de que el agente respete la regla: antes de cada commit
+  comprueba que no ha tocado el principal. El launcher le da acceso de escritura
+  a `projects/<proyecto>.worktrees/`.
+
+`bin/worktree` (`create`, `list`, `merge`, `remove`) también se puede usar a mano.
+`bin/agent mi-proyecto --wt login` abre directamente una sesión dentro de un
+worktree. Es útil para retomar una feature que quedó a medias, y en ese caso
+también Codex queda aislado del checkout principal. El panel de inicio lista los
+worktrees abiertos del proyecto y, dentro de uno, muestra la feature y la rama
+activas. El historial es siempre el del checkout principal.
 
 Si el proyecto necesita archivos no versionados, como `.env`, puede listarlos en
-`.agent/worktree-files` (una ruta relativa por línea); se copian al crear el
+`.agent/worktree-files`, con una ruta relativa por línea. Se copian al crear el
 worktree sin sobrescribir nada. Ten en cuenta que los worktrees no aíslan
 puertos, bases de datos locales, cachés ni servicios, y que dos features que
 tocan los mismos archivos chocarán igualmente al integrarse. La política

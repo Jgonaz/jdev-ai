@@ -1,9 +1,10 @@
 # Worktrees por feature
 
 Varias sesiones de agentes pueden trabajar a la vez en el mismo proyecto. Para
-que no se pisen, los cambios grandes se implementan en una sesión propia que
-arranca en un worktree de Git con su rama. Las sesiones se siguen abriendo con
-`agent <proyecto>`; el aislamiento lo propone el agente cuando procede.
+que no se pisen, los cambios grandes se implementan en un worktree de Git con su
+propia rama. Las sesiones se siguen abriendo con `agent <proyecto>`. El agente
+propone el aislamiento cuando procede y hace todo el ciclo en la misma sesión:
+crear el worktree, implementar, integrar y limpiar.
 
 ## Cuándo proponerlo
 
@@ -22,65 +23,67 @@ Para cambios pequeños trabaja en el checkout principal sin proponerlo, salvo qu
 la persona lo pida. Si rechaza el aislamiento, trabaja en el checkout principal
 como siempre. No apliques esta regla al propio harness.
 
-## Abrir la sesión del worktree
+Aceptar el worktree autoriza a crearlo y a hacer commits por hitos en
+`feat/<feature>`, con el formato de commits de `AGENTS.md`. No autoriza el
+merge, la limpieza, el push ni la apertura de una PR.
 
-Si la persona acepta, no implementes el cambio en la sesión actual. Dale un
-comando listo para copiar en otra terminal, con la CLI que esté usando:
+## Entrar en el worktree
 
-```sh
-agent <proyecto> --wt <feature> [--codex] -- "<prompt inicial>"
-```
-
-El prompt inicial resume la tarea, las decisiones ya tomadas y los archivos o
-documentos relevantes, para que la nueva sesión no dependa de esta
-conversación. Evita comillas dobles dentro del prompt o escápalas.
-
-El launcher crea o reutiliza la rama y el worktree en
-`projects/<proyecto>.worktrees/<feature>/`, copia los archivos no versionados
-que declare el proyecto en `.agent/worktree-files` y abre el agente allí.
+1. Desde el checkout principal, ejecuta `<harness>/bin/worktree create <feature>`.
+   Crea o reutiliza la rama y el worktree en
+   `projects/<proyecto>.worktrees/<feature>/`, copia los archivos no versionados
+   que declare el proyecto en `.agent/worktree-files` e imprime la ruta.
+2. Mueve la sesión al worktree:
+   - **Claude Code**: usa `EnterWorktree` con `path` igual a esa ruta. La sesión,
+     sus comandos y sus subagentes pasan a trabajar en el worktree.
+   - **Codex y otras CLIs sin esa herramienta**: la sesión sigue anclada en el
+     checkout principal. A partir de aquí, usa la ruta absoluta del worktree en
+     todas las ediciones, ejecuta cada comando con el worktree como directorio de
+     trabajo y pasa esa ruta en cada encargo a un subagente.
+3. Si el proyecto declara un setup en su `AGENTS.md` (dependencias, base de
+   datos…) y el worktree lo necesita, ejecútalo dentro del worktree.
 
 ## Trabajar en el worktree
 
-En una sesión abierta en un worktree (el panel lo indica y existe
-`JDEV_WORKTREE`):
-
-- Edita, ejecuta comandos y valida solo dentro del worktree. No modifiques el
-  checkout principal, otros worktrees ni otras ramas; la única excepción es el
-  historial local y el merge confirmado.
-- Abrir la sesión con `--wt` autoriza commits por hitos en `feat/<feature>`,
-  con el formato de commits de `AGENTS.md`. No autoriza el merge, la limpieza,
-  el push ni la apertura de una PR.
-- Si el proyecto declara un setup en su `AGENTS.md` (dependencias, base de
-  datos…) y el worktree lo necesita, ejecútalo dentro del worktree.
-- Recuerda que los worktrees no aíslan puertos, bases de datos locales, cachés
-  ni servicios: sigue las indicaciones del proyecto para no chocar con otras
-  sesiones.
+- Edita, ejecuta comandos, valida y haz commits solo en el worktree. No
+  modifiques el checkout principal, otros worktrees ni otras ramas; las únicas
+  excepciones son el historial local y el merge confirmado.
+- Sin `EnterWorktree`, antes de cada commit comprueba con `git status` en el
+  checkout principal que no le has añadido cambios. Si los hay, detente y
+  avisa, sin revertir nada que pueda ser de otra sesión.
+- Los worktrees no aíslan puertos, bases de datos locales, cachés ni servicios.
+  Sigue las indicaciones del proyecto para no chocar con otras sesiones.
 
 ## Integrar y limpiar
 
 Cuando la feature esté terminada y validada, propón integrarla indicando la rama
-destino. Tras la confirmación:
+destino, y avisa de que después se eliminarán el worktree y la rama. Tras la
+confirmación:
 
-1. Integra la rama destino en el worktree (`git merge <rama destino>`), resuelve
+1. En el worktree, integra la rama destino (`git merge <rama destino>`), resuelve
    allí los conflictos y repite las validaciones.
-2. Ejecuta `<harness>/bin/worktree merge <feature>`, que exige el worktree
-   limpio y hace `git merge --no-ff` en el checkout principal. Si falla por un
-   conflicto o por cambios locales de otra sesión, deja el checkout principal
-   como estaba: vuelve al paso 1 o informa del bloqueo.
-3. Indica a la persona que cierre la sesión y elimine el worktree desde el
-   checkout principal con `bin/worktree remove <feature>`, o que se lo pida a
-   una sesión abierta allí. Una sesión no puede borrar el directorio en el que
-   corre.
+2. Vuelve al checkout principal. En Claude Code, usa `ExitWorktree` con
+   `action: "keep"`: el worktree lo borra el script, no la herramienta.
+3. Ejecuta `<harness>/bin/worktree merge <feature>`, que exige el worktree limpio
+   y hace `git merge --no-ff` en el checkout principal. Si falla por un conflicto
+   o por cambios locales de otra sesión, deja el checkout principal como estaba.
+   En ese caso, vuelve al worktree y al paso 1, o informa del bloqueo.
+4. Ejecuta `<harness>/bin/worktree remove <feature>`. No fuerza nada: falla si
+   hay cambios sin confirmar y solo borra la rama si ya está integrada.
 
-`bin/worktree remove` no fuerza nada: falla si hay cambios sin confirmar y solo
-borra la rama si ya está integrada. Ejecútalo únicamente con confirmación.
+Si la persona prefiere dejar la feature a medias, sal del worktree sin
+eliminarlo. Se retoma más tarde desde cualquier sesión del proyecto con
+`bin/worktree create <feature>`, o abriendo directamente
+`agent <proyecto> --wt <feature>`.
 
 `bin/worktree list` muestra los worktrees del proyecto y si tienen cambios.
 
 ## Archivos no versionados
 
 Un proyecto puede versionar `.agent/worktree-files` con una ruta relativa por
-línea (se admiten líneas vacías y comentarios con `#`). Al crear o reutilizar un
-worktree se copian las rutas que existan en el checkout principal y falten en el
-worktree, sin sobrescribir nada. Sirve para archivos como `.env`; no lo uses
-para dependencias o artefactos que se puedan regenerar.
+línea; admite líneas vacías y comentarios con `#`. Al crear o reutilizar un
+worktree, se copian las rutas que existan en el checkout principal y falten en
+el worktree, sin sobrescribir nada. Sirve para archivos como `.env`; no lo uses
+para dependencias o artefactos que se puedan regenerar. Si esos archivos no
+están ignorados por Git, `bin/worktree remove` no podrá eliminar el worktree
+hasta quitarlos.

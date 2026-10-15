@@ -1,17 +1,22 @@
 ## Purpose
 
-Esta capacidad permite que varias sesiones de agentes trabajen a la vez sobre el mismo proyecto sin pisarse. El agente propone aislar los cambios grandes, que se implementan en una sesión que arranca en su propio worktree y rama, y se integran en la rama principal cuando el usuario lo confirma.
+Esta capacidad permite que varias sesiones de agentes trabajen a la vez sobre el mismo proyecto sin pisarse. El agente propone aislar los cambios grandes en un worktree con su propia rama y, desde la misma sesión, los implementa, los integra en la rama principal cuando el usuario lo confirma y limpia el worktree.
 
 ## ADDED Requirements
 
-### Requirement: El agente propone aislar los cambios grandes en otra sesión
+### Requirement: El agente propone aislar los cambios grandes y hace todo el ciclo en la misma sesión
 
-Al recibir una tarea en el checkout principal, el agente SHALL valorar si es un cambio grande según los criterios de `workflows/feature.md`. Si lo es, SHALL proponer aislarlo, indicando el nombre de la feature, la rama y la rama base, y SHALL esperar la confirmación explícita. Si el usuario acepta, SHALL darle el comando `agent <proyecto> --wt <feature>`, con la CLI en uso y un prompt inicial que resuma la tarea, y SHALL NOT implementar el cambio en esa sesión. Para los cambios pequeños, el agente SHALL trabajar en el checkout principal sin proponer worktree, salvo que el usuario lo pida.
+Al recibir una tarea en el checkout principal, el agente SHALL valorar si es un cambio grande según los criterios de `workflows/feature.md`. Si lo es, SHALL proponer aislarlo, indicando el nombre de la feature, la rama y la rama base, y SHALL esperar la confirmación explícita antes de crear nada. Si el usuario acepta, la misma sesión SHALL crear el worktree con `bin/worktree create` y SHALL trabajar en él. En Claude Code, SHALL mover la sesión al worktree con `EnterWorktree`. En las CLIs sin esa herramienta, SHALL usar las rutas del worktree y SHALL comprobar antes de cada commit que el checkout principal no tiene cambios suyos. Para los cambios pequeños, el agente SHALL trabajar en el checkout principal sin proponer worktree, salvo que el usuario lo pida.
 
-#### Scenario: Cambio grande aceptado
+#### Scenario: Cambio grande aceptado en Claude Code
 
-- **WHEN** el usuario pide en una sesión nueva una funcionalidad que afecta a varias partes del sistema y acepta aislarla
-- **THEN** el agente le da el comando para abrir la sesión en el worktree con un prompt inicial y no modifica archivos
+- **WHEN** el usuario pide una funcionalidad que afecta a varias partes del sistema y acepta aislarla
+- **THEN** el agente crea el worktree, entra en él con `EnterWorktree` e implementa allí sin abrir otra terminal
+
+#### Scenario: Cambio grande aceptado en Codex
+
+- **WHEN** el usuario acepta aislar el cambio en una sesión de Codex
+- **THEN** el agente crea el worktree y edita y ejecuta comandos solo con rutas del worktree, sin modificar el checkout principal
 
 #### Scenario: Cambio pequeño
 
@@ -23,9 +28,9 @@ Al recibir una tarea en el checkout principal, el agente SHALL valorar si es un 
 - **WHEN** el usuario rechaza el aislamiento
 - **THEN** el agente trabaja en el checkout principal como hasta ahora
 
-### Requirement: El launcher abre la sesión en el worktree
+### Requirement: El launcher permite usar worktrees
 
-`bin/agent <proyecto> --wt <feature>` SHALL crear o reutilizar, mediante `bin/worktree create`, la rama `feat/<feature>` y el worktree `projects/<proyecto>.worktrees/<feature>/`, y SHALL lanzar el agente con ese worktree como directorio de trabajo. Para Claude y Codex, SHALL añadir como directorios adicionales solo el `.git` común y `.agent/history/` del checkout principal. `agent .` SHALL aceptar un worktree de un proyecto de `projects/`. `--wt` SHALL NOT admitirse sobre el harness. Sin `--wt`, el launcher SHALL comportarse como hasta ahora.
+En el checkout principal de un proyecto, `bin/agent` SHALL pasar a Codex `projects/<proyecto>.worktrees/` como directorio adicional y SHALL crearlo si no existe. No SHALL hacerlo con el harness. `bin/agent <proyecto> --wt <feature>` SHALL crear o reutilizar, mediante `bin/worktree create`, la rama `feat/<feature>` y el worktree `projects/<proyecto>.worktrees/<feature>/`, y SHALL lanzar el agente con ese worktree como directorio de trabajo. Para Claude y Codex, SHALL añadir como directorios adicionales solo el `.git` común y `.agent/history/` del checkout principal. `agent .` SHALL aceptar un worktree de un proyecto de `projects/`. `--wt` SHALL NOT admitirse sobre el harness. Sin `--wt`, el launcher SHALL comportarse como hasta ahora.
 
 #### Scenario: Primera sesión de una feature
 
@@ -41,6 +46,11 @@ Al recibir una tarea en el checkout principal, el agente SHALL valorar si es un 
 
 - **WHEN** se ejecuta `agent demo --wt login --codex`
 - **THEN** Codex recibe como directorios adicionales el `.git` común y `projects/demo/.agent/history`, pero no `projects/demo`
+
+#### Scenario: Codex en el checkout principal
+
+- **WHEN** se ejecuta `agent demo --codex`
+- **THEN** Codex se abre en `projects/demo` y recibe `projects/demo.worktrees` como directorio adicional
 
 ### Requirement: El script valida y crea los worktrees de forma idempotente
 
@@ -65,9 +75,9 @@ Cuando exista `<checkout principal>/.agent/worktree-files`, `create` SHALL copia
 - **WHEN** el worktree ya tiene `.env`
 - **THEN** el archivo del worktree no cambia
 
-### Requirement: La sesión del worktree trabaja solo en su rama
+### Requirement: El trabajo en el worktree se limita a su rama
 
-Una sesión abierta en un worktree SHALL hacer todas las ediciones, comandos y validaciones en el worktree. SHALL NOT modificar el checkout principal, otros worktrees ni otras ramas, salvo el historial local y el merge confirmado. Abrirla con `--wt` SHALL autorizar commits por hitos en `feat/<feature>` con Conventional Commits. SHALL NOT autorizar el merge, la limpieza, el push ni la apertura de PR.
+Mientras trabaja en un worktree, el agente SHALL hacer todas las ediciones, comandos y validaciones en el worktree. SHALL NOT modificar el checkout principal, otros worktrees ni otras ramas, salvo el historial local y el merge confirmado. Aceptar el worktree, o abrir la sesión con `--wt`, SHALL autorizar commits por hitos en `feat/<feature>` con Conventional Commits. SHALL NOT autorizar el merge, la limpieza, el push ni la apertura de PR.
 
 #### Scenario: Hito completado
 
@@ -90,7 +100,7 @@ Cuando la feature esté lista, el agente SHALL proponer integrarla, indicando la
 
 ### Requirement: La limpieza no pierde trabajo
 
-`bin/worktree remove <feature>` SHALL eliminar el worktree sin forzar y SHALL borrar la rama solo si está integrada. SHALL rechazar ejecutarse desde dentro del worktree que elimina. Tras el merge, el agente SHALL indicar cómo hacer la limpieza desde el checkout principal y SHALL NOT ejecutarla sin confirmación.
+`bin/worktree remove <feature>` SHALL eliminar el worktree sin forzar y SHALL borrar la rama solo si está integrada. SHALL rechazar ejecutarse desde dentro del worktree que elimina. Tras el merge confirmado, el agente SHALL volver al checkout principal (con `ExitWorktree` y `keep` en Claude Code) y SHALL ejecutar la limpieza en la misma sesión. La confirmación del merge SHALL incluir la limpieza.
 
 #### Scenario: Worktree con cambios
 

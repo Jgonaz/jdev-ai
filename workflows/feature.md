@@ -18,12 +18,12 @@ Usa el flujo normal para correcciones que restauran el comportamiento esperado, 
 
 ## Aislar los cambios grandes
 
-Con independencia de OpenSpec, un cambio grande en un proyecto se propone
-implementarlo en una sesión propia abierta en un worktree, para que otras
-sesiones en paralelo no lo pisen. Sigue [`rules/worktrees.md`](../rules/worktrees.md):
-la sesión actual propone el worktree y, si se acepta, da el comando para abrirlo
-sin implementar nada; la integración final se hace con `merge --no-ff` tras
-confirmación. Si también procede OpenSpec, propón ambos a la vez y crea sus
+Con independencia de OpenSpec, propón implementar un cambio grande en un
+proyecto dentro de un worktree con su propia rama, para que otras sesiones en
+paralelo no lo pisen. Sigue [`rules/worktrees.md`](../rules/worktrees.md). Si se
+acepta, la misma sesión crea el worktree, entra en él, implementa y hace commits
+allí. Al terminar, y tras confirmación, integra con `merge --no-ff` y elimina el
+worktree y la rama. Si también procede OpenSpec, propón ambos a la vez y crea sus
 artefactos en el worktree.
 
 ## Aprobación previa de OpenSpec
