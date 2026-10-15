@@ -16,6 +16,16 @@ Una sola señal puede justificar OpenSpec cuando afecta a contratos, datos, segu
 
 Usa el flujo normal para correcciones que restauran el comportamiento esperado, cambios internos o refactors sin cambio funcional, tests, ajustes de configuración, documentación, textos, estilos o pequeñas mejoras claramente acotadas y reversibles. Estos cambios pueden requerir actualizar documentación o changelog si cambian algo que el proyecto ya presenta a sus usuarios, pero no necesitan proposals, specs ni tasks OpenSpec por defecto.
 
+## Aislar los cambios grandes
+
+Con independencia de OpenSpec, un cambio grande en un proyecto se propone
+implementarlo en una sesión propia abierta en un worktree, para que otras
+sesiones en paralelo no lo pisen. Sigue [`rules/worktrees.md`](../rules/worktrees.md):
+la sesión actual propone el worktree y, si se acepta, da el comando para abrirlo
+sin implementar nada; la integración final se hace con `merge --no-ff` tras
+confirmación. Si también procede OpenSpec, propón ambos a la vez y crea sus
+artefactos en el worktree.
+
 ## Aprobación previa de OpenSpec
 
 Si el agente considera que OpenSpec puede ser adecuado, debe detenerse antes de instalarlo, inicializarlo o crear/modificar cualquier artefacto dentro del `openspec/` del proyecto afectado. Primero presentará una propuesta breve con:

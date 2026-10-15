@@ -10,3 +10,4 @@ No añadas una regla compartida hasta que exista una necesidad real.
 - [`delegation.md`](delegation.md): roles y criterios compartidos para delegar trabajo entre agentes.
 - [`user-guides.md`](user-guides.md): criterios para crear documentación didáctica orientada a desarrolladores y usuarios.
 - [`images.md`](images.md): cuándo proponer imágenes generadas y cómo delegarlas en Codex.
+- [`worktrees.md`](worktrees.md): cuándo aislar un cambio grande en un worktree y cómo integrarlo.

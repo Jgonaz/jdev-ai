@@ -37,6 +37,10 @@
 - No hagas commits, pushes, merges ni acciones destructivas sin petición explícita del usuario.
 - Crea o cambia de rama y abre una Pull Request únicamente cuando el usuario lo
   solicite de forma explícita; en caso contrario, conserva la rama actual.
+- Para cambios grandes en un proyecto, propón aislarlos en una sesión abierta en
+  un worktree según `<harness>/rules/worktrees.md`. Una sesión abierta con
+  `--wt` ya tiene autorizada su rama y los commits en ella, pero no el merge, la
+  limpieza ni el push, y no modifica el checkout principal ni otros worktrees.
 - Cuando el usuario solicite un commit, usa Conventional Commits y redacta el
   mensaje en castellano salvo que el proyecto indique otro idioma. En el cuerpo,
   añade un bullet por cada archivo modificado indicando qué cambió y por qué.

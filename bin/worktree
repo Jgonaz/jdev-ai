@@ -1,0 +1,295 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+    cat <<'EOF'
+Uso: worktree <create|list|merge|remove> [feature]
+
+Gestiona los worktrees de feature de un proyecto de jdev-ai/projects/. Se
+ejecuta desde el checkout principal del proyecto o desde cualquiera de sus
+worktrees. Cada feature tiene la rama feat/<feature> y el worktree
+projects/<proyecto>.worktrees/<feature>/.
+
+  create <feature>   Crea o reutiliza la rama y el worktree (idempotente) y
+                     copia los archivos de .agent/worktree-files sin
+                     sobrescribir nada. Imprime la ruta del worktree en stdout;
+                     los mensajes informativos van a stderr.
+  list               Muestra los worktrees del proyecto y si tienen cambios.
+  merge <feature>    Integra feat/<feature> en la rama del checkout principal
+                     con merge --no-ff. Exige el worktree limpio y, ante un
+                     conflicto, aborta y deja el checkout principal como estaba.
+  remove <feature>   Elimina el worktree sin forzar y borra la rama solo si
+                     está integrada. No se puede ejecutar desde dentro de él.
+
+El nombre de la feature solo admite [a-z0-9._-], sin empezar por «.» o «-» y
+sin «..».
+EOF
+}
+
+fail() {
+    printf 'Error: %s\n' "$1" >&2
+    exit 1
+}
+
+# Los mensajes informativos van a stderr para que stdout quede reservado a la
+# ruta que captura bin/agent.
+info() {
+    printf '%s\n' "$1" >&2
+}
+
+validate_feature() {
+    case "$1" in
+        "") fail "indica el nombre de la feature" ;;
+        .*|-*) fail "el nombre de la feature no puede empezar por «.» ni por «-»: $1" ;;
+        *..*) fail "el nombre de la feature no puede contener «..»: $1" ;;
+        *[!a-z0-9._-]*) fail "el nombre de la feature solo admite [a-z0-9._-]: $1" ;;
+    esac
+    # Descarta nombres que Git no admite como rama (por ejemplo, «x.lock»).
+    git check-ref-format --branch "feat/$1" >/dev/null 2>&1 || \
+        fail "el nombre de la feature no es válido como rama de Git: $1"
+}
+
+if [ "$#" -eq 0 ]; then
+    usage
+    exit 0
+fi
+
+case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+esac
+
+command_name=$1
+shift
+feature=
+
+case "$command_name" in
+    create|merge|remove)
+        [ "$#" -ge 1 ] || fail "indica la feature: worktree $command_name <feature>"
+        [ "$#" -le 1 ] || fail "demasiados argumentos: $2"
+        feature=$1
+        ;;
+    list)
+        [ "$#" -eq 0 ] || fail "«list» no admite argumentos: $1"
+        ;;
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    *) fail "comando desconocido: $command_name (usa create, list, merge o remove)" ;;
+esac
+
+command -v git >/dev/null 2>&1 || fail "Git no está instalado o no está disponible en PATH"
+[ -z "$feature" ] || validate_feature "$feature"
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+harness_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+projects_root="$harness_root/projects"
+
+# El checkout principal es el padre del .git común, tanto si se ejecuta desde él
+# como desde uno de sus worktrees.
+common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || \
+    fail "el directorio actual no pertenece a un repositorio Git"
+common_dir=$(CDPATH= cd -- "$common_dir" && pwd -P)
+[ "${common_dir##*/}" = ".git" ] || \
+    fail "el repositorio actual no tiene un checkout principal con .git"
+main_checkout=${common_dir%/*}
+
+[ "$main_checkout" != "$harness_root" ] || \
+    fail "el harness no admite worktrees; usa un proyecto de $projects_root"
+[ "${main_checkout%/*}" = "$projects_root" ] || \
+    fail "el repositorio actual no es un proyecto directo de $projects_root"
+
+project_name=${main_checkout##*/}
+worktrees_root="$projects_root/$project_name.worktrees"
+branch="feat/$feature"
+worktree_path="$worktrees_root/$feature"
+
+git_main() {
+    git -C "$main_checkout" "$@"
+}
+
+# Ruta donde está desprotegida la rama «feat/<feature>», o nada si no lo está.
+branch_worktree() {
+    git_main worktree list --porcelain | awk -v ref="branch refs/heads/$branch" '
+        /^worktree / { path = substr($0, 10) }
+        $0 == ref { print path; exit }
+    '
+}
+
+# Pares «ruta<TAB>rama» de los worktrees que no son el checkout principal.
+other_worktrees() {
+    git_main worktree list --porcelain | awk '
+        function flush() {
+            if (path != "" && n > 1) print path "\t" (branch == "" ? "(detached)" : branch)
+        }
+        /^worktree / { flush(); n++; path = substr($0, 10); branch = ""; next }
+        /^branch / { branch = substr($0, 8); sub(/^refs\/heads\//, "", branch) }
+        END { flush() }
+    '
+}
+
+main_ref_description() {
+    if ref=$(git_main symbolic-ref --quiet --short HEAD 2>/dev/null); then
+        printf '%s' "$ref"
+    else
+        printf 'commit %s (HEAD desprotegido)' "$(git_main rev-parse --short HEAD)"
+    fi
+}
+
+copy_worktree_files() {
+    list_file="$main_checkout/.agent/worktree-files"
+    [ -f "$list_file" ] || return 0
+
+    copied=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        entry=$(printf '%s' "$line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        case "$entry" in
+            ""|"#"*) continue ;;
+            /*|*..*)
+                info "Aviso: se omite la ruta no permitida en worktree-files: $entry"
+                continue
+                ;;
+        esac
+        while [ "${entry%/}" != "$entry" ]; do entry=${entry%/}; done
+        [ -n "$entry" ] || continue
+
+        source_path="$main_checkout/$entry"
+        target_path="$worktree_path/$entry"
+        [ -e "$source_path" ] || [ -L "$source_path" ] || continue
+        # Nunca se sobrescribe: lo que ya existe en el worktree manda.
+        if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+            continue
+        fi
+
+        mkdir -p -- "$(dirname -- "$target_path")"
+        if [ -d "$source_path" ] && [ ! -L "$source_path" ]; then
+            cp -Rp -- "$source_path" "$target_path"
+        else
+            cp -p -- "$source_path" "$target_path"
+        fi
+        info "Copiado al worktree: $entry"
+        copied=$((copied + 1))
+    done < "$list_file"
+
+    [ "$copied" -gt 0 ] || info "No hay archivos de .agent/worktree-files que copiar."
+}
+
+cmd_create() {
+    git_main rev-parse --verify --quiet HEAD >/dev/null || \
+        fail "el checkout principal no tiene ningún commit: $main_checkout"
+
+    existing=$(branch_worktree)
+    if [ -n "$existing" ]; then
+        if [ "$existing" = "$worktree_path" ] && [ -d "$worktree_path" ]; then
+            info "Worktree existente: $worktree_path ($branch)"
+        else
+            fail "la rama $branch ya está desprotegida en otra ruta: $existing"
+        fi
+    else
+        if [ -e "$worktree_path" ] || [ -L "$worktree_path" ]; then
+            fail "la ruta $worktree_path ya existe y no es el worktree de $branch"
+        fi
+
+        if git_main show-ref --verify --quiet "refs/heads/$branch"; then
+            git_main worktree add -- "$worktree_path" "$branch" >&2 || \
+                fail "no se pudo crear el worktree de la rama existente $branch"
+            info "Worktree creado en $worktree_path con la rama existente $branch."
+        else
+            base=$(main_ref_description)
+            git_main worktree add -b "$branch" -- "$worktree_path" HEAD >&2 || \
+                fail "no se pudo crear la rama $branch y su worktree"
+            info "Rama $branch creada desde $base; worktree en $worktree_path."
+        fi
+    fi
+
+    copy_worktree_files
+    printf '%s\n' "$worktree_path"
+}
+
+cmd_list() {
+    entries=$(other_worktrees)
+    if [ -z "$entries" ]; then
+        printf 'No hay worktrees abiertos en %s.\n' "$project_name"
+        return 0
+    fi
+
+    printf 'Worktrees de %s:\n' "$project_name"
+    printf '%s\n' "$entries" | while IFS="$(printf '\t')" read -r path wt_branch; do
+        case "$path" in
+            "$worktrees_root/"*) name=${path#"$worktrees_root/"} ;;
+            *) name=$path ;;
+        esac
+        if [ ! -d "$path" ]; then
+            state="directorio ausente"
+        elif [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
+            state="con cambios"
+        else
+            state="limpio"
+        fi
+        printf '  %-24s %-28s %s\n' "$name" "$wt_branch" "$state"
+    done
+}
+
+require_worktree() {
+    existing=$(branch_worktree)
+    [ "$existing" = "$worktree_path" ] && [ -d "$worktree_path" ] || \
+        fail "no existe el worktree de $branch en $worktree_path"
+}
+
+cmd_merge() {
+    require_worktree
+
+    [ -z "$(git -C "$worktree_path" status --porcelain)" ] || \
+        fail "el worktree tiene cambios sin confirmar; haz commit antes de integrar: $worktree_path"
+    if git_main rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
+        fail "el checkout principal tiene un merge en curso; termínalo o abórtalo antes: $main_checkout"
+    fi
+
+    target=$(main_ref_description)
+    info "Integrando $branch en $target (checkout principal: $main_checkout)."
+    if git_main merge --no-ff --no-edit "$branch"; then
+        info "Integración completada. Para limpiar: worktree remove $feature"
+        return 0
+    fi
+
+    # Si el merge llegó a empezar hay que abortarlo; si un cambio local lo
+    # bloqueó antes, no hay nada que deshacer.
+    if git_main rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
+        git_main merge --abort
+    fi
+    fail "no se pudo integrar $branch en $target y el checkout principal ha quedado como estaba.
+Integra $target en el worktree (cd $worktree_path && git merge $target), resuelve allí los conflictos, repite las validaciones y vuelve a ejecutar «worktree merge $feature».
+Si el fallo se debe a cambios locales en el checkout principal, confírmalos o guárdalos antes."
+}
+
+cmd_remove() {
+    require_worktree
+
+    current_dir=$(pwd -P)
+    case "$current_dir/" in
+        "$worktree_path/"*) fail "no se puede eliminar el worktree desde dentro de él; ejecuta el comando desde el checkout principal" ;;
+    esac
+
+    git_main worktree remove -- "$worktree_path" >&2 || \
+        fail "no se pudo eliminar el worktree (¿tiene cambios sin confirmar?): $worktree_path"
+    # El directorio contenedor sobra cuando se elimina el último worktree.
+    rmdir "$worktrees_root" 2>/dev/null || true
+    info "Worktree eliminado: $worktree_path"
+
+    if git_main branch -d "$branch" >&2 2>&1; then
+        info "Rama $branch eliminada."
+    else
+        info "Aviso: la rama $branch no está integrada y se conserva; intégrala o bórrala a mano con «git branch -D $branch»."
+    fi
+}
+
+case "$command_name" in
+    create) cmd_create ;;
+    list) cmd_list ;;
+    merge) cmd_merge ;;
+    remove) cmd_remove ;;
+esac

@@ -4,6 +4,11 @@ La política pertenece al harness, pero cada proyecto guarda su historial local
 bajo `.agent/history/`. Sus entradas son Markdown, agnósticas al agente y deben
 estar ignoradas por el Git del proyecto.
 
+Desde una sesión abierta en un worktree, escribe siempre en el
+`.agent/history/` del checkout principal (`$JDEV_MAIN_CHECKOUT`), nunca en el
+del worktree: al estar ignorado se perdería al eliminarlo. Indica en el resumen
+la feature y la rama.
+
 El historial ayuda a recordar qué ocurrió y cómo continuar; no es una fuente de
 verdad, una transcripción del chat ni documentación permanente.
 

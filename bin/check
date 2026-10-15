@@ -7,7 +7,7 @@ set -eu
 
 # Si bin/check se lanza desde una sesión abierta con bin/agent, hereda las
 # variables del panel y alteran la salida que se comprueba.
-unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING
+unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING JDEV_MAIN_CHECKOUT JDEV_WORKTREE
 
 harness_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 work=$(mktemp -d)
@@ -22,7 +22,7 @@ check() {
 
 # Harness temporal con un proyecto de prueba y su historial.
 mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/adapters/claude" "$work/h/projects/demo/.agent/history" "$work/bin"
-cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$work/h/bin/"
+cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/worktree" "$work/h/bin/"
 cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
 cp "$harness_root/adapters/claude/agents.json" "$work/h/adapters/claude/"
@@ -59,12 +59,15 @@ mkdir -p "$work/h/projects/demo/openspec/changes/cambio-x" "$work/h/projects/dem
 printf -- '- [x] Hecha\n- [ ] Pendiente\n  - [ ] Subtarea\n' > "$work/h/projects/demo/openspec/changes/cambio-x/tasks.md"
 
 # Agentes simulados: guardan sus argumentos separados por NUL, seguidos del
-# aviso que el launcher exporta para el panel.
+# aviso que el launcher exporta para el panel, además del directorio de
+# lanzamiento (.cwd) y las variables de worktree (.env).
 verified=$(sed -n 's/^codex_verified_version=//p' "$harness_root/bin/agent")
 for name in codex claude copilot; do
     cat > "$work/bin/$name" <<EOF
 #!/bin/sh
 [ "\${1:-}" = "--version" ] && { echo "codex-cli \${FAKE_CODEX_VERSION:-$verified}"; exit 0; }
+pwd -P > "$work/$name.cwd"
+printf '%s\\n%s\\n' "\${JDEV_MAIN_CHECKOUT:-}" "\${JDEV_WORKTREE:-}" > "$work/$name.env"
 for x in "\$@" "JDEV_SESSION_WARNING=\${JDEV_SESSION_WARNING:-}"; do printf '%s\\0' "\$x"; done > "$work/$name.args"
 EOF
     chmod +x "$work/bin/$name"
@@ -72,7 +75,7 @@ done
 
 agent="$work/h/bin/agent"
 status="$work/h/bin/session-status"
-run() { rm -f "$work"/*.args; PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
+run() { rm -f "$work"/*.args "$work"/*.cwd "$work"/*.env; PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
 args() { tr '\0' '\n' < "$work/$1.args"; }
 
 check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
@@ -125,6 +128,90 @@ check "codex no duplica las reglas en el harness" '(cd "$work/h" && run . --code
 check "codex reenvía tras --" 'run demo --codex -- resume && [ "$(args codex | tail -n 2 | head -n 1)" = "resume" ]'
 check "sin aviso con la versión verificada" 'run demo --codex && ! args codex | grep -q "^JDEV_SESSION_WARNING=."'
 check "aviso con otra versión de codex" 'FAKE_CODEX_VERSION=0.0.1 run demo --codex && args codex | grep -q "^JDEV_SESSION_WARNING=codex 0.0.1 no verificado"'
+
+# Worktrees de feature: proyecto aparte con commits e historial propios.
+real_work=$(CDPATH= cd -- "$work" && pwd -P)
+wtp="$real_work/h/projects/wtp"
+wtp_trees="$real_work/h/projects/wtp.worktrees"
+worktree="$work/h/bin/worktree"
+mkdir -p "$wtp/.agent/history" "$wtp/cfg" "$wtp/carpeta"
+git init -q -b main "$wtp"
+git -C "$wtp" config user.name "Prueba"
+git -C "$wtp" config user.email "prueba@example.com"
+git -C "$wtp" config commit.gpgsign false
+printf '.agent/\n.env\ncfg/\ncarpeta/\n' > "$wtp/.gitignore"
+printf 'base\n' > "$wtp/conf.txt"
+git -C "$wtp" add .gitignore conf.txt
+git -C "$wtp" commit -q -m "base"
+printf '# Historial del principal\n\nFecha: 2026-02-02 10:00\nEstado: finalizada\n' > "$wtp/.agent/history/2026-02-02-1000-principal.md"
+wt() { (cd "$wtp" && "$worktree" "$@") > "$work/wtout" 2> "$work/wterr"; }
+wt_in() { dir=$1; shift; (cd "$dir" && "$worktree" "$@") > "$work/wtout" 2> "$work/wterr"; }
+commit_in() { printf '%s\n' "$3" > "$1/$2" && git -C "$1" add "$2" && git -C "$1" commit -q -m "cambio $2"; }
+branches() { git -C "$wtp" branch --list 'feat/*' | wc -l | tr -d ' '; }
+
+check "sintaxis de bin/worktree" 'sh -n "$harness_root/bin/worktree"'
+check "worktree sin argumentos muestra la ayuda" '"$worktree" | grep -q "^Uso: worktree"'
+check "worktree: comando desconocido falla" '! wt borrar x && grep -q "comando desconocido" "$work/wterr"'
+check "worktree create crea rama y worktree con la ruta como única salida" 'wt create x && [ "$(cat "$work/wtout")" = "$wtp_trees/x" ] && [ -e "$wtp_trees/x/.git" ] && git -C "$wtp" rev-parse --verify -q refs/heads/feat/x >/dev/null && grep -q "creada desde main" "$work/wterr"'
+check "worktree create es idempotente" 'before=$(git -C "$wtp" rev-parse feat/x) && wt create x && [ "$(cat "$work/wtout")" = "$wtp_trees/x" ] && grep -q "Worktree existente" "$work/wterr" && [ "$(git -C "$wtp" rev-parse feat/x)" = "$before" ] && [ "$(branches)" -eq 1 ]'
+check "worktree create funciona desde el worktree" 'wt_in "$wtp_trees/x" create x && [ "$(cat "$work/wtout")" = "$wtp_trees/x" ]'
+check "nombres inválidos fallan sin efectos" 'ok=0; for n in ../x .x -x A "a b" a..b a/b x.lock ""; do if wt create "$n"; then ok=1; fi; done; [ $ok -eq 0 ] && [ "$(branches)" -eq 1 ] && [ "$(ls "$wtp_trees")" = "x" ] && [ ! -e "$real_work/h/projects/x" ]'
+check "rama desprotegida en otra ruta falla sin efectos" 'git -C "$wtp" worktree add -q -b feat/busy "$real_work/otro" && ! wt create busy && grep -q "otra ruta" "$work/wterr" && [ ! -e "$wtp_trees/busy" ]'
+check "ruta ocupada que no es el worktree falla" 'mkdir -p "$wtp_trees/ocupada" && ! wt create ocupada && grep -q "ya existe" "$work/wterr" && ! git -C "$wtp" rev-parse --verify -q refs/heads/feat/ocupada >/dev/null'
+check "worktree falla desde el harness" '! wt_in "$work/h" create x && grep -q "harness" "$work/wterr"'
+check "worktree falla fuera de projects/" '! wt_in "$work/fuera" create x'
+
+# Rutas de worktree-files: una válida, un directorio, una absoluta y una con «..».
+mkdir -p "$wtp/carpeta/sub" "$real_work/h/projects/secreto"
+printf 'principal\n' > "$wtp/.env"
+printf 'cfg\n' > "$wtp/cfg/local.json"
+printf 'dentro\n' > "$wtp/carpeta/sub/a.txt"
+printf '# archivos locales\n\n.env\ncfg/local.json\n/etc/passwd\n../secreto\ncarpeta\nno-existe\n' > "$wtp/.agent/worktree-files"
+check "worktree-files copia lo declarado y rechaza rutas absolutas o con «..»" 'wt create y && [ "$(cat "$wtp_trees/y/.env")" = "principal" ] && [ "$(cat "$wtp_trees/y/cfg/local.json")" = "cfg" ] && [ -f "$wtp_trees/y/carpeta/sub/a.txt" ] && grep -q "Copiado al worktree: .env" "$work/wterr" && grep -q "no permitida.*/etc/passwd" "$work/wterr" && grep -q "no permitida.*\.\./secreto" "$work/wterr" && [ ! -e "$wtp_trees/y/etc" ] && [ ! -e "$wtp_trees/secreto" ]'
+check "worktree-files no sobrescribe" 'printf "local\n" > "$wtp_trees/y/.env" && printf "sucio\n" > "$wtp_trees/y/sucio.txt" && wt create y && [ "$(cat "$wtp_trees/y/.env")" = "local" ] && ! grep -q "Copiado" "$work/wterr"'
+
+check "worktree list muestra rama y estado" 'wt list && grep -q "^  x .*feat/x .*limpio$" "$work/wtout" && grep -q "^  y .*feat/y .*con cambios$" "$work/wtout" && ! grep -q "^  wtp " "$work/wtout"'
+check "worktree list sin worktrees lo indica" '(cd "$work/h/projects/demo" && "$worktree" list) | grep -q "No hay worktrees"'
+
+# Integración: m1 limpia, c1 en conflicto, x con un commit sin integrar.
+wt create m1 && wt create c1
+printf 'principal\n' > "$wtp/conf.txt" && git -C "$wtp" commit -q -am "principal"
+commit_in "$wtp_trees/m1" nuevo.txt "m1"
+printf 'feature\n' > "$wtp_trees/c1/conf.txt" && git -C "$wtp_trees/c1" commit -q -am "feature"
+commit_in "$wtp_trees/x" solo-x.txt "x"
+check "merge con worktree sucio falla" '! wt merge y && grep -q "cambios sin confirmar" "$work/wterr"'
+check "merge limpio crea un commit de merge --no-ff" 'before=$(git -C "$wtp" rev-parse HEAD) && wt merge m1 && [ "$(git -C "$wtp" rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ] && [ -f "$wtp/nuevo.txt" ] && [ "$(git -C "$wtp" rev-parse HEAD^1)" = "$before" ] && grep -q "en main" "$work/wterr"'
+check "merge con conflicto aborta y deja el principal intacto" 'head_before=$(git -C "$wtp" rev-parse HEAD) && status_before=$(git -C "$wtp" status --porcelain) && ! wt merge c1 && [ "$(git -C "$wtp" rev-parse HEAD)" = "$head_before" ] && [ "$(git -C "$wtp" status --porcelain)" = "$status_before" ] && ! git -C "$wtp" rev-parse -q --verify MERGE_HEAD >/dev/null && [ "$(cat "$wtp/conf.txt")" = "principal" ] && grep -q "cd .*c1 && git merge main" "$work/wterr"'
+check "merge sin worktree falla" '! wt merge inexistente && grep -q "no existe el worktree" "$work/wterr"'
+
+check "remove con cambios falla y no elimina nada" '! wt remove y && [ -d "$wtp_trees/y" ] && git -C "$wtp" rev-parse --verify -q refs/heads/feat/y >/dev/null'
+check "remove desde dentro del worktree falla" '! wt_in "$wtp_trees/x/." remove x && grep -q "desde dentro" "$work/wterr" && [ -d "$wtp_trees/x" ]'
+check "remove desde un subdirectorio del worktree falla" 'mkdir -p "$wtp_trees/x/sub" && ! wt_in "$wtp_trees/x/sub" remove x && [ -d "$wtp_trees/x" ]; r=$?; rmdir "$wtp_trees/x/sub"; [ $r -eq 0 ]'
+check "remove de rama integrada borra worktree y rama" 'wt remove m1 && [ ! -e "$wtp_trees/m1" ] && ! git -C "$wtp" rev-parse --verify -q refs/heads/feat/m1 >/dev/null'
+check "remove de rama no integrada conserva la rama y avisa" 'wt remove x && [ ! -e "$wtp_trees/x" ] && git -C "$wtp" rev-parse --verify -q refs/heads/feat/x >/dev/null && grep -q "no está integrada" "$work/wterr"'
+check "create reutiliza la rama existente sin worktree" 'wt create x && [ -f "$wtp_trees/x/solo-x.txt" ] && grep -q "rama existente feat/x" "$work/wterr"'
+
+# Launcher: --wt y «agent .» dentro de un worktree.
+check "agent --wt crea el worktree y lanza claude en él" 'run wtp --wt lanz && [ "$(cat "$work/claude.cwd")" = "$wtp_trees/lanz" ] && [ -d "$wtp_trees/lanz" ] && git -C "$wtp" rev-parse --verify -q refs/heads/feat/lanz >/dev/null && grep -q "creada desde main" "$work/out"'
+check "agent --wt exporta el checkout principal y la feature" 'run wtp --wt lanz && [ "$(sed -n 1p "$work/claude.env")" = "$wtp" ] && [ "$(sed -n 2p "$work/claude.env")" = "lanz" ] && run wtp && [ "$(sed -n 1p "$work/claude.env")" = "$wtp" ] && [ -z "$(sed -n 2p "$work/claude.env")" ]'
+check "claude recibe solo el .git común y el historial como directorios adicionales" 'run wtp --wt lanz -- "hola" && [ "$(args claude | grep -cx -- "--add-dir")" -eq 2 ] && args claude | grep -qx "$wtp/.git" && args claude | grep -qx "$wtp/.agent/history" && ! args claude | grep -qx "$wtp" && [ "$(args claude | grep -n -x -- "--add-dir" | tail -n 1 | cut -d: -f1)" -lt "$(args claude | grep -n -x -- "--settings" | cut -d: -f1)" ] && args claude | grep -qx "hola"'
+check "codex recibe solo el .git común y el historial como directorios adicionales" 'run wtp --wt lanz --codex && [ "$(cat "$work/codex.cwd")" = "$wtp_trees/lanz" ] && [ "$(args codex | grep -cx -- "--add-dir")" -eq 2 ] && args codex | grep -qx "$wtp/.git" && args codex | grep -qx "$wtp/.agent/history" && ! args codex | grep -qx "$wtp"'
+check "copilot no recibe --add-dir pero se abre en el worktree" 'run wtp --wt lanz --copilot && [ "$(cat "$work/copilot.cwd")" = "$wtp_trees/lanz" ] && ! args copilot | grep -qx -- "--add-dir"'
+check "sin --wt no hay directorios adicionales ni cambio de directorio" 'run wtp --codex && ! args codex | grep -qx -- "--add-dir" && [ "$(cat "$work/codex.cwd")" = "$wtp" ] && run wtp && ! args claude | grep -qx -- "--add-dir"'
+check "«agent .» dentro de un worktree abre el agente en él" '(cd "$wtp_trees/lanz" && run . --codex) && [ "$(cat "$work/codex.cwd")" = "$wtp_trees/lanz" ] && args codex | grep -qx "$wtp/.git" && args codex | grep -qx "$wtp/.agent/history" && ! args codex | grep -qx "$wtp" && [ "$(sed -n 2p "$work/codex.env")" = "lanz" ] && [ "$(sed -n 1p "$work/codex.env")" = "$wtp" ]'
+check "«agent .» en un subdirectorio del worktree abre la raíz del worktree" 'mkdir -p "$wtp_trees/lanz/sub" && (cd "$wtp_trees/lanz/sub" && run .) && [ "$(cat "$work/claude.cwd")" = "$wtp_trees/lanz" ]'
+check "«agent .» en un worktree fuera de projects/ falla" 'git init -q -b main "$work/fuera2" && git -C "$work/fuera2" -c user.name=x -c user.email=x@example.com commit -q --allow-empty -m base && git -C "$work/fuera2" worktree add -q "$work/fuera2-wt" -b otra && ! (cd "$work/fuera2-wt" && run .) && grep -q "no es el harness ni está dentro" "$work/out"'
+check "--wt sobre el harness falla" '! (cd "$work/h" && run . --wt x) && grep -q "no se admite sobre el harness" "$work/out" && [ ! -e "$work/h/projects/h.worktrees" ]'
+check "--wt sin valor falla" '! run wtp --wt && grep -q "requiere el nombre" "$work/out"'
+check "--wt con nombre inválido falla sin lanzar el agente" '! run wtp --wt ../x && [ ! -f "$work/claude.args" ] && grep -q "nombre de la feature" "$work/out"'
+check "--wt se admite en cualquier orden" 'run --wt orden --codex wtp && [ "$(cat "$work/codex.cwd")" = "$wtp_trees/orden" ]'
+
+# Panel: historial del principal y datos del worktree.
+psummary() { (cd "$1" && "$status" ${2:+"$2"}) > "$work/out"; }
+check "panel en un worktree: historial del principal, feature y rama" 'psummary "$wtp_trees/lanz" && grep -q "^┌ jdev-ai · wtp$" "$work/out" && grep -q "^│ «Historial del principal»$" "$work/out" && grep -q "^│ Worktree lanz · rama feat/lanz$" "$work/out" && [ "$(grep -vc "^[┌│└]" "$work/out")" -eq 0 ]'
+check "panel en el principal: lista los worktrees abiertos" 'psummary "$wtp" && grep -q "^│ Worktrees abiertos: .*lanz" "$work/out" && grep -q "agent wtp --wt <nombre>" "$work/out" && ! grep -q "^│ Worktree " "$work/out" && [ "$(grep -vc "^[┌│└]" "$work/out")" -eq 0 ]'
+check "panel sin worktrees no añade líneas de worktree" 'psummary "$work/h/projects/demo" && ! grep -q "Worktree" "$work/out"'
+check "panel en modo hook desde un worktree" 'echo "{}" | psummary "$wtp_trees/lanz" --hook && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "Worktree lanz · rama feat/lanz" "$work/out"'
 
 if [ "$failures" -gt 0 ]; then
     printf '\n%s comprobaciones fallidas\n' "$failures"

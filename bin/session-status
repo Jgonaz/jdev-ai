@@ -22,6 +22,7 @@ esac
 
 summary_points=2
 continuation_points=3
+worktree_names_shown=5
 wrap_width=74
 
 json_string() {
@@ -117,8 +118,8 @@ relative_day() {
 # de la fecha de modificación. Ordenar solo por nombre no basta: hay entradas
 # sin hora que quedarían por delante de otras posteriores del mismo día.
 latest_history() {
-    [ -d .agent/history ] || return 0
-    for file in .agent/history/*.md; do
+    [ -d "$history_dir" ] || return 0
+    for file in "$history_dir"/*.md; do
         [ -f "$file" ] || continue
         stamp=$(sed -n 's/^Fecha: *//p' "$file" | head -n 1)
         name=${file##*/}
@@ -148,13 +149,43 @@ count_matches() {
     grep -c "$1" "$2" 2>/dev/null || true
 }
 
+# Nombres de los worktrees abiertos del checkout principal «$1», uno por línea.
+open_worktrees() {
+    git -C "$1" worktree list --porcelain 2>/dev/null | awk '
+        /^worktree / { n++; if (n > 1) print substr($0, 10) }
+    ' | while IFS= read -r path; do
+        [ -d "$path" ] || continue
+        case "$path" in
+            "${1%/*}/${1##*/}.worktrees/"*) printf '%s\n' "${path#"${1%/*}/${1##*/}.worktrees/"}" ;;
+            *) printf '%s\n' "${path##*/}" ;;
+        esac
+    done
+}
+
 panel() {
     project_dir=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
     cd -- "$project_dir"
-    project_name=${project_dir##*/}
+    project_dir=$(pwd -P)
 
     has_git=0
     git rev-parse --git-dir >/dev/null 2>&1 && has_git=1
+
+    # El historial es único por proyecto y vive en el checkout principal, que
+    # en un worktree es el padre del .git común.
+    main_checkout=$project_dir
+    is_worktree=0
+    if [ "$has_git" -eq 1 ]; then
+        common_dir=$(git rev-parse --git-common-dir 2>/dev/null) && \
+            common_dir=$(CDPATH= cd -- "$common_dir" 2>/dev/null && pwd -P) || common_dir=
+        if [ -n "$common_dir" ] && [ "${common_dir##*/}" = ".git" ] && [ "${common_dir%/*}" != "$project_dir" ]; then
+            main_checkout=${common_dir%/*}
+            is_worktree=1
+        fi
+    elif [ -n "${JDEV_MAIN_CHECKOUT:-}" ] && [ -d "$JDEV_MAIN_CHECKOUT" ]; then
+        main_checkout=$JDEV_MAIN_CHECKOUT
+    fi
+    history_dir="$main_checkout/.agent/history"
+    project_name=${main_checkout##*/}
 
     header="jdev-ai · $project_name"
     [ -z "${JDEV_SESSION_AGENT:-}" ] || header="$header · $JDEV_SESSION_AGENT"
@@ -163,6 +194,24 @@ panel() {
         printf '│ Orquestador %s · implementador %s\n' "$JDEV_SESSION_ORCHESTRATOR" "${JDEV_SESSION_IMPLEMENTER:-}"
     fi
     [ -z "${JDEV_SESSION_WARNING:-}" ] || wrap '│ ⚠ ' '│   ' "$JDEV_SESSION_WARNING"
+    if [ "$is_worktree" -eq 1 ]; then
+        wt_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo "HEAD desprotegido")
+        case "$project_dir" in
+            "${main_checkout%/*}/$project_name.worktrees/"*) wt_name=${project_dir#"${main_checkout%/*}/$project_name.worktrees/"} ;;
+            *) wt_name=${project_dir##*/} ;;
+        esac
+        printf '│ Worktree %s · rama %s\n' "$wt_name" "$wt_branch"
+    elif [ "$has_git" -eq 1 ]; then
+        all_names=$(open_worktrees "$main_checkout")
+        if [ -n "$all_names" ]; then
+            total_names=$(printf '%s\n' "$all_names" | wc -l | tr -d ' ')
+            open_names=$(printf '%s\n' "$all_names" | head -n "$worktree_names_shown" | tr '\n' ' ' | sed 's/ $//; s/ /, /g')
+            [ "$total_names" -le "$worktree_names_shown" ] || \
+                open_names="$open_names (+$((total_names - worktree_names_shown)) más)"
+            wrap '│ Worktrees abiertos: ' '│   ' "$open_names"
+            printf '│   Retómalos con: agent %s --wt <nombre>\n' "$project_name"
+        fi
+    fi
     printf '│\n'
 
     latest=$(latest_history)

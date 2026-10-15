@@ -4,12 +4,18 @@ set -eu
 
 usage() {
     cat <<'EOF'
-Uso: agent <proyecto|.> [--codex|--claude|--copilot|--opencode] [-- <args del agente>]
+Uso: agent <proyecto|.> [--codex|--claude|--copilot|--opencode] [--wt <feature>] [-- <args del agente>]
 
 Abre un repositorio de jdev-ai/projects/ con Claude (por defecto) o con
 el agente indicado. El nombre del proyecto no distingue mayúsculas. Usa «agent .» desde un repositorio Git situado dentro
-de projects/ o desde el propio harness. Los argumentos posteriores a «--» se
+de projects/, desde uno de sus worktrees o desde el propio harness. Los argumentos posteriores a «--» se
 pasan sin cambios al agente (por ejemplo, un prompt inicial o «resume»).
+
+Con --wt <feature>, crea o reutiliza (con bin/worktree) la rama feat/<feature>
+y su worktree en projects/<proyecto>.worktrees/<feature>/ y abre el agente
+allí, de modo que la sesión no pueda modificar el checkout principal. Claude y
+Codex reciben además como directorios adicionales el .git común y el
+.agent/history/ del checkout principal. No se admite sobre el harness.
 
 Con --codex, se usa por defecto Astra/medium como orquestador y un único
 implementador Luna/max definido por el harness. Puedes sobrescribirlos con las variables
@@ -54,6 +60,7 @@ esac
 
 project=
 agent_command=claude
+wt_feature=
 
 # El proyecto y el agente pueden indicarse en cualquier orden; lo que siga a
 # «--» queda en "$@" para reenviarlo al agente.
@@ -63,6 +70,12 @@ while [ "$#" -gt 0 ]; do
         --claude) agent_command=claude ;;
         --copilot) agent_command=copilot ;;
         --opencode) agent_command=opencode ;;
+        --wt)
+            [ "$#" -ge 2 ] || fail "--wt requiere el nombre de la feature"
+            [ -n "$2" ] || fail "--wt requiere el nombre de la feature"
+            wt_feature=$2
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -97,6 +110,7 @@ fi
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 harness_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 projects_root="$harness_root/projects"
+worktree_script="$script_dir/worktree"
 codex_implementer_config="$harness_root/adapters/codex/implementer.toml"
 claude_agents_config="$harness_root/adapters/claude/agents.json"
 harness_instructions="$harness_root/AGENTS.md"
@@ -105,16 +119,37 @@ harness_instructions="$harness_root/AGENTS.md"
 # que el launcher solo puede avisar cuando la versión instalada es otra.
 codex_verified_version=0.160.0
 
+# Checkout principal del proyecto; solo difiere de project_dir cuando «agent .»
+# se ejecuta dentro de un worktree.
+main_checkout=
+
 if [ "$project" = "." ]; then
     command -v git >/dev/null 2>&1 || fail "Git no está instalado o no está disponible en PATH"
     project_dir=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null) || \
         fail "el directorio actual no pertenece a un repositorio Git"
     project_dir=$(CDPATH= cd -- "$project_dir" && pwd -P)
 
-    case "$project_dir/" in
-        "$projects_root/"*|"$harness_root/") ;;
-        *) fail "el repositorio actual no es el harness ni está dentro de $projects_root" ;;
-    esac
+    # En un worktree el toplevel no está en projects/, pero su checkout
+    # principal (el padre del .git común) sí.
+    common_dir=$(git -C "$PWD" rev-parse --git-common-dir 2>/dev/null) && \
+        common_dir=$(CDPATH= cd -- "$common_dir" 2>/dev/null && pwd -P) || common_dir=
+    if [ -n "$common_dir" ] && [ "${common_dir##*/}" = ".git" ] && [ "${common_dir%/*}" != "$project_dir" ]; then
+        case "${common_dir%/*}" in
+            "$projects_root"/*)
+                main_checkout=${common_dir%/*}
+                case "$main_checkout" in
+                    "$projects_root"/*/*) main_checkout= ;;
+                esac
+                ;;
+        esac
+    fi
+
+    if [ -z "$main_checkout" ]; then
+        case "$project_dir/" in
+            "$projects_root/"*|"$harness_root/") ;;
+            *) fail "el repositorio actual no es el harness ni está dentro de $projects_root" ;;
+        esac
+    fi
 else
     case "$project" in
         ""|/*|.|..|*/*) fail "indica un nombre de proyecto directo dentro de projects/" ;;
@@ -150,6 +185,13 @@ repo_root=$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null) || \
 repo_root=$(CDPATH= cd -- "$repo_root" && pwd -P)
 [ "$repo_root" = "$project_dir" ] || \
     fail "el directorio seleccionado no es la raíz de su repositorio Git: $project_dir"
+
+if [ -z "$main_checkout" ]; then
+    main_checkout=$project_dir
+fi
+if [ -n "$wt_feature" ] && [ "$main_checkout" = "$harness_root" ]; then
+    fail "--wt no se admite sobre el harness; usa un proyecto de $projects_root"
+fi
 
 command -v "$agent_command" >/dev/null 2>&1 || \
     fail "el ejecutable '$agent_command' no está instalado o no está disponible en PATH"
@@ -191,7 +233,37 @@ $harness_rules'''"
     fi
 fi
 
+# Una sesión abierta en un worktree (por --wt o por «agent .») recibe el .git
+# común y el historial del checkout principal; el resto del checkout principal
+# queda fuera de su directorio de trabajo.
+worktree_name=
+worktree_git_dir=
+worktree_history_dir=
+
+if [ -n "$wt_feature" ]; then
+    [ -x "$worktree_script" ] || fail "no se encuentra el gestor de worktrees: $worktree_script"
+    # Los mensajes de «create» van a stderr y su stdout es solo la ruta.
+    wt_path=$(cd -- "$main_checkout" && "$worktree_script" create "$wt_feature")
+    [ -d "$wt_path" ] || fail "bin/worktree no devolvió un worktree válido: $wt_path"
+    project_dir=$(CDPATH= cd -- "$wt_path" && pwd -P)
+fi
+
+if [ "$project_dir" != "$main_checkout" ]; then
+    case "$project_dir" in
+        "$projects_root/${main_checkout##*/}.worktrees/"*) worktree_name=${project_dir#"$projects_root/${main_checkout##*/}.worktrees/"} ;;
+        *) worktree_name=${project_dir##*/} ;;
+    esac
+    worktree_git_dir=$(git -C "$main_checkout" rev-parse --git-common-dir)
+    worktree_git_dir=$(CDPATH= cd -- "$main_checkout" && CDPATH= cd -- "$worktree_git_dir" && pwd -P)
+    worktree_history_dir="$main_checkout/.agent/history"
+    mkdir -p -- "$worktree_history_dir"
+fi
+
 cd -- "$project_dir"
+
+JDEV_MAIN_CHECKOUT=$main_checkout
+JDEV_WORKTREE=$worktree_name
+export JDEV_MAIN_CHECKOUT JDEV_WORKTREE
 
 # El panel se pinta dentro de la sesión mediante un hook SessionStart: si se
 # imprimiera aquí, la interfaz del agente lo borraría al arrancar. El comando
@@ -217,7 +289,11 @@ subagent_notice="$harness_root/bin/subagent-notice"
 if [ "$agent_command" = "claude" ]; then
     [ -x "$subagent_notice" ] || fail "no se encuentra el aviso de subagentes: $subagent_notice"
     # PreToolUse sobre Agent avisa de cada delegación con su subagente y modelo.
+    # --add-dir acepta varios valores, así que va antes de otra opción para no
+    # absorber el prompt que llegue en "$@".
     exec claude \
+        ${worktree_git_dir:+--add-dir} ${worktree_git_dir:+"$worktree_git_dir"} \
+        ${worktree_history_dir:+--add-dir} ${worktree_history_dir:+"$worktree_history_dir"} \
         --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]}],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}]}}" \
         --agents "$claude_agents" \
         "$@"
@@ -227,6 +303,8 @@ if [ "$agent_command" = "codex" ]; then
     exec "$agent_command" \
         --model "$codex_orchestrator_model" \
         --config "model_reasoning_effort=\"$codex_orchestrator_effort\"" \
+        ${worktree_git_dir:+--add-dir} ${worktree_git_dir:+"$worktree_git_dir"} \
+        ${worktree_history_dir:+--add-dir} ${worktree_history_dir:+"$worktree_history_dir"} \
         --config 'agents.enabled=true' \
         --config 'agents.max_concurrent_threads_per_session=1' \
         --config "agents.default_subagent_model=\"$codex_implementer_model\"" \
