@@ -4,7 +4,7 @@ set -eu
 
 usage() {
     cat <<'EOF'
-Uso: worktree <create|list|merge|remove> [feature]
+Uso: worktree <create|list|push|merge|remove> [feature] [--local]
 
 Gestiona los worktrees de feature de un proyecto de jdev-ai/projects/. Se
 ejecuta desde el checkout principal del proyecto o desde cualquiera de sus
@@ -16,14 +16,30 @@ projects/<proyecto>.worktrees/<feature>/.
                      sobrescribir nada. Imprime la ruta del worktree en stdout;
                      los mensajes informativos van a stderr.
   list               Muestra los worktrees del proyecto y si tienen cambios.
-  merge <feature>    Integra feat/<feature> en la rama del checkout principal
-                     con merge --no-ff. Exige el worktree limpio y, ante un
-                     conflicto, aborta y deja el checkout principal como estaba.
+  push <feature>     Sube feat/<feature> a «origin» (git push -u) como copia de
+                     seguridad durante el trabajo. Exige el worktree existente.
+  merge <feature>    Integra feat/<feature> en la rama del checkout principal.
+                     Exige el worktree limpio. Tiene dos modos:
+                     - Por defecto, si el checkout principal tiene «origin»:
+                       modo Pull Request. Sube la rama, exige una PR abierta
+                       contra la rama del principal (la crea antes el agente con
+                       «gh pr create --base <destino> --head feat/<feature>
+                       --title ... --body ...»), espera sus checks, la integra
+                       con «gh pr merge --merge», borra la rama remota y
+                       actualiza el principal con fetch + merge --ff-only. Si
+                       no puede actualizarlo avisa, pero termina con código 0
+                       porque la PR ya está integrada. Requiere «gh».
+                     - Con --local (en cualquier posición), o automáticamente si
+                       no hay «origin»: merge --no-ff en el principal; ante un
+                       conflicto aborta y lo deja como estaba.
   remove <feature>   Elimina el worktree sin forzar y borra la rama solo si
                      está integrada. No se puede ejecutar desde dentro de él.
 
 El nombre de la feature solo admite [a-z0-9._-], sin empezar por «.» o «-» y
 sin «..».
+
+Variable de entorno: JDEV_WORKTREE_CHECKS_WAIT (segundos, por defecto 10) es la
+espera entre los reintentos cuando la PR aún no tiene checks registrados.
 EOF
 }
 
@@ -66,8 +82,22 @@ command_name=$1
 shift
 feature=
 
+local_mode=0
 case "$command_name" in
-    create|merge|remove)
+    merge)
+        # «--local» se admite antes o después de la feature.
+        for arg in "$@"; do
+            case "$arg" in
+                --local) local_mode=1 ;;
+                *)
+                    [ -z "$feature" ] || fail "demasiados argumentos: $arg"
+                    feature=$arg
+                    ;;
+            esac
+        done
+        [ -n "$feature" ] || fail "indica la feature: worktree merge <feature> [--local]"
+        ;;
+    create|push|remove)
         [ "$#" -ge 1 ] || fail "indica la feature: worktree $command_name <feature>"
         [ "$#" -le 1 ] || fail "demasiados argumentos: $2"
         feature=$1
@@ -79,7 +109,7 @@ case "$command_name" in
         usage
         exit 0
         ;;
-    *) fail "comando desconocido: $command_name (usa create, list, merge o remove)" ;;
+    *) fail "comando desconocido: $command_name (usa create, list, push, merge o remove)" ;;
 esac
 
 command -v git >/dev/null 2>&1 || fail "Git no está instalado o no está disponible en PATH"
@@ -240,6 +270,17 @@ require_worktree() {
         fail "no existe el worktree de $branch en $worktree_path"
 }
 
+cmd_push() {
+    require_worktree
+    git_main remote get-url origin >/dev/null 2>&1 || \
+        fail "el checkout principal no tiene remoto «origin»; no hay dónde subir $branch"
+
+    info "Subiendo $branch a origin."
+    git -C "$worktree_path" push -u origin "$branch" >&2 || \
+        fail "no se pudo subir $branch a origin"
+    info "Rama $branch subida a origin."
+}
+
 cmd_merge() {
     require_worktree
 
@@ -249,6 +290,17 @@ cmd_merge() {
         fail "el checkout principal tiene un merge en curso; termínalo o abórtalo antes: $main_checkout"
     fi
 
+    if [ "$local_mode" -eq 1 ]; then
+        merge_local
+    elif git_main remote get-url origin >/dev/null 2>&1; then
+        merge_pr
+    else
+        info "Aviso: el checkout principal no tiene remoto «origin»; se integra en local (como con --local)."
+        merge_local
+    fi
+}
+
+merge_local() {
     target=$(main_ref_description)
     info "Integrando $branch en $target (checkout principal: $main_checkout)."
     if git_main merge --no-ff --no-edit "$branch"; then
@@ -264,6 +316,111 @@ cmd_merge() {
     fail "no se pudo integrar $branch en $target y el checkout principal ha quedado como estaba.
 Integra $target en el worktree (cd $worktree_path && git merge $target), resuelve allí los conflictos, repite las validaciones y vuelve a ejecutar «worktree merge $feature».
 Si el fallo se debe a cambios locales en el checkout principal, confírmalos o guárdalos antes."
+}
+
+# gh se ejecuta desde el worktree: allí la rama está desprotegida y el
+# repositorio se resuelve igual que desde el principal.
+gh_run() {
+    (cd "$worktree_path" && gh "$@")
+}
+
+# Espera los checks de la PR. Un «no checks reported» inmediato suele ser solo
+# que aún no se han registrado, así que se reintenta unas veces antes de
+# continuar sin ellos. La espera entre reintentos (segundos, por defecto 10) se
+# puede acortar con JDEV_WORKTREE_CHECKS_WAIT, por ejemplo en las pruebas.
+wait_pr_checks() {
+    wait_seconds=${JDEV_WORKTREE_CHECKS_WAIT:-10}
+    case "$wait_seconds" in
+        ""|*[!0-9]*) fail "JDEV_WORKTREE_CHECKS_WAIT debe ser un número de segundos: $wait_seconds" ;;
+    esac
+
+    checks_log=$(mktemp)
+    checks_rc=$(mktemp)
+    retries=0
+    while :; do
+        info "Esperando los checks de la PR #$pr_number."
+        # El código de gh se guarda aparte porque la tubería (tee, para ver el
+        # avance en directo y poder buscar «no checks reported») lo pierde.
+        { gh_run pr checks "$pr_number" --watch --fail-fast && echo 0 > "$checks_rc" || echo "$?" > "$checks_rc"; } 2>&1 | tee "$checks_log" >&2
+        rc=$(cat "$checks_rc")
+        if [ "$rc" = 0 ]; then
+            info "Los checks de la PR #$pr_number han pasado."
+            return 0
+        fi
+        if grep -qi 'no checks reported' "$checks_log"; then
+            if [ "$retries" -lt 3 ]; then
+                retries=$((retries + 1))
+                info "La PR #$pr_number aún no tiene checks registrados; reintento $retries/3 en ${wait_seconds} s."
+                sleep "$wait_seconds"
+                continue
+            fi
+            info "Aviso: la PR #$pr_number no tiene checks; se continúa sin ellos."
+            return 0
+        fi
+        fail "los checks de la PR #$pr_number no han pasado (o no han terminado); no se integra nada.
+Corrige el problema en el worktree ($worktree_path), haz commit y vuelve a ejecutar «worktree merge $feature»: la rama se sube de nuevo y la PR se actualiza."
+    done
+}
+
+merge_pr() {
+    target=$(git_main symbolic-ref --quiet --short HEAD 2>/dev/null) || \
+        fail "el checkout principal tiene HEAD desprotegido; sitúalo en la rama destino o usa «worktree merge $feature --local»"
+    command -v gh >/dev/null 2>&1 || \
+        fail "falta «gh» (GitHub CLI) en PATH; instálalo o integra sin Pull Request con «worktree merge $feature --local»"
+
+    gh_log=
+    checks_log=
+    checks_rc=
+    trap 'rm -f "$gh_log" "$checks_log" "$checks_rc"' EXIT
+    gh_log=$(mktemp)
+
+    info "Subiendo $branch a origin."
+    git -C "$worktree_path" push -u origin "$branch" >&2 || \
+        fail "no se pudo subir $branch a origin"
+
+    no_pr_message="no hay una Pull Request abierta de $branch contra $target.
+Créala antes con: gh pr create --base $target --head $branch --title \"...\" --body \"...\"
+y vuelve a ejecutar «worktree merge $feature»."
+    pr_info=$(gh_run pr view "$branch" --json number,state,baseRefName -q '"\(.number) \(.state) \(.baseRefName)"' 2> "$gh_log") || \
+        fail "$no_pr_message
+(gh: $(tr '\n' ' ' < "$gh_log"))"
+    read -r pr_number pr_state pr_base <<EOF
+$pr_info
+EOF
+    case "$pr_number" in
+        ""|*[!0-9]*) fail "gh devolvió datos de PR inesperados: $pr_info" ;;
+    esac
+    [ "$pr_state" = "OPEN" ] || fail "$no_pr_message
+(la PR #$pr_number está en estado $pr_state)"
+    [ "$pr_base" = "$target" ] || \
+        fail "la PR #$pr_number tiene como base $pr_base y la rama destino es $target; ajusta su base (gh pr edit $pr_number --base $target) o cámbiala de rama."
+
+    wait_pr_checks
+
+    info "Integrando la PR #$pr_number en $target (merge commit)."
+    # Sin --delete-branch: gh intentaría borrar también la rama local, que está
+    # desprotegida en el worktree. La remota se borra después.
+    gh_run pr merge "$pr_number" --merge >&2 || \
+        fail "gh no pudo integrar la PR #$pr_number (conflictos, protección de rama o requisitos pendientes).
+Integra $target en el worktree (cd $worktree_path && git fetch origin && git merge origin/$target), resuelve allí los conflictos, repite las validaciones, haz commit y vuelve a ejecutar «worktree merge $feature»."
+    info "PR #$pr_number integrada en $target."
+
+    git_main push origin --delete "$branch" >&2 || \
+        info "Aviso: no se pudo borrar $branch de origin (quizá GitHub ya la borró)."
+
+    # El principal no se fuerza: con commits locales sin subir o cambios que
+    # chocan, el ff falla y se deja a la persona decidir cómo ponerlo al día.
+    if git_main fetch origin "$target" >&2 && git_main merge --ff-only "origin/$target" >&2; then
+        info "Checkout principal actualizado con origin/$target."
+        info "Integración completada. Para limpiar: worktree remove $feature"
+        return 0
+    fi
+
+    # Se sale con 0: la integración (lo que pide este comando) ya está hecha y
+    # un código distinto de cero invitaría a repetirla, cuando la PR ya no está
+    # abierta. El aviso va en stderr y deja la rama local sin borrar en remove.
+    info "AVISO: la PR #$pr_number ya está integrada en GitHub, pero no se ha podido actualizar el checkout principal con origin/$target (¿commits locales sin subir o cambios locales que chocan?)."
+    info "Actualízalo a mano en $main_checkout (por ejemplo «git pull» o «git merge origin/$target») y después ejecuta: worktree remove $feature"
 }
 
 cmd_remove() {
@@ -290,6 +447,7 @@ cmd_remove() {
 case "$command_name" in
     create) cmd_create ;;
     list) cmd_list ;;
+    push) cmd_push ;;
     merge) cmd_merge ;;
     remove) cmd_remove ;;
 esac

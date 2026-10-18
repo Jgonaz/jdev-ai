@@ -77,30 +77,66 @@ Cuando exista `<checkout principal>/.agent/worktree-files`, `create` SHALL copia
 
 ### Requirement: El trabajo en el worktree se limita a su rama
 
-Mientras trabaja en un worktree, el agente SHALL hacer todas las ediciones, comandos y validaciones en el worktree. SHALL NOT modificar el checkout principal, otros worktrees ni otras ramas, salvo el historial local y el merge confirmado. Aceptar el worktree, o abrir la sesión con `--wt`, SHALL autorizar commits por hitos en `feat/<feature>` con Conventional Commits. SHALL NOT autorizar el merge, la limpieza, el push ni la apertura de PR.
+Mientras trabaja en un worktree, el agente SHALL hacer todas las ediciones, comandos y validaciones en el worktree. SHALL NOT modificar el checkout principal, otros worktrees ni otras ramas, salvo el historial local y el merge confirmado. Aceptar el worktree, o abrir la sesión con `--wt`, SHALL autorizar commits por hitos en `feat/<feature>` con Conventional Commits. SHALL autorizar también subir esa rama. SHALL NOT autorizar abrir la PR, integrar ni limpiar.
 
 #### Scenario: Hito completado
 
 - **WHEN** el agente completa y valida un hito de la feature
 - **THEN** hace un commit en `feat/<feature>` sin tocar la rama principal
 
-### Requirement: La integración se hace con merge sin fast-forward tras confirmación
+### Requirement: La rama se sube a GitHub durante el trabajo
 
-Cuando la feature esté lista, el agente SHALL proponer integrarla, indicando la rama destino. Tras la confirmación, SHALL integrar primero la rama destino en el worktree, resolver allí los conflictos y repetir las validaciones. Después, SHALL ejecutar `bin/worktree merge <feature>`. El script SHALL exigir el worktree limpio y SHALL ejecutar `git merge --no-ff feat/<feature>` en el checkout principal. Ante un conflicto o un cambio local que lo bloquee, SHALL abortar el merge y dejar el checkout principal como estaba.
+Mientras trabaja en un worktree de un proyecto con remoto `origin`, el agente SHALL subir `feat/<feature>` tras cada commit con `bin/worktree push <feature>`. La aceptación del worktree SHALL cubrir ese push. SHALL NOT cubrir ningún push a otras ramas.
 
-#### Scenario: Integración limpia
+#### Scenario: Commit de un hito
 
-- **WHEN** el usuario confirma la integración y la rama está al día con la rama destino
-- **THEN** se crea un commit de merge en la rama del checkout principal
+- **WHEN** el agente hace un commit en `feat/login`
+- **THEN** sube la rama a `origin` con seguimiento y la rama destino no cambia
 
-#### Scenario: Conflicto
+### Requirement: La integración se hace mediante Pull Request tras confirmación
 
-- **WHEN** el merge en el checkout principal produce conflictos
+Cuando la feature esté lista, el agente SHALL proponer integrarla indicando la rama destino y avisando de que abrirá una PR, la integrará y limpiará. Tras la confirmación:
+- SHALL integrar primero la rama destino en el worktree, resolver allí los conflictos y repetir las validaciones;
+- SHALL abrir la PR con un título en Conventional Commits y una descripción redactada por él;
+- SHALL ejecutar `bin/worktree merge <feature>`.
+
+En un proyecto con remoto `origin`, el script SHALL:
+- exigir el worktree limpio y una PR abierta de `feat/<feature>` con base en la rama destino;
+- esperar a sus checks;
+- integrarla con commit de merge sin usar `--delete-branch` de `gh`;
+- borrar la rama remota;
+- actualizar el checkout principal solo por fast-forward.
+
+Si un check falla o la PR no se puede integrar, SHALL NOT integrar. Si el fast-forward no es posible, SHALL NOT forzarlo y SHALL avisar. En un proyecto sin `origin`, o con `--local`, SHALL ejecutar `git merge --no-ff feat/<feature>` en el checkout principal y abortar ante un conflicto dejando el checkout principal como estaba.
+
+#### Scenario: Integración por PR
+
+- **WHEN** el usuario confirma la integración, la PR existe y sus checks pasan
+- **THEN** la PR se integra con commit de merge, la rama remota se borra y el checkout principal avanza hasta la rama destino remota
+
+#### Scenario: Check fallido
+
+- **WHEN** algún check de la PR falla
+- **THEN** el script termina con error sin integrar la PR
+
+#### Scenario: Sin PR abierta
+
+- **WHEN** se ejecuta `bin/worktree merge login` sin PR abierta para `feat/login`
+- **THEN** el script termina con error indicando que se cree la PR
+
+#### Scenario: Proyecto sin remoto
+
+- **WHEN** el proyecto no tiene `origin`
+- **THEN** se integra con `merge --no-ff` en local y se avisa del modo usado
+
+#### Scenario: Conflicto en modo local
+
+- **WHEN** el merge local produce conflictos
 - **THEN** el script aborta el merge, el checkout principal queda como antes y se indica que se resuelva en el worktree
 
 ### Requirement: La limpieza no pierde trabajo
 
-`bin/worktree remove <feature>` SHALL eliminar el worktree sin forzar y SHALL borrar la rama solo si está integrada. SHALL rechazar ejecutarse desde dentro del worktree que elimina. Tras el merge confirmado, el agente SHALL volver al checkout principal (con `ExitWorktree` y `keep` en Claude Code) y SHALL ejecutar la limpieza en la misma sesión. La confirmación del merge SHALL incluir la limpieza.
+`bin/worktree remove <feature>` SHALL eliminar el worktree sin forzar y SHALL borrar la rama solo si está integrada. SHALL rechazar ejecutarse desde dentro del worktree que elimina. Tras el merge confirmado, el agente SHALL volver al checkout principal (con `ExitWorktree` y `keep` en Claude Code) y SHALL ejecutar la limpieza en la misma sesión. La confirmación de la integración SHALL incluir la limpieza.
 
 #### Scenario: Worktree con cambios
 

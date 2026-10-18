@@ -36,11 +36,13 @@
 - Evita documentación, abstracciones y procesos sin un valor claro.
 - No hagas commits, pushes, merges ni acciones destructivas sin petición explícita del usuario.
 - Crea o cambia de rama y abre una Pull Request únicamente cuando el usuario lo
-  solicite de forma explícita; en caso contrario, conserva la rama actual.
+  solicite de forma explícita; en caso contrario, conserva la rama actual. El
+  flujo de worktrees es la excepción acotada que se describe a continuación.
 - Para cambios grandes en un proyecto, propón aislarlos en un worktree con su
   rama y haz todo el ciclo en la misma sesión según `<harness>/rules/worktrees.md`.
-  Aceptar el worktree autoriza a crearlo y a hacer commits en su rama, pero no el
-  merge, la limpieza ni el push. Mientras trabajes en él, no modifiques el
+  Aceptar el worktree autoriza a crearlo, a hacer commits en su rama y a subirla.
+  Confirmar la integración autoriza a abrir la PR, integrarla en la rama destino
+  y borrar el worktree y la rama. Mientras trabajes en él, no modifiques el
   checkout principal ni otros worktrees.
 - Cuando el usuario solicite un commit, usa Conventional Commits y redacta el
   mensaje en castellano salvo que el proyecto indique otro idioma. En el cuerpo,

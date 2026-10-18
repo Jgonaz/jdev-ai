@@ -21,9 +21,9 @@ Usa el flujo normal para correcciones que restauran el comportamiento esperado, 
 Con independencia de OpenSpec, propón implementar un cambio grande en un
 proyecto dentro de un worktree con su propia rama, para que otras sesiones en
 paralelo no lo pisen. Sigue [`rules/worktrees.md`](../rules/worktrees.md). Si se
-acepta, la misma sesión crea el worktree, entra en él, implementa y hace commits
-allí. Al terminar, y tras confirmación, integra con `merge --no-ff` y elimina el
-worktree y la rama. Si también procede OpenSpec, propón ambos a la vez y crea sus
+acepta, la misma sesión crea el worktree, entra en él, implementa, hace commits
+allí y sube la rama. Al terminar, y tras confirmación, la integra mediante una
+Pull Request, después de los checks de GitHub, y elimina el worktree y la rama. Si también procede OpenSpec, propón ambos a la vez y crea sus
 artefactos en el worktree.
 
 ## Aprobación previa de OpenSpec

@@ -144,8 +144,8 @@ printf 'base\n' > "$wtp/conf.txt"
 git -C "$wtp" add .gitignore conf.txt
 git -C "$wtp" commit -q -m "base"
 printf '# Historial del principal\n\nFecha: 2026-02-02 10:00\nEstado: finalizada\n' > "$wtp/.agent/history/2026-02-02-1000-principal.md"
-wt() { (cd "$wtp" && "$worktree" "$@") > "$work/wtout" 2> "$work/wterr"; }
-wt_in() { dir=$1; shift; (cd "$dir" && "$worktree" "$@") > "$work/wtout" 2> "$work/wterr"; }
+wt() { (cd "$wtp" && PATH="$work/bin:$PATH" "$worktree" "$@") > "$work/wtout" 2> "$work/wterr"; }
+wt_in() { dir=$1; shift; (cd "$dir" && PATH="$work/bin:$PATH" "$worktree" "$@") > "$work/wtout" 2> "$work/wterr"; }
 commit_in() { printf '%s\n' "$3" > "$1/$2" && git -C "$1" add "$2" && git -C "$1" commit -q -m "cambio $2"; }
 branches() { git -C "$wtp" branch --list 'feat/*' | wc -l | tr -d ' '; }
 
@@ -190,6 +190,126 @@ check "remove desde un subdirectorio del worktree falla" 'mkdir -p "$wtp_trees/x
 check "remove de rama integrada borra worktree y rama" 'wt remove m1 && [ ! -e "$wtp_trees/m1" ] && ! git -C "$wtp" rev-parse --verify -q refs/heads/feat/m1 >/dev/null'
 check "remove de rama no integrada conserva la rama y avisa" 'wt remove x && [ ! -e "$wtp_trees/x" ] && git -C "$wtp" rev-parse --verify -q refs/heads/feat/x >/dev/null && grep -q "no está integrada" "$work/wterr"'
 check "create reutiliza la rama existente sin worktree" 'wt create x && [ -f "$wtp_trees/x/solo-x.txt" ] && grep -q "rama existente feat/x" "$work/wterr"'
+
+# Integración por Pull Request: proyecto con remoto «origin» (bare temporal) y
+# un «gh» simulado que lee su estado de $gh_state y registra cada llamada. Sin
+# red ni el gh real.
+wtr="$real_work/h/projects/wtr"
+wtr_trees="$real_work/h/projects/wtr.worktrees"
+bare="$real_work/remote.git"
+gh_state="$work/gh"
+mkdir -p "$gh_state"
+git init -q --bare -b main "$bare"
+git init -q -b main "$wtr"
+git -C "$wtr" config user.name "Prueba"
+git -C "$wtr" config user.email "prueba@example.com"
+git -C "$wtr" config commit.gpgsign false
+printf 'base\n' > "$wtr/conf.txt"
+git -C "$wtr" add conf.txt
+git -C "$wtr" commit -q -m "base"
+git -C "$wtr" remote add origin "$bare"
+git -C "$wtr" push -q -u origin main
+cat > "$work/bin/gh" <<'EOF'
+#!/bin/sh
+# gh simulado. Estado en $FAKE_GH_DIR: «pr» («número estado base rama»),
+# «checks» (pass|fail|none), «merge.fail» y «bare» (ruta del remoto).
+d=$FAKE_GH_DIR
+printf '%s\n' "$*" >> "$d/calls"
+case "$1 $2" in
+    "pr view")
+        [ -f "$d/pr" ] || { echo "no pull requests found for branch \"$3\"" >&2; exit 1; }
+        read -r n st base head < "$d/pr"
+        printf '%s %s %s\n' "$n" "$st" "$base"
+        ;;
+    "pr checks")
+        case "$(cat "$d/checks")" in
+            pass) echo "All checks were successful"; exit 0 ;;
+            fail) echo "build	fail" ; exit 1 ;;
+            none) echo "no checks reported on the 'feat' branch" >&2; exit 1 ;;
+        esac
+        ;;
+    "pr merge")
+        [ ! -f "$d/merge.fail" ] || { echo "Pull request is not mergeable" >&2; exit 1; }
+        read -r n st base head < "$d/pr"
+        tmp=$(mktemp -d)
+        git clone -q "$(cat "$d/bare")" "$tmp/c" 2>/dev/null
+        cd "$tmp/c" && git checkout -q "$base" &&
+            git -c user.name=GitHub -c user.email=noreply@example.com -c commit.gpgsign=false merge -q --no-ff -m "Merge pull request #$n" "origin/$head" &&
+            git push -q origin "$base"
+        r=$?
+        rm -rf "$tmp"
+        exit $r
+        ;;
+    *) echo "gh simulado: no soportado: $*" >&2; exit 2 ;;
+esac
+EOF
+chmod +x "$work/bin/gh"
+printf '%s\n' "$bare" > "$gh_state/bare"
+export FAKE_GH_DIR="$gh_state"
+gh_reset() { rm -f "$gh_state/pr" "$gh_state/merge.fail" "$gh_state/calls"; printf 'pass\n' > "$gh_state/checks"; : > "$gh_state/calls"; }
+gh_pr() { printf '%s\n' "$1" > "$gh_state/pr"; }
+gh_calls() { grep -c "$1" "$gh_state/calls" || true; }
+wr() { (cd "$wtr" && PATH="$work/bin:$PATH" JDEV_WORKTREE_CHECKS_WAIT=0 "$worktree" "$@") > "$work/wtout" 2> "$work/wterr"; }
+bare_main() { git -C "$bare" rev-parse refs/heads/main; }
+# PATH sin gh con solo las herramientas que usa el script.
+mkdir -p "$work/nogh"
+for tool in git awk sed tr dirname cat mkdir rmdir mktemp grep sleep tee rm cp; do
+    ln -s "$(command -v "$tool")" "$work/nogh/$tool"
+done
+gh_reset
+
+check "worktree push sube la rama al remoto" 'wr create p1 && commit_in "$wtr_trees/p1" p1.txt p1 && wr push p1 && [ "$(git -C "$bare" rev-parse refs/heads/feat/p1)" = "$(git -C "$wtr_trees/p1" rev-parse HEAD)" ] && [ -z "$(cat "$work/wtout")" ]'
+check "worktree push sin worktree falla" '! wr push nada && grep -q "no existe el worktree" "$work/wterr"'
+check "worktree push sin origin falla" 'wt create sinorigen && ! wt push sinorigen && grep -q "origin" "$work/wterr"; r=$?; wt remove sinorigen; [ $r -eq 0 ]'
+
+gh_pr "7 OPEN main feat/p1"
+check "merge por PR integra en el remoto, borra la rama remota y actualiza el principal" 'old=$(git -C "$wtr" rev-parse HEAD) && wr merge p1 && [ "$(git -C "$wtr" rev-parse HEAD)" = "$(bare_main)" ] && [ "$(git -C "$wtr" rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ] && [ "$(git -C "$wtr" rev-parse HEAD^1)" = "$old" ] && [ -f "$wtr/p1.txt" ] && ! git -C "$bare" rev-parse --verify -q refs/heads/feat/p1 >/dev/null && grep -q "worktree remove p1" "$work/wterr" && [ -z "$(cat "$work/wtout")" ]'
+check "merge por PR consulta la PR, espera los checks e integra con --merge sin --delete-branch" '[ "$(gh_calls "^pr view feat/p1 --json number,state,baseRefName")" -eq 1 ] && [ "$(gh_calls "^pr checks 7 --watch --fail-fast$")" -eq 1 ] && [ "$(gh_calls "^pr merge 7 --merge$")" -eq 1 ] && [ "$(gh_calls "delete-branch")" -eq 0 ]'
+check "remove tras el merge por PR borra worktree y rama local" 'wr remove p1 && [ ! -e "$wtr_trees/p1" ] && ! git -C "$wtr" rev-parse --verify -q refs/heads/feat/p1 >/dev/null && ! grep -q "no está integrada" "$work/wterr"'
+
+gh_reset
+wr create p2 && commit_in "$wtr_trees/p2" p2.txt p2
+check "merge sin PR abierta falla sin integrar y explica cómo crearla" 'main_before=$(bare_main) && ! wr merge p2 && grep -q "gh pr create --base main --head feat/p2" "$work/wterr" && [ "$(gh_calls "^pr merge")" -eq 0 ] && [ "$(bare_main)" = "$main_before" ] && git -C "$bare" rev-parse --verify -q refs/heads/feat/p2 >/dev/null'
+gh_pr "8 OPEN main feat/p2"
+printf 'fail\n' > "$gh_state/checks"
+check "merge con checks fallidos no integra" 'main_before=$(bare_main) && ! wr merge p2 && grep -q "checks de la PR #8 no han pasado" "$work/wterr" && [ "$(gh_calls "^pr merge")" -eq 0 ] && [ "$(bare_main)" = "$main_before" ] && [ "$(gh_calls "^pr checks")" -eq 1 ]'
+gh_pr "8 OPEN develop feat/p2"
+printf 'pass\n' > "$gh_state/checks"
+check "merge con la base de la PR distinta falla sin integrar" 'main_before=$(bare_main) && ! wr merge p2 && grep -q "tiene como base develop" "$work/wterr" && [ "$(gh_calls "^pr merge")" -eq 0 ] && [ "$(bare_main)" = "$main_before" ]'
+gh_pr "8 MERGED main feat/p2"
+check "merge con la PR ya cerrada falla como si no hubiera PR" '! wr merge p2 && grep -q "estado MERGED" "$work/wterr" && [ "$(gh_calls "^pr merge")" -eq 0 ]'
+gh_pr "8 OPEN main feat/p2"
+printf 'none\n' > "$gh_state/checks"
+touch "$gh_state/merge.fail"
+: > "$gh_state/calls"
+check "merge sin checks reintenta 3 veces y continúa; si gh no integra, falla" '! wr merge p2 && [ "$(gh_calls "^pr checks")" -eq 4 ] && grep -q "no tiene checks" "$work/wterr" && [ "$(gh_calls "^pr merge 8 --merge$")" -eq 1 ] && grep -q "gh no pudo integrar" "$work/wterr" && grep -q "git merge origin/main" "$work/wterr" && [ ! -f "$wtr/p2.txt" ]'
+rm -f "$gh_state/merge.fail"
+check "merge sin checks continúa e integra" 'wr merge p2 && [ -f "$wtr/p2.txt" ] && git -C "$bare" ls-tree -r --name-only main | grep -qx p2.txt && ! git -C "$bare" rev-parse --verify -q refs/heads/feat/p2 >/dev/null'
+wr remove p2
+
+check "merge sin gh en PATH falla y sugiere --local" 'wr create sg && commit_in "$wtr_trees/sg" sg.txt sg && ! (cd "$wtr" && PATH="$work/nogh" "$worktree" merge sg) > "$work/wtout" 2> "$work/wterr" && grep -q "falta «gh».*--local" "$work/wterr" && ! git -C "$bare" rev-parse --verify -q refs/heads/feat/sg >/dev/null'
+
+gh_reset
+check "merge --local mantiene el merge --no-ff local sin usar gh ni subir la rama" 'before=$(git -C "$wtr" rev-parse HEAD) && wr merge --local sg && [ "$(git -C "$wtr" rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ] && [ "$(git -C "$wtr" rev-parse HEAD^1)" = "$before" ] && [ -f "$wtr/sg.txt" ] && [ ! -s "$gh_state/calls" ] && [ "$(bare_main)" != "$(git -C "$wtr" rev-parse HEAD)" ] && ! grep -q "Aviso" "$work/wterr"'
+check "merge <feature> --local se admite tras la feature" 'wr create lo && commit_in "$wtr_trees/lo" lo.txt lo && wr merge lo --local && [ -f "$wtr/lo.txt" ] && [ ! -s "$gh_state/calls" ]'
+check "merge con dos features falla" '! wr merge lo sg && grep -q "demasiados argumentos" "$work/wterr"'
+wr remove sg; wr remove lo
+git -C "$wtr" push -q origin main
+
+wr create p3 && commit_in "$wtr_trees/p3" p3.txt p3
+gh_pr "9 OPEN main feat/p3"
+commit_in "$wtr" local-only.txt local
+check "principal con commit local sin subir: la PR se integra, el ff no y se avisa con código 0" 'local_head=$(git -C "$wtr" rev-parse HEAD) && wr merge p3 && git -C "$bare" ls-tree -r --name-only main | grep -qx p3.txt && [ "$(git -C "$wtr" rev-parse HEAD)" = "$local_head" ] && [ ! -f "$wtr/p3.txt" ] && grep -q "AVISO: la PR #9 ya está integrada en GitHub" "$work/wterr" && ! grep -q "Integración completada" "$work/wterr"'
+check "remove con el principal sin actualizar conserva la rama y avisa" 'wr remove p3 && git -C "$wtr" rev-parse --verify -q refs/heads/feat/p3 >/dev/null && grep -q "no está integrada" "$work/wterr"'
+
+check "merge con el principal en HEAD desprotegido falla sin integrar" 'wr create dh && commit_in "$wtr_trees/dh" dh.txt dh && git -C "$wtr" checkout -q --detach && ! wr merge dh && grep -q "HEAD desprotegido" "$work/wterr"; r=$?; git -C "$wtr" checkout -q main; [ $r -eq 0 ]'
+wr remove dh || true
+git -C "$wtr" branch -D feat/dh >/dev/null 2>&1 || true
+
+: > "$gh_state/calls"
+wt create auto && commit_in "$wtp_trees/auto" auto.txt auto
+check "proyecto sin origin integra en local automáticamente con aviso" 'wt merge auto && [ -f "$wtp/auto.txt" ] && grep -q "Aviso: .*no tiene remoto «origin»" "$work/wterr" && [ ! -s "$gh_state/calls" ]'
+wt remove auto
 
 # Launcher: --wt y «agent .» dentro de un worktree.
 check "agent --wt crea el worktree y lanza claude en él" 'run wtp --wt lanz && [ "$(cat "$work/claude.cwd")" = "$wtp_trees/lanz" ] && [ -d "$wtp_trees/lanz" ] && git -C "$wtp" rev-parse --verify -q refs/heads/feat/lanz >/dev/null && grep -q "creada desde main" "$work/out"'

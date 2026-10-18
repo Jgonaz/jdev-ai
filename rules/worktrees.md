@@ -4,7 +4,8 @@ Varias sesiones de agentes pueden trabajar a la vez en el mismo proyecto. Para
 que no se pisen, los cambios grandes se implementan en un worktree de Git con su
 propia rama. Las sesiones se siguen abriendo con `agent <proyecto>`. El agente
 propone el aislamiento cuando procede y hace todo el ciclo en la misma sesión:
-crear el worktree, implementar, integrar y limpiar.
+crear el worktree, implementar, subir la rama, integrarla mediante una Pull
+Request y limpiar.
 
 ## Cuándo proponerlo
 
@@ -20,12 +21,14 @@ Si lo es, propón aislarlo antes de modificar nada e indica:
 - si además propones OpenSpec, porque sus artefactos se crearán en el worktree.
 
 Para cambios pequeños trabaja en el checkout principal sin proponerlo, salvo que
-la persona lo pida. Si rechaza el aislamiento, trabaja en el checkout principal
-como siempre. No apliques esta regla al propio harness.
+la persona lo pida. Si lo pide expresamente («crea un worktree para…»), esa
+petición ya es la aceptación: no vuelvas a preguntar. Si rechaza el
+aislamiento, trabaja en el checkout principal como siempre. No apliques esta
+regla al propio harness.
 
-Aceptar el worktree autoriza a crearlo y a hacer commits por hitos en
-`feat/<feature>`, con el formato de commits de `AGENTS.md`. No autoriza el
-merge, la limpieza, el push ni la apertura de una PR.
+Aceptar el worktree autoriza a crearlo, a hacer commits por hitos en
+`feat/<feature>` con el formato de commits de `AGENTS.md` y a subir esa rama a
+GitHub. No autoriza abrir la PR, integrar ni limpiar.
 
 ## Entrar en el worktree
 
@@ -45,8 +48,10 @@ merge, la limpieza, el push ni la apertura de una PR.
 
 ## Trabajar en el worktree
 
-- Edita, ejecuta comandos, valida y haz commits solo en el worktree. No
-  modifiques el checkout principal, otros worktrees ni otras ramas; las únicas
+- Edita, ejecuta comandos, valida y haz commits solo en el worktree. Tras cada
+  commit, sube la rama con `<harness>/bin/worktree push <feature>`, que sirve de
+  copia de seguridad.
+- No modifiques el checkout principal, otros worktrees ni otras ramas; las únicas
   excepciones son el historial local y el merge confirmado.
 - Sin `EnterWorktree`, antes de cada commit comprueba con `git status` en el
   checkout principal que no le has añadido cambios. Si los hay, detente y
@@ -57,19 +62,36 @@ merge, la limpieza, el push ni la apertura de una PR.
 ## Integrar y limpiar
 
 Cuando la feature esté terminada y validada, propón integrarla indicando la rama
-destino, y avisa de que después se eliminarán el worktree y la rama. Tras la
+destino. Avisa de que abrirás una PR, esperarás a los checks de GitHub, la
+integrarás y eliminarás el worktree y la rama, local y remota. Tras la
 confirmación:
 
 1. En el worktree, integra la rama destino (`git merge <rama destino>`), resuelve
-   allí los conflictos y repite las validaciones.
-2. Vuelve al checkout principal. En Claude Code, usa `ExitWorktree` con
+   allí los conflictos, repite las validaciones y haz commit.
+2. Abre la PR desde el worktree con
+   `gh pr create --base <rama destino> --head feat/<feature>`. El título sigue
+   Conventional Commits en castellano y la descripción resume qué cambia, por
+   qué y cómo se ha validado. Si ya hay una PR abierta para la rama, reutilízala.
+3. Vuelve al checkout principal. En Claude Code, usa `ExitWorktree` con
    `action: "keep"`: el worktree lo borra el script, no la herramienta.
-3. Ejecuta `<harness>/bin/worktree merge <feature>`, que exige el worktree limpio
-   y hace `git merge --no-ff` en el checkout principal. Si falla por un conflicto
-   o por cambios locales de otra sesión, deja el checkout principal como estaba.
-   En ese caso, vuelve al worktree y al paso 1, o informa del bloqueo.
-4. Ejecuta `<harness>/bin/worktree remove <feature>`. No fuerza nada: falla si
-   hay cambios sin confirmar y solo borra la rama si ya está integrada.
+4. Ejecuta `<harness>/bin/worktree merge <feature>`. El script:
+   - sube la rama;
+   - espera a los checks de la PR;
+   - la integra con un commit de merge;
+   - borra la rama remota;
+   - actualiza el checkout principal.
+
+   Si un check falla o la PR no se puede integrar, se detiene sin integrar:
+   corrige en el worktree y repite. Si la PR se integra pero el checkout
+   principal no se puede actualizar (porque tiene commits sin subir o cambios
+   locales que chocan), informa a la persona en lugar de forzarlo.
+5. Ejecuta `<harness>/bin/worktree remove <feature>`. No fuerza nada: falla si
+   hay cambios sin confirmar y solo borra la rama local si ya está integrada.
+
+Si el proyecto no tiene remoto `origin`, `bin/worktree merge` integra en local
+con `merge --no-ff` y lo avisa. Si lo tiene pero falta `gh` o no hay sesión
+iniciada, no cambies de modo por tu cuenta: informa y pregunta si se integra en
+local con `bin/worktree merge --local <feature>`.
 
 Si la persona prefiere dejar la feature a medias, sal del worktree sin
 eliminarlo. Se retoma más tarde desde cualquier sesión del proyecto con

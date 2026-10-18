@@ -5,6 +5,8 @@
 - [x] 1.3 Implementar `merge`: exigir el worktree limpio, ejecutar `merge --no-ff` en el checkout principal y abortar ante un conflicto o un bloqueo.
 - [x] 1.4 Implementar `remove`: eliminar el worktree sin `--force`, borrar la rama con `branch -d`, avisar si no está integrada y rechazar la ejecución desde el propio worktree.
 
+- [x] 1.5 Añadir `push` e integrar por Pull Request en `merge` (checks, `gh pr merge --merge`, borrado de la rama remota y fast-forward del principal), con `--local` y modo local automático sin `origin`.
+
 ## 2. Launcher y panel
 
 - [x] 2.1 Añadir a `bin/agent` la opción `--wt <feature>`, que delega en `bin/worktree create` y lanza el agente en el worktree, y aceptar `agent .` dentro de un worktree. Rechazar `--wt` sobre el harness.
@@ -19,6 +21,8 @@
 - [x] 3.2 Añadir a `workflows/feature.md` el paso de aislar los cambios grandes y el cierre con merge y limpieza.
 - [x] 3.3 Indicar en `rules/history.md` que el historial va al checkout principal e incluye la feature.
 - [x] 3.4 Documentar en `README.md` el flujo, `--wt`, `bin/worktree`, `.agent/worktree-files` y los límites.
+
+- [x] 3.5 Describir en `rules/worktrees.md`, `AGENTS.md`, `workflows/feature.md` y `README.md` el push de la rama y la integración por PR.
 
 ## 4. Verificación y cierre
 

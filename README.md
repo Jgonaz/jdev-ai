@@ -159,15 +159,26 @@ Si trabajas con varias sesiones a la vez en el mismo proyecto, los cambios
 grandes se aíslan en un worktree de Git con su propia rama para que no se pisen.
 No tienes que decidirlo al lanzar ni abrir otra terminal. Abre
 `agent mi-proyecto` como siempre y, si el agente ve que el cambio es grande, te
-lo propondrá. Si aceptas, la misma sesión hace todo el ciclo:
+lo propondrá. También puedes pedirlo para cualquier cambio («crea un worktree
+para…»). Si aceptas, la misma sesión hace todo el ciclo:
 
 1. Crea la rama `feat/login` y el worktree `projects/mi-proyecto.worktrees/login/`
    con `bin/worktree create login`, y entra en él.
-2. Implementa y hace commits por hitos solo en esa rama.
-3. Al terminar, te propone integrar. Si confirmas, trae la rama principal al
-   worktree, resuelve allí los conflictos y valida. Después vuelve al checkout
-   principal, hace `merge --no-ff` y borra el worktree y la rama. El push y la PR
-   siguen pidiéndose aparte.
+2. Implementa y hace commits solo en esa rama. Tras cada commit la sube a GitHub
+   (`bin/worktree push login`) como copia de seguridad.
+3. Al terminar, te propone integrar. Si confirmas:
+   - trae la rama principal al worktree, resuelve allí los conflictos y valida;
+   - abre una Pull Request;
+   - vuelve al checkout principal y ejecuta `bin/worktree merge login`. El
+     script espera a los checks de GitHub, integra la PR con un commit de merge,
+     borra la rama remota y actualiza tu `main` local;
+   - termina con `bin/worktree remove login`, que borra el worktree y la rama
+     local.
+
+Hay dos confirmaciones: al aceptar el worktree (rama, commits y push de la
+rama) y al integrar (PR, merge y limpieza). Si un check falla, no se integra
+nada. En un proyecto sin remoto `origin`, la integración se hace en local con
+`merge --no-ff`.
 
 El grado de aislamiento depende de la CLI:
 

@@ -6,8 +6,15 @@ Es habitual trabajar con varias sesiones de agentes a la vez (Claude, Codex u ot
 
 - Al recibir una tarea en el checkout principal, el agente valora si es un cambio grande con los criterios de `workflows/feature.md`. Si lo es, propone aislarlo en un worktree y espera la confirmación.
 - Si se acepta, la misma sesión crea el worktree con `bin/worktree create` y entra en él. En Claude Code usa `EnterWorktree`, que mueve la sesión y sus subagentes al worktree. En Codex y otras CLIs trabaja con rutas absolutas y comprueba antes de cada commit que no ha tocado el checkout principal.
-- Aceptar el worktree autoriza commits por hitos en `feat/<feature>`. Cuando termina, y tras confirmación, la misma sesión hace `merge --no-ff` en el checkout principal y elimina el worktree y la rama. El push y la PR se piden aparte.
-- Nuevo script `bin/worktree`, común a todas las CLIs, con `create`, `list`, `merge` y `remove`.
+- Aceptar el worktree autoriza commits por hitos en `feat/<feature>` y subir esa rama a GitHub como copia de seguridad. Cuando termina, y tras confirmación, la misma sesión:
+  - abre una Pull Request;
+  - espera a los checks de GitHub;
+  - la integra con un commit de merge;
+  - borra la rama remota;
+  - actualiza el checkout principal;
+  - elimina el worktree y la rama local.
+- Si el proyecto no tiene remoto, la integración se hace con `merge --no-ff` en local.
+- Nuevo script `bin/worktree`, común a todas las CLIs, con `create`, `list`, `push`, `merge` (por PR, o en local con `--local`) y `remove`.
 - `bin/agent` pasa a Codex `projects/<nombre>.worktrees/` como directorio adicional. Acepta `--wt <feature>` para abrir directamente una sesión en un worktree, útil para retomar una feature a medias. También acepta `agent .` dentro de un worktree.
 - El panel de sesión muestra el worktree activo o los worktrees abiertos del proyecto, y lee el historial del checkout principal.
 - Nueva regla `rules/worktrees.md`. Se actualizan `AGENTS.md`, `rules/README.md`, `workflows/feature.md`, `rules/history.md` y `README.md`.

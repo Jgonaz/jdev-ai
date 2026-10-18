@@ -52,16 +52,30 @@ En el checkout principal de un proyecto, el launcher pasa a Codex `--add-dir pro
 
 En una sesión abierta directamente en un worktree, para hacer commits y escribir el historial, el launcher pasa a Claude y a Codex dos directorios adicionales con `--add-dir`: el `.git` común (`git rev-parse --git-common-dir`) y `<checkout principal>/.agent/history/`, que crea si no existe. El árbol del checkout principal no se añade. Copilot y OpenCode no reciben la opción y aplican sus propios permisos.
 
-### Commits en la rama, integración con confirmación
+### Rama en GitHub e integración por Pull Request
 
-Abrir la sesión con `--wt` autoriza commits por hitos en `feat/<feature>`, con Conventional Commits en castellano y el formato de cuerpo de `AGENTS.md`. El cierre queda así:
+Aceptar el worktree, o abrir la sesión con `--wt`, autoriza commits por hitos en `feat/<feature>`, con Conventional Commits en castellano y el formato de cuerpo de `AGENTS.md`. También autoriza subir la rama tras cada commit con `bin/worktree push`, para que el trabajo en curso tenga copia en GitHub. El cierre queda así:
 
-1. El agente propone integrar cuando la feature está lista y validada, indicando la rama destino, que es el `HEAD` del checkout principal.
+1. El agente propone integrar cuando la feature está lista y validada. Indica la rama destino, que es la rama actual del checkout principal, y avisa de que abrirá una PR, la integrará y limpiará.
 2. Tras la confirmación, ejecuta `git merge <rama destino>` en el worktree, resuelve allí los conflictos y repite las validaciones.
-3. Ejecuta `bin/worktree merge <feature>`. El script exige el worktree limpio y hace `git merge --no-ff feat/<feature>` en el checkout principal. Antes, la sesión vuelve al checkout principal (`ExitWorktree` con `keep` en Claude Code). Si la sesión se abrió con `--wt`, el merge escribe fuera de su directorio de trabajo y la CLI pedirá aprobación, que coincide con la confirmación ya dada.
-4. Si aparece un conflicto, o un cambio local de otra sesión lo bloquea, el script aborta el merge, deja el checkout principal como estaba e indica que hay que volver al paso 2.
+3. Abre la PR con `gh pr create`. El título y la descripción los redacta el agente, no el script.
+4. Vuelve al checkout principal (`ExitWorktree` con `keep` en Claude Code) y ejecuta `bin/worktree merge <feature>`. El script:
+   - sube la rama;
+   - localiza la PR abierta y comprueba su base;
+   - espera a sus checks con `gh pr checks --watch`;
+   - la integra con `gh pr merge --merge`;
+   - borra la rama remota;
+   - actualiza el checkout principal con `fetch` y `merge --ff-only`.
 
-`--no-ff` agrupa la feature en un commit de merge que se puede revertir entero.
+   No usa `--delete-branch` de `gh`, porque intenta borrar la rama local, que sigue desprotegida en el worktree.
+5. Si un check falla o la PR no se puede integrar, el script se detiene sin integrar. Si la PR se integra pero el checkout principal no admite el fast-forward, no lo fuerza y lo avisa.
+
+Por qué una PR y no un merge local:
+- Los tests de GitHub de los proyectos se ejecutan en `pull_request` y en `push` a `main`. Con un merge local correrían solo después de que el cambio estuviera en `main`.
+- Algunos proyectos ya integran con PRs, así que cada feature queda documentada en GitHub.
+- `--merge` conserva el commit de merge, equivalente a `--no-ff`.
+
+Si el proyecto no tiene remoto `origin`, `merge` usa el modo local (`merge --no-ff` en el checkout principal y abortar ante conflictos) y lo avisa. Si tiene remoto pero falta `gh`, falla y el agente pregunta antes de usar `--local`.
 
 ### Limpieza conservadora
 
@@ -83,6 +97,9 @@ El historial se escribe en `<checkout principal>/.agent/history/`, incluso desde
 - [El sandbox de Codex trata los `.git` como protegidos] → No se ha podido verificar fuera de una sesión real si un `.git` añadido con `--add-dir` es escribible (con el perfil `:workspace` sin raíces adicionales, Git falla con «Read-only file system»). Si no lo es, los commits pedirán aprobación, igual que en una sesión normal de Codex, sin cambiar el resto del diseño.
 - [Puertos, bases de datos o servicios compartidos] → Se documenta como límite. Cada proyecto puede indicar en su `AGENTS.md` cómo evitar choques.
 - [Conflictos entre features] → Se resuelven en el worktree antes de integrar, nunca en el checkout principal.
+- [Dependencia de GitHub y `gh`] → Sin `gh` o sin sesión iniciada, el script falla antes de integrar y el agente pregunta si se integra en local.
+- [Checks lentos o que tardan en registrarse] → `merge` reintenta varias veces si aún no hay checks y después espera a que terminen. Si un check falla, no se integra.
+- [Checkout principal con commits locales sin subir] → La PR se integra en GitHub, pero el fast-forward local no se fuerza. Se avisa para actualizarlo a mano.
 - [Copiar secretos] → Solo se copian las rutas declaradas, dentro de `projects/`, que está fuera del Git del harness.
 
 ## Migration Plan
