@@ -296,16 +296,19 @@ case "$session_status" in
 esac
 hook_command="'$session_status' --hook"
 subagent_notice="$harness_root/bin/subagent-notice"
+session_title="$harness_root/bin/session-title"
 
 if [ "$agent_command" = "claude" ]; then
     [ -x "$subagent_notice" ] || fail "no se encuentra el aviso de subagentes: $subagent_notice"
+    [ -x "$session_title" ] || fail "no se encuentra el script de títulos de sesión: $session_title"
     # PreToolUse sobre Agent avisa de cada delegación con su subagente y modelo.
+    # UserPromptSubmit quita la marca [Closed] del título al retomar la sesión.
     # --add-dir acepta varios valores, así que va antes de otra opción para no
     # absorber el prompt que llegue en "$@".
     exec claude \
         ${worktree_git_dir:+--add-dir} ${worktree_git_dir:+"$worktree_git_dir"} \
         ${worktree_history_dir:+--add-dir} ${worktree_history_dir:+"$worktree_history_dir"} \
-        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]}],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}]}}" \
+        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]}],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_title' --hook\"}]}]}}" \
         --agents "$claude_agents" \
         "$@"
 fi

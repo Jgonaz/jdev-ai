@@ -11,3 +11,4 @@ No añadas una regla compartida hasta que exista una necesidad real.
 - [`user-guides.md`](user-guides.md): criterios para crear documentación didáctica orientada a desarrolladores y usuarios.
 - [`images.md`](images.md): cuándo proponer imágenes generadas y cómo delegarlas en Codex.
 - [`worktrees.md`](worktrees.md): cuándo aislar un cambio grande en un worktree y cómo integrarlo.
+- [`session-title.md`](session-title.md): título de la sesión en `/resume` y marca `[Closed]` tras integrar.

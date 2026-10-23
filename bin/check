@@ -22,7 +22,7 @@ check() {
 
 # Harness temporal con un proyecto de prueba y su historial.
 mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/adapters/claude" "$work/h/projects/demo/.agent/history" "$work/bin"
-cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/worktree" "$work/h/bin/"
+cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/session-title" "$harness_root/bin/worktree" "$work/h/bin/"
 cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
 cp "$harness_root/adapters/claude/agents.json" "$work/h/adapters/claude/"
@@ -81,6 +81,7 @@ args() { tr '\0' '\n' < "$work/$1.args"; }
 check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
 check "sintaxis de bin/session-status" 'sh -n "$harness_root/bin/session-status"'
 check "sintaxis de bin/subagent-notice" 'sh -n "$harness_root/bin/subagent-notice"'
+check "sintaxis de bin/session-title" 'sh -n "$harness_root/bin/session-title"'
 check "sin argumentos muestra la ayuda" 'run && grep -q "^Uso:" "$work/out"'
 
 check "claude por defecto" 'run demo && [ -f "$work/claude.args" ] && [ ! -f "$work/codex.args" ]'
@@ -120,6 +121,22 @@ check "aviso: subagente del adaptador con modelo y esfuerzo" '[ "$(notice "{\"mo
 check "aviso: fork con el modelo de la sesión" 'notice "{\"tool_input\":{\"subagent_type\":\"fork\"}}" | grep -q "Subagente fork · modelo de la sesión\"}$"'
 check "aviso: modelo indicado en la llamada" 'notice "{\"tool_input\":{\"subagent_type\":\"Explore\",\"model\":\"sonnet\"}}" | grep -q "Subagente Explore · sonnet \[medium\]\"}$"'
 check "aviso: entrada no válida sin salida" '[ -z "$(notice basura)" ]'
+check "claude recibe el hook de títulos" 'run demo && args claude | grep -q "\"UserPromptSubmit\":\[{\"hooks\":\[{.*session-title. --hook"'
+
+# Títulos de sesión sobre un transcript simulado de Claude Code.
+mkdir -p "$work/claude/projects/p"
+transcript="$work/claude/projects/p/s-1.jsonl"
+printf '{"type":"ai-title","aiTitle":"Título automático","sessionId":"s-1"}\n' > "$transcript"
+title() { CLAUDE_CONFIG_DIR="$work/claude" CLAUDE_CODE_SESSION_ID=s-1 "$work/h/bin/session-title" "$@" > "$work/out" 2>&1; }
+title_hook() { printf '{"session_id":"s-1","transcript_path":"%s"}' "$transcript" | "$work/h/bin/session-title" --hook; }
+last_line() { tail -n 1 "$transcript"; }
+check "título: fija el título con escapes JSON" 'title "Login con \"magic link\"" && [ "$(last_line)" = "{\"type\":\"custom-title\",\"customTitle\":\"Login con \\\"magic link\\\"\",\"sessionId\":\"s-1\"}" ]'
+check "título: --closed antepone la marca una sola vez" 'title --closed && title --closed && [ "$(grep -c "\[Closed\]" "$transcript")" -eq 1 ] && grep -q "sin cambios" "$work/out"'
+check "título: el hook reabre la sesión cerrada" '[ "$(title_hook)" = "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"sessionTitle\":\"Login con \\\"magic link\\\"\"}}" ]'
+check "título: --open quita la marca y el hook calla" 'title --open && last_line | grep -q "\"customTitle\":\"Login con" && [ -z "$(title_hook)" ]'
+check "título: --closed usa el título automático" 'printf "{\"type\":\"ai-title\",\"aiTitle\":\"Otro\",\"sessionId\":\"s-2\"}\n" > "$work/claude/projects/p/s-2.jsonl" && CLAUDE_CONFIG_DIR="$work/claude" CLAUDE_CODE_SESSION_ID=s-2 "$work/h/bin/session-title" --closed >/dev/null && tail -n 1 "$work/claude/projects/p/s-2.jsonl" | grep -q "\"customTitle\":\"\[Closed\] Otro\""'
+check "título: fuera de Claude Code no escribe" 'lines=$(wc -l < "$transcript") && (unset CLAUDE_CODE_SESSION_ID; "$work/h/bin/session-title" "x" 2>&1) | grep -q "no es una sesión de Claude Code" && [ "$(wc -l < "$transcript")" -eq "$lines" ]'
+check "título: hook con entrada no válida sin salida" '[ -z "$(echo basura | "$work/h/bin/session-title" --hook)" ]'
 check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
 check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "^┌ jdev-ai · demo · copilot$" "$work/out"'
 

@@ -44,6 +44,8 @@
   Confirmar la integración autoriza a abrir la PR, integrarla en la rama destino
   y borrar el worktree y la rama. Mientras trabajes en él, no modifiques el
   checkout principal ni otros worktrees.
+- En Claude Code, mantén el título de la sesión según `<harness>/rules/session-title.md`
+  y márcala con `[Closed]` cuando integres una feature en la rama principal.
 - Cuando el usuario solicite un commit, usa Conventional Commits y redacta el
   mensaje en castellano salvo que el proyecto indique otro idioma. En el cuerpo,
   añade un bullet por cada archivo modificado indicando qué cambió y por qué.

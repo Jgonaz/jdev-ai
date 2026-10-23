@@ -144,6 +144,12 @@ subagentes que no están en él, como `fork`, aparecen con el modelo de la
 sesión. Además, `rules/delegation.md` pide al orquestador que explique en una
 línea por qué delega.
 
+Con Claude, el agente pone a cada sesión un título corto que describe el
+trabajo y que es el que ves en `/resume`. Al integrar una feature en la rama
+principal le antepone `[Closed] `, y un hook `UserPromptSubmit`
+(`bin/session-title --hook`) quita esa marca en cuanto vuelves a escribir en la
+terminal. La política está en [`rules/session-title.md`](rules/session-title.md).
+
 Copilot y OpenCode mantienen su ejecución actual; podrán mapear los mismos
 roles a sus mecanismos nativos sin cambiar la política común ni los proyectos.
 
@@ -207,7 +213,7 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 
 ## Validación del harness
 
-Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/worktree` o los archivos que inyectan, ejecuta:
+Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/worktree` o los archivos que inyectan, ejecuta:
 
 ```sh
 bin/check

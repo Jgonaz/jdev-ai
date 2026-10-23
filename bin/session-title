@@ -1,0 +1,131 @@
+#!/bin/sh
+
+# Título de la sesión de Claude Code que se muestra en /resume. Claude guarda el
+# título en el transcript de la sesión como una línea «custom-title» y, antes de
+# reescribir sus metadatos, adopta la última que encuentre; por eso basta con
+# añadir una línea para renombrar la sesión en curso.
+#
+#   session-title "<título>"  fija el título.
+#   session-title --closed    antepone «[Closed] » al título actual.
+#   session-title --open      quita «[Closed] » del título actual.
+#   session-title --hook      hook UserPromptSubmit: si el título está cerrado,
+#                             lo reabre devolviendo «sessionTitle» sin la marca.
+#
+# Fuera de Claude Code (sin CLAUDE_CODE_SESSION_ID) no hace nada y lo avisa. El
+# hook nunca bloquea el prompt: ante cualquier problema termina sin decir nada.
+
+set -u
+
+closed_mark="[Closed] "
+
+usage() {
+    printf 'Uso: session-title "<título>" | --closed | --open | --hook\n' >&2
+    exit 2
+}
+
+# Último valor de un campo de título en el transcript, sin escapes JSON.
+last_title() {
+    grep -F "\"type\":\"$1\"" "$transcript" 2>/dev/null | tail -n 1 | awk -v key="$2" '
+        {
+            if (!match($0, "\"" key "\":\"([^\"\\\\]|\\\\.)*\"")) exit
+            value = substr($0, RSTART, RLENGTH)
+            sub("^\"" key "\":\"", "", value)
+            sub(/"$/, "", value)
+            gsub(/\\"/, "\"", value)
+            gsub(/\\\\/, "\\", value)
+            print value
+        }
+    '
+}
+
+# El título propio manda; sin él, Claude muestra el que genera automáticamente.
+current_title() {
+    title=$(last_title custom-title customTitle)
+    [ -n "$title" ] || title=$(last_title ai-title aiTitle)
+    printf '%s' "$title"
+}
+
+json_string() {
+    printf '%s' "$1" | awk '
+        BEGIN { ORS = ""; print "\"" }
+        {
+            gsub(/\\/, "\\\\")
+            gsub(/"/, "\\\"")
+            gsub(/\t/, " ")
+            gsub(/\r/, "")
+            if (NR > 1) print " "
+            print
+        }
+        END { print "\"" }
+    '
+}
+
+write_title() {
+    printf '{"type":"custom-title","customTitle":%s,"sessionId":%s}\n' \
+        "$(json_string "$1")" "$(json_string "$session_id")" >> "$transcript"
+}
+
+if [ "${1:-}" = "--hook" ]; then
+    [ $# -eq 1 ] || usage
+    input=$(cat) || exit 0
+    field() {
+        printf '%s' "$input" | tr '\n' ' ' | sed -n "s/.*\"$1\"[ ]*:[ ]*\"\\([^\"]*\\)\".*/\\1/p"
+    }
+    transcript=$(field transcript_path)
+    [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
+    title=$(current_title)
+    case "$title" in
+        "$closed_mark"*) ;;
+        *) exit 0 ;;
+    esac
+    printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","sessionTitle":%s}}\n' \
+        "$(json_string "${title#"$closed_mark"}")"
+    exit 0
+fi
+
+[ $# -eq 1 ] && [ -n "$1" ] || usage
+
+session_id=${CLAUDE_CODE_SESSION_ID:-}
+if [ -z "$session_id" ]; then
+    printf 'session-title: no es una sesión de Claude Code; el título no cambia.\n' >&2
+    exit 0
+fi
+case "$session_id" in
+    *[!A-Za-z0-9-]*) printf 'session-title: identificador de sesión no válido: %s\n' "$session_id" >&2; exit 1 ;;
+esac
+
+config_dir=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+transcript=
+for candidate in "$config_dir"/projects/*/"$session_id.jsonl"; do
+    [ -f "$candidate" ] && transcript=$candidate && break
+done
+if [ -z "$transcript" ]; then
+    printf 'session-title: no se encuentra el transcript de la sesión %s en %s/projects\n' "$session_id" "$config_dir" >&2
+    exit 1
+fi
+
+title=$(current_title)
+case "$1" in
+    --closed)
+        case "$title" in
+            "$closed_mark"*) new_title= ;;
+            "") new_title="${closed_mark}Sesión sin título" ;;
+            *) new_title="$closed_mark$title" ;;
+        esac
+        ;;
+    --open)
+        case "$title" in
+            "$closed_mark"*) new_title=${title#"$closed_mark"} ;;
+            *) new_title= ;;
+        esac
+        ;;
+    -*) usage ;;
+    *) new_title=$1 ;;
+esac
+
+if [ -z "$new_title" ] || [ "$new_title" = "$title" ]; then
+    printf 'Título sin cambios: %s\n' "$title"
+    exit 0
+fi
+write_title "$new_title"
+printf 'Título de la sesión: %s\n' "$new_title"

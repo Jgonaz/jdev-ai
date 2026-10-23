@@ -133,6 +133,20 @@ Si un check falla o la PR no se puede integrar, SHALL NOT integrar. Si el fast-f
 - **WHEN** el merge local produce conflictos
 - **THEN** el script aborta el merge, el checkout principal queda como antes y se indica que se resuelva en el worktree
 
+### Requirement: La sesión se marca como cerrada tras integrar
+
+En Claude Code, cuando la feature se integra en la rama destino, el agente SHALL anteponer `[Closed] ` al título de la sesión con `bin/session-title --closed`. En las sesiones abiertas con `bin/agent`, un hook `UserPromptSubmit` SHALL quitar la marca cuando el usuario vuelva a escribir en la sesión.
+
+#### Scenario: Feature integrada
+
+- **WHEN** `bin/worktree merge <feature>` integra la PR
+- **THEN** el título de la sesión en `/resume` empieza por `[Closed] `
+
+#### Scenario: Retomar la sesión cerrada
+
+- **WHEN** el usuario escribe un nuevo mensaje en una sesión con título `[Closed] Alternativas de ejercicios`
+- **THEN** el título pasa a `Alternativas de ejercicios`
+
 ### Requirement: La limpieza no pierde trabajo
 
 `bin/worktree remove <feature>` SHALL eliminar el worktree sin forzar y SHALL borrar la rama solo si está integrada. SHALL rechazar ejecutarse desde dentro del worktree que elimina. Tras el merge confirmado, el agente SHALL volver al checkout principal (con `ExitWorktree` y `keep` en Claude Code) y SHALL ejecutar la limpieza en la misma sesión. La confirmación de la integración SHALL incluir la limpieza.
