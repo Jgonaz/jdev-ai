@@ -81,6 +81,12 @@ confirmación:
    - borra la rama remota;
    - actualiza el checkout principal.
 
+   Lánzalo siempre en segundo plano (en Claude Code, Bash con
+   `run_in_background`) y avisa a la persona de que tardará lo que tarden los
+   checks y de que la avisarás al terminar. Mientras espera no muestra nada, así
+   que en primer plano parece colgado y bloquea la conversación. Al recibir el
+   aviso de que ha terminado, informa del resultado y sigue con el paso 5.
+
    Si un check falla o la PR no se puede integrar, se detiene sin integrar:
    corrige en el worktree y repite. Si la PR se integra pero el checkout
    principal no se puede actualizar (porque tiene commits sin subir o cambios
