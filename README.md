@@ -117,6 +117,7 @@ registra con `--agents` los subagentes de `adapters/claude/agents.json`:
 | `Explore` | Haiku | `medium` | Lectura, búsqueda, Bash y web; sin edición | Sustituye al Explore integrado para búsquedas y lecturas amplias |
 | `implementer` | Sonnet | `high` | Todas | Implementador único de `rules/delegation.md` |
 | `validator` | Haiku | `medium` | Lectura, búsqueda y Bash; sin edición | Ejecuta las validaciones, reproduce los fallos y resume su causa |
+| `qa` | Sonnet | `high` | Todas menos edición, con el MCP de Playwright | QA de punta a punta al cerrar una implementación con interfaz |
 
 El reparto busca reservar el modelo principal (normalmente Opus) para
 planificar, decidir y revisar, y llevar a modelos más baratos la lectura masiva
@@ -132,8 +133,49 @@ Ten en cuenta que:
   `/usage` muestra el consumo por subagente.
 - El modelo y el esfuerzo de cada subagente no se pueden comprobar desde el
   launcher; revísalos con `/usage` tras una delegación.
-- `Explore` y `validator` no tienen herramientas de edición, pero sí Bash: que
-  no escriban en el proyecto depende de su prompt y de los permisos que apruebes.
+- `Explore`, `validator` y `qa` no tienen herramientas de edición, pero sí Bash:
+  que no escriban en el proyecto depende de su prompt y de los permisos que
+  apruebes.
+
+### Subagente de QA
+
+`qa` prueba una implementación terminada en el navegador con el MCP de
+Playwright (`@playwright/mcp`, con versión fijada en el adaptador). Solo él carga
+ese MCP: arranca con el subagente y se cierra al terminar. El flujo completo está
+en [`rules/delegation.md`](rules/delegation.md#qa).
+
+- **Entorno.** Prueba en el entorno de desarrollo salvo que indiques otro.
+- **Pruebas mutables.** Antes de crear, cambiar o borrar datos, o de provocar
+  efectos externos, te muestra la lista de esas pruebas y espera tu
+  autorización.
+- **Diseño.** Por defecto lo compara con Claude Design. Pásale la URL del
+  canvas. El QA lo descarga, lo sirve en local con el runtime del propio canvas
+  y lo compara con la app en los mismos viewports.
+- **Tests e2e.** No escribe tests. Propone su especificación, y los escribe el
+  `implementer` si quieres conservarlos.
+
+Para que un proyecto pueda usarlo, añade a su `AGENTS.md` un apartado `## QA`:
+
+```markdown
+## QA
+
+- Arranque del entorno de desarrollo: `pnpm dev` (http://localhost:3000)
+- Datos de prueba: usuario `demo@example.com` / `demo1234`
+- Seguro en desarrollo: base de datos local desechable; los correos van a Mailpit
+- Tests e2e: `e2e/`, con `pnpm test:e2e`
+```
+
+Requisitos y efectos:
+
+- **Node y navegador.** Hace falta Node (`npx`). La primera vez, instala el
+  navegador del MCP con `npx @playwright/mcp@0.0.83 install-browser
+  chrome-for-testing` (unos 120 MiB en `~/.cache/ms-playwright`). Usa la misma
+  versión que fija el adaptador.
+- **Evidencias.** Las capturas y los snapshots van a `PLAYWRIGHT_MCP_OUTPUT_DIR`,
+  que el launcher fija por defecto en `${TMPDIR:-/tmp}/jdev-qa/<proyecto>`, fuera
+  del repositorio.
+- **Coste.** Es el subagente más caro, porque navega y hace capturas. Lánzalo al
+  cerrar una feature, no tras cada cambio.
 
 Para que sepas cuándo y para qué se usa cada modelo, el launcher registra
 también un hook `PreToolUse` sobre la herramienta `Agent` que ejecuta

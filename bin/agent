@@ -26,7 +26,8 @@ JDEV_CODEX_IMPLEMENTER_MODEL y JDEV_CODEX_IMPLEMENTER_EFFORT.
 
 Con Claude, la sesión usa el modelo que tengas configurado y se registran los
 subagentes de adapters/claude/agents.json (Explore y validator con Haiku,
-implementer con Sonnet).
+implementer y qa con Sonnet). Las evidencias del qa van a
+PLAYWRIGHT_MCP_OUTPUT_DIR (por defecto, ${TMPDIR:-/tmp}/jdev-qa/<proyecto>).
 EOF
 }
 
@@ -205,6 +206,11 @@ if [ "$agent_command" = "claude" ]; then
     # Claude solo acepta --agents como ruta de archivo en modo --print; en
     # interactivo hay que pasarle el JSON como texto.
     claude_agents=$(cat -- "$claude_agents_config")
+    # Playwright MCP del subagente qa escribe por defecto en .playwright-mcp/
+    # del proyecto, y Claude no expande variables en los argumentos de
+    # mcpServers; el proceso del MCP hereda esta variable.
+    PLAYWRIGHT_MCP_OUTPUT_DIR=${PLAYWRIGHT_MCP_OUTPUT_DIR:-${TMPDIR:-/tmp}/jdev-qa/${main_checkout##*/}}
+    export PLAYWRIGHT_MCP_OUTPUT_DIR
 fi
 
 codex_instructions_arg=

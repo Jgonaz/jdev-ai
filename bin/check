@@ -68,6 +68,7 @@ for name in codex claude copilot; do
 [ "\${1:-}" = "--version" ] && { echo "codex-cli \${FAKE_CODEX_VERSION:-$verified}"; exit 0; }
 pwd -P > "$work/$name.cwd"
 printf '%s\\n%s\\n' "\${JDEV_MAIN_CHECKOUT:-}" "\${JDEV_WORKTREE:-}" > "$work/$name.env"
+printf '%s\\n' "\${PLAYWRIGHT_MCP_OUTPUT_DIR:-}" > "$work/$name.qa"
 for x in "\$@" "JDEV_SESSION_WARNING=\${JDEV_SESSION_WARNING:-}"; do printf '%s\\0' "\$x"; done > "$work/$name.args"
 EOF
     chmod +x "$work/bin/$name"
@@ -75,7 +76,7 @@ done
 
 agent="$work/h/bin/agent"
 status="$work/h/bin/session-status"
-run() { rm -f "$work"/*.args "$work"/*.cwd "$work"/*.env; PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
+run() { rm -f "$work"/*.args "$work"/*.cwd "$work"/*.env "$work"/*.qa; PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
 args() { tr '\0' '\n' < "$work/$1.args"; }
 
 check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
@@ -113,6 +114,10 @@ check "resumen con el agente y los modelos del launcher" 'JDEV_SESSION_AGENT=cod
 
 check "claude recibe el hook y no imprime el resumen" 'run demo && args claude | grep -q "^{\"hooks\":{\"SessionStart\":.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
 check "claude recibe los subagentes del adaptador" 'run demo && args claude | grep -qx -- "--agents" && args claude | grep -q "\"implementer\": {" && args claude | grep -q "\"Explore\": {"'
+check "claude recibe el qa con Playwright fijado y sin edición" 'run demo && args claude | grep -q "\"qa\": {" && args claude | grep -q "\"@playwright/mcp@[0-9][0-9.]*\"" && ! args claude | grep -q "@playwright/mcp@latest" && args claude | grep -q "\"disallowedTools\": \[\"Edit\", \"Write\", \"NotebookEdit\"\]"'
+check "playwright solo en el adaptador, no en la sesión" 'run demo && ! args claude | grep -qx -- "--mcp-config"'
+check "aviso: qa con su modelo y esfuerzo" 'notice_qa=$(printf "%s" "{\"tool_input\":{\"subagent_type\":\"qa\"}}" | "$work/h/bin/subagent-notice") && [ "$notice_qa" = "{\"systemMessage\":\"⇢ Subagente qa · sonnet [high]\"}" ]'
+check "evidencias del qa fuera del proyecto" '(unset PLAYWRIGHT_MCP_OUTPUT_DIR; TMPDIR=/tmp/x run demo) && [ "$(cat "$work/claude.qa")" = "/tmp/x/jdev-qa/demo" ] && PLAYWRIGHT_MCP_OUTPUT_DIR=/otro run demo && [ "$(cat "$work/claude.qa")" = "/otro" ]'
 check "adaptador de claude es JSON válido" '! command -v python3 >/dev/null 2>&1 || python3 -m json.tool "$harness_root/adapters/claude/agents.json" >/dev/null'
 check "claude falla sin adaptador de subagentes" 'mv "$work/h/adapters/claude/agents.json" "$work/agents.json" && ! run demo; r=$?; mv "$work/agents.json" "$work/h/adapters/claude/agents.json"; [ $r -eq 0 ] && grep -q "adaptador de subagentes" "$work/out"'
 check "claude recibe el aviso de subagentes" 'run demo && args claude | grep -q "\"PreToolUse\":\[{\"matcher\":\"Agent\".*subagent-notice"'

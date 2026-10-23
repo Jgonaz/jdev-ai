@@ -60,5 +60,42 @@ No modifican archivos del proyecto ni toman decisiones; el orquestador interpret
 devuelven. Pueden ejecutarse en paralelo entre sí, pero no sustituyen la
 revisión final del orquestador.
 
+## QA
+
+Cuando el proveedor lo permita, al cerrar una implementación relevante con
+interfaz el orquestador puede delegar en un auxiliar de **QA** sin capacidad de
+escritura. El QA verifica la funcionalidad de punta a punta en el navegador. No
+lo lances tras cada cambio menor, porque su coste es alto.
+
+- **Encargo.** El orquestador le pasa el alcance o el diff, la spec de OpenSpec
+  si existe y la referencia de diseño. Por defecto, la referencia es la URL del
+  artifact de Claude Design. Puede añadir lo que la persona quiera que se pruebe
+  y, solo si lo ha indicado, un entorno distinto del de desarrollo.
+- **Entorno.** El QA prueba en el entorno de desarrollo que declare el apartado
+  `## QA` del `AGENTS.md` del proyecto. Ese apartado incluye el arranque, la
+  URL, los datos de prueba, lo que es seguro en ese entorno y las convenciones
+  e2e. Si falta un dato imprescindible, el QA devuelve un bloqueo en lugar de
+  inventarlo.
+- **Cobertura.** Además del happy path, cubre las validaciones, los errores, los
+  estados vacíos y de carga, los permisos, la navegación, el responsive y la
+  accesibilidad básica, y declara lo que no cubre.
+- **Pruebas mutables.** Son las que persisten datos o tienen efectos externos,
+  y ante la duda una prueba se considera mutable. El QA no ejecuta ninguna sin
+  autorización: primero hace las no mutables y devuelve la lista de las
+  mutables con sus efectos y cómo se revierten. El orquestador presenta esa
+  lista a la persona y espera su respuesta. Después retoma al mismo QA con su
+  contexto (en Claude, con `SendMessage`) y le indica solo las pruebas
+  aprobadas.
+- **Diseño.** El QA compara el diseño y la app en los mismos viewports y
+  reporta cada desviación con captura de ambos y su gravedad. Lo que el diseño
+  no define lo marca como «no especificado».
+- **Tests e2e.** El QA no escribe tests. Devuelve la especificación de los que
+  merezcan quedar como regresión. Si la persona quiere conservarlos, el
+  orquestador encarga al implementador que los escriba y al validador que los
+  ejecute.
+- **Revisión.** El QA marca cada fallo como confirmado o hipótesis. El
+  orquestador decide qué arreglar y comprueba que no quedan servidores ni
+  navegadores abiertos.
+
 Usa un solo implementador con capacidad de escritura cada vez. Añade más roles
 o paralelismo únicamente cuando una necesidad real lo justifique.
