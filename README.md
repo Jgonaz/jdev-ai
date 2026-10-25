@@ -322,6 +322,14 @@ usa su herramienta integrada; Claude Code y el resto de agentes delegan en
 Codex mediante `codex exec`. La política completa está en
 [`rules/images.md`](rules/images.md).
 
+## Diseño previo
+
+Cuando una feature implique cambios de interfaz considerables, el agente
+propone por iniciativa propia cerrar antes los diseños en Claude Design y no
+implementa esa interfaz hasta que la persona responda. El diseño aprobado es la
+referencia de la implementación y del QA. La política completa está en
+[`rules/design.md`](rules/design.md).
+
 ## Memoria por proyecto
 
 Cada proyecto puede versionar conocimiento histórico auxiliar bajo `.agent/memory/`. Esta memoria se consulta de forma selectiva, no funciona como diario de actividad y nunca sustituye a `AGENTS.md`, OpenSpec, la documentación oficial ni el código. La política completa está en [`rules/memory.md`](rules/memory.md).

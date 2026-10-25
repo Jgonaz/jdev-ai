@@ -26,6 +26,13 @@ allí y sube la rama. Al terminar, y tras confirmación, la integra mediante una
 Pull Request, después de los checks de GitHub, y elimina el worktree y la rama. Si también procede OpenSpec, propón ambos a la vez y crea sus
 artefactos en el worktree.
 
+## Cerrar el diseño
+
+Si la feature implica cambios de interfaz no triviales, propón cerrar antes los
+diseños en Claude Design según [`rules/design.md`](../rules/design.md), junto
+con OpenSpec o el worktree si también proceden. En ambos flujos, no implementes
+esa interfaz hasta que la persona apruebe el diseño o rechace la propuesta.
+
 ## Aprobación previa de OpenSpec
 
 Si el agente considera que OpenSpec puede ser adecuado, debe detenerse antes de instalarlo, inicializarlo o crear/modificar cualquier artefacto dentro del `openspec/` del proyecto afectado. Primero presentará una propuesta breve con:
