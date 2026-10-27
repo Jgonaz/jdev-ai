@@ -330,6 +330,17 @@ implementa esa interfaz hasta que la persona responda. El diseño aprobado es la
 referencia de la implementación y del QA. La política completa está en
 [`rules/design.md`](rules/design.md).
 
+## Cierre autónomo de una conversación
+
+Con «Continúa hasta dar esta conversación por closed» (por ejemplo, como
+objetivo de `/goal`) o con su forma abreviada `/goal Close`, el agente trabaja
+sin pedir confirmación hasta cumplir el objetivo completo: valida, integra en
+la rama principal, elimina el worktree y, como último paso, marca siempre la
+sesión como `[Closed]`. Resuelve las dudas por su cuenta y deja las decisiones
+en el historial, pero sigue preguntando ante acciones peligrosas o
+destructivas. La política completa está en
+[`rules/closed-goal.md`](rules/closed-goal.md).
+
 ## Memoria por proyecto
 
 Cada proyecto puede versionar conocimiento histórico auxiliar bajo `.agent/memory/`. Esta memoria se consulta de forma selectiva, no funciona como diario de actividad y nunca sustituye a `AGENTS.md`, OpenSpec, la documentación oficial ni el código. La política completa está en [`rules/memory.md`](rules/memory.md).

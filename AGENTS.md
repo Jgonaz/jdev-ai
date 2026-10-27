@@ -45,6 +45,13 @@
   Confirmar la integración autoriza a abrir la PR, integrarla en la rama destino
   y borrar el worktree y la rama. Mientras trabajes en él, no modifiques el
   checkout principal ni otros worktrees.
+- Si la persona pide «Continúa hasta dar esta conversación por closed» (por
+  ejemplo, en un `/goal`) o usa su forma abreviada `/goal Close`, trabaja sin
+  pedir confirmación hasta cumplir todo el objetivo, incluida la integración
+  en la rama principal, el borrado del worktree y la marca `[Closed]` en el
+  título de la sesión, según `<harness>/rules/closed-goal.md`. Esa petición
+  autoriza lo que estas reglas condicionan a su visto bueno, salvo acciones
+  peligrosas o destructivas.
 - En Claude Code, mantén el título de la sesión según `<harness>/rules/session-title.md`
   y márcala con `[Closed]` cuando integres una feature en la rama principal.
 - Cuando el usuario solicite un commit, usa Conventional Commits y redacta el
