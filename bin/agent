@@ -25,9 +25,8 @@ JDEV_CODEX_ORCHESTRATOR_MODEL, JDEV_CODEX_ORCHESTRATOR_EFFORT,
 JDEV_CODEX_IMPLEMENTER_MODEL y JDEV_CODEX_IMPLEMENTER_EFFORT.
 
 Con Claude, la sesión usa el modelo que tengas configurado y se registran los
-subagentes de adapters/claude/agents.json (Explore y validator con Haiku,
-implementer y qa con Sonnet). Las evidencias del qa van a
-PLAYWRIGHT_MCP_OUTPUT_DIR (por defecto, ${TMPDIR:-/tmp}/jdev-qa/<proyecto>).
+subagentes de adapters/claude/agents.json, cada uno con su modelo. Las
+evidencias del qa van a PLAYWRIGHT_MCP_OUTPUT_DIR (por defecto, ${TMPDIR:-/tmp}/jdev-qa/<proyecto>).
 EOF
 }
 

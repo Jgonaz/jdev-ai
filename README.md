@@ -71,7 +71,7 @@ AGENTS.md        Global instructions every agent reads
 CLAUDE.md        Entry point for Claude Code (imports AGENTS.md)
 rules/           Shared policies: delegation, worktrees, history, memory,
                  backlog, user guides, images, design, session title, close
-workflows/       Common processes (feature.md: normal flow vs OpenSpec)
+workflows/       Common processes (feature.md: OpenSpec, worktree and design proposals)
 adapters/        Per-provider subagent definitions (claude, codex)
 bin/             agent, check, worktree, session-status, session-title,
                  subagent-notice
