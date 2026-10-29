@@ -15,54 +15,67 @@
 
 ## Reglas
 
-- Comunícate por defecto en castellano de España, incluida la documentación, salvo que el contexto justifique otro idioma.
-- Antes de trabajar en un proyecto, lee su `AGENTS.md` si existe. Sus instrucciones específicas prevalecen sobre estas.
-- Este harness contiene procesos compartidos; cada proyecto contiene su dominio, arquitectura, stack y reglas.
-- Para cambios grandes o funcionalmente relevantes, revisa `<harness>/workflows/feature.md` y determina si procede OpenSpec. Si procede, propón su uso y espera el visto bueno explícito del desarrollador antes de instalarlo, inicializarlo o crear/modificar sus artefactos; no lo trates como requisito para cambios pequeños.
-- Para tareas que requieran planificación y una implementación relevante, aplica `<harness>/rules/delegation.md`; evita delegar trabajo trivial.
-- Usa la memoria auxiliar de cada proyecto según `<harness>/rules/memory.md`; consúltala o actualízala solo cuando exista contexto histórico relevante y nunca como sustituto de las fuentes autoritativas.
-- Antes de terminar una iteración relevante, registra un resumen compacto en el historial local del proyecto afectado según `<harness>/rules/history.md`. Una iteración es relevante cuando cumple los criterios de su apartado «Cuándo registrar»; omite las interacciones triviales. Si el usuario pide ponerse al día o retomar el proyecto, sigue su apartado «Puesta al día».
-- Detecta y, cuando exista evidencia clara, propone el trabajo futuro que no deba abordarse en la tarea actual según `<harness>/rules/backlog.md`; solo lo registra en `docs/backlog/` del proyecto afectado tras confirmación explícita y sin ampliar el alcance en curso.
-- Valora crear o actualizar guías didácticas para personas según `<harness>/rules/user-guides.md` cuando una funcionalidad necesite explicarse o recordarse sin contexto previo.
-- Cuando un desarrollo necesite imágenes que el proyecto no tenga, propón generarlas sin esperar a que te lo pidan, según `<harness>/rules/images.md`; genéralas solo tras confirmación explícita.
-- Cuando una feature implique cambios de interfaz no triviales, propón cerrar antes los diseños en Claude Design sin esperar a que te lo pidan, según `<harness>/rules/design.md`; no implementes esa interfaz hasta que la persona responda.
+- Comunícate en castellano de España, también en la documentación, los commits
+  y los comentarios, salvo que el proyecto o el contexto indiquen otro idioma.
+- Antes de trabajar en un proyecto, lee su `AGENTS.md` si existe; sus
+  instrucciones prevalecen sobre estas. El dominio, la arquitectura, el stack y
+  las validaciones son de cada proyecto: no asumas stack, gestor de paquetes ni
+  comandos comunes.
 - No modifiques otros proyectos de `<harness>/projects/` distintos del solicitado.
-- No asumas un stack, gestor de paquetes ni comandos de validación comunes.
 - Preserva los cambios locales del usuario; no los sobrescribas ni reviertas sin permiso.
-- No inventes requisitos, contratos, modelos de datos ni decisiones de producto. Si falta información relevante, pregunta al usuario; utiliza una asunción declarada únicamente cuando sea reversible y de bajo riesgo.
-- No añadas dependencias ni herramientas que no existan en el proyecto sin justificarlo.
-- Explica el porqué de las decisiones y señala los riesgos, efectos secundarios y edge cases relevantes.
-- Comenta únicamente la intención de la lógica no obvia; evita comentarios que repitan el código.
+- No inventes requisitos, contratos, modelos de datos ni decisiones de producto:
+  pregunta. Usa una asunción declarada solo si es reversible y de bajo riesgo.
+- No añadas dependencias ni herramientas sin justificarlo. Evita documentación,
+  abstracciones y procesos sin un valor claro.
+- Explica el porqué de las decisiones y señala los riesgos, efectos secundarios
+  y edge cases relevantes. Comenta solo la intención de la lógica no obvia.
 - Antes de terminar, ejecuta únicamente las validaciones definidas por el proyecto afectado.
-- Evita documentación, abstracciones y procesos sin un valor claro.
-- No hagas commits, pushes, merges ni acciones destructivas sin petición explícita del usuario.
-- Crea o cambia de rama y abre una Pull Request únicamente cuando el usuario lo
-  solicite de forma explícita; en caso contrario, conserva la rama actual. El
-  flujo de worktrees es la excepción acotada que se describe a continuación.
-- Para cambios grandes en un proyecto, propón aislarlos en un worktree con su
-  rama y haz todo el ciclo en la misma sesión según `<harness>/rules/worktrees.md`.
-  Aceptar el worktree autoriza a crearlo, a hacer commits en su rama y a subirla.
-  Confirmar la integración autoriza a abrir la PR, integrarla en la rama destino
-  y borrar el worktree y la rama. Mientras trabajes en él, no modifiques el
-  checkout principal ni otros worktrees.
-- Si la persona pide «Continúa hasta dar esta conversación por closed» (por
-  ejemplo, en un `/goal`) o usa su forma abreviada `/goal Close`, trabaja sin
-  pedir confirmación hasta cumplir todo el objetivo, incluida la integración
-  en la rama principal, el borrado del worktree y la marca `[Closed]` en el
-  título de la sesión, según `<harness>/rules/closed-goal.md`. Esa petición
-  autoriza lo que estas reglas condicionan a su visto bueno, salvo acciones
-  peligrosas o destructivas.
-- En Claude Code, mantén el título de la sesión según `<harness>/rules/session-title.md`
-  y márcala con `[Closed]` cuando integres una feature en la rama principal.
-- Cuando el usuario solicite un commit, usa Conventional Commits y redacta el
-  mensaje en castellano salvo que el proyecto indique otro idioma. En el cuerpo,
-  añade un bullet por cada archivo modificado indicando qué cambió y por qué.
-- Antes de cerrar un cambio que el proyecto afectado presente a sus usuarios o
-  consumidores (funcionalidad, comportamiento, contrato o configuración
-  visibles), actualiza el changelog que defina ese proyecto. Los refactors,
-  tests y ajustes internos no lo requieren salvo que el proyecto indique otra
-  cosa. No registres cambios de un proyecto en el harness ni crees un
-  changelog si el proyecto no lo contempla.
-- Usa `--no-verify` solo cuando esté justificado y deja constancia del motivo.
-- Mantén actualizada la documentación existente afectada por cada cambio; crea documentación nueva solo cuando aporte un valor claro.
+- Mantén al día la documentación afectada; crea documentación nueva solo si
+  aporta un valor claro. Si el cambio es visible para los usuarios o
+  consumidores del proyecto (funcionalidad, comportamiento, contrato o
+  configuración), actualiza el changelog que defina; los refactors, tests y
+  ajustes internos no lo requieren salvo que el proyecto diga otra cosa. No
+  crees un changelog si el proyecto no lo contempla.
 - Al acabar cada iteración, termina la respuesta con `Siguiente paso recomendado: ...`.
+
+## Procesos
+
+Lee cada regla cuando se dé su caso:
+
+- Cambios grandes o funcionalmente relevantes: `<harness>/workflows/feature.md`
+  decide si propones, sin esperar a que te lo pidan, OpenSpec, un worktree o
+  cerrar antes el diseño en Claude Design. Ninguno empieza sin visto bueno
+  explícito ni se aplica a cambios pequeños.
+- Planificación con una implementación relevante: `<harness>/rules/delegation.md`;
+  no delegues trabajo trivial.
+- Antes de terminar una iteración relevante (su apartado «Cuándo registrar»),
+  registra el historial según `<harness>/rules/history.md`. Para ponerse al día
+  o retomar el proyecto, sigue su apartado «Puesta al día».
+- Memoria auxiliar del proyecto: `<harness>/rules/memory.md`, solo con contexto
+  histórico relevante y nunca en lugar de las fuentes autoritativas.
+- Trabajo futuro fuera del alcance y con evidencia clara: propónlo según
+  `<harness>/rules/backlog.md` y regístralo solo tras confirmación explícita.
+- Funcionalidad que necesite explicarse o recordarse sin contexto previo:
+  guías según `<harness>/rules/user-guides.md`.
+- Imágenes que el proyecto no tenga: propón generarlas sin esperar a que te lo
+  pidan, según `<harness>/rules/images.md`, y genéralas solo tras confirmación.
+- En Claude Code, título de la sesión y marca `[Closed]` según
+  `<harness>/rules/session-title.md`.
+
+## Autorizaciones
+
+- Sin petición explícita, no hagas commits, pushes, merges ni acciones
+  destructivas, y no crees ni cambies de rama ni abras Pull Requests.
+- Commits con Conventional Commits y, en el cuerpo, un bullet por archivo
+  modificado con qué cambió y por qué. Usa `--no-verify` solo cuando esté
+  justificado y deja constancia del motivo.
+- Worktrees (`<harness>/rules/worktrees.md`): aceptar el worktree, o abrir la
+  sesión con `--wt`, autoriza a crearlo, a hacer commits en su rama y a
+  subirla. Confirmar la integración autoriza a abrir la PR, integrarla en la
+  rama destino y borrar el worktree y la rama. Mientras trabajes en él, no
+  modifiques el checkout principal ni otros worktrees.
+- Cierre autónomo (`<harness>/rules/closed-goal.md`): «Continúa hasta dar esta
+  conversación por closed», o `/goal Close`, autoriza todo lo anterior salvo
+  acciones peligrosas o destructivas. Trabaja sin pedir confirmación hasta
+  cumplir todo el objetivo, incluida la integración en la rama principal, el
+  borrado del worktree y la marca `[Closed]`.

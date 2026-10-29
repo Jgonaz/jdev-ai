@@ -17,7 +17,8 @@ verdad, una transcripción del chat ni documentación permanente.
 ## Cuándo registrar
 
 Antes de finalizar una iteración relevante, crea una entrada en el proyecto
-afectado. Registra una iteración cuando haya producido trabajo o contexto que
+afectado. Si continúa un trabajo que ya tiene entrada en esta misma sesión,
+actualiza esa entrada (fecha, estado y secciones) en lugar de crear otra. Registra una iteración cuando haya producido trabajo o contexto que
 sería útil recuperar días después, por ejemplo:
 
 - una implementación, investigación o debugging sustancial;
@@ -130,11 +131,7 @@ sin que la persona lo pida.
 
 ## Separación de responsabilidades
 
-- Los requisitos y cambios funcionales relevantes pertenecen a OpenSpec.
-- El conocimiento duradero y difícil de redescubrir pertenece a la memoria.
-- Los hitos publicados pertenecen al changelog definido por el proyecto.
-- Las reglas permanentes pertenecen a `AGENTS.md`.
-- El historial conserva únicamente el cierre y la continuidad de iteraciones.
-
+El historial conserva únicamente el cierre y la continuidad de iteraciones; el
+resto de fuentes se reparte según [`README.md`](README.md#dónde-va-cada-cosa).
 Si una conclusión del historial merece sobrevivir como conocimiento estable,
 promuévela a la ubicación correspondiente sin duplicarla.

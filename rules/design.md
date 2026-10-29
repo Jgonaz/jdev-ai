@@ -21,9 +21,10 @@ aprobado que cubra el cambio; en ese caso, úsalo como referencia.
 ## Cómo proponerlo
 
 Haz la propuesta al planificar, antes de implementar, en pocas líneas: qué
-pantallas o estados conviene diseñar y por qué. Si también proceden OpenSpec o
-un worktree, propónlo todo a la vez. Si la persona la rechaza, no la repitas en
-esa feature e implementa siguiendo el estilo y los componentes existentes.
+pantallas o estados conviene diseñar y por qué, junto con el resto de la
+propuesta inicial de [`workflows/feature.md`](../workflows/feature.md). Si la
+persona la rechaza, no la repitas en esa feature e implementa siguiendo el
+estilo y los componentes existentes.
 
 ## Con el diseño cerrado
 

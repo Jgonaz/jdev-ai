@@ -5,6 +5,11 @@ contenido bajo `.agent/memory/` y lo versiona en su propio repositorio. La
 memoria es un mecanismo auxiliar basado en Markdown, agnóstico al agente y sin
 dependencias, servicios ni almacenamiento externo.
 
+La memoria propia del agente (por ejemplo, la memoria automática de Claude
+Code) es privada y no se versiona: úsala solo para las preferencias de la
+persona y su forma de trabajar. El conocimiento del proyecto va siempre a
+`.agent/memory/`.
+
 ## Consulta selectiva
 
 No leas automáticamente la memoria ni su `index.md` al iniciar una sesión o una

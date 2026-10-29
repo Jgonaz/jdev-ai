@@ -95,9 +95,11 @@ Mientras trabaja en un worktree de un proyecto con remoto `origin`, el agente SH
 ### Requirement: La integración se hace mediante Pull Request tras confirmación
 
 Cuando la feature esté lista, el agente SHALL proponer integrarla indicando la rama destino y avisando de que abrirá una PR, la integrará y limpiará. Tras la confirmación:
-- SHALL integrar primero la rama destino en el worktree, resolver allí los conflictos y repetir las validaciones;
+- SHALL integrar primero la rama destino actualizada (`origin/<rama destino>` tras `git fetch`, si existe `origin`) en el worktree, resolver allí los conflictos y repetir las validaciones;
 - SHALL abrir la PR con un título en Conventional Commits y una descripción redactada por él;
 - SHALL ejecutar `bin/worktree merge <feature>`.
+
+En una sesión abierta con `--wt`, el agente SHALL ejecutar `bin/worktree merge` y `bin/worktree remove` con el checkout principal como directorio de trabajo, SHALL dejar `remove` para el final porque elimina el directorio de la sesión y, si el entorno no permite escribir en el checkout principal, SHALL pedir a la persona que lo ejecute.
 
 En un proyecto con remoto `origin`, el script SHALL:
 - exigir el worktree limpio y una PR abierta de `feat/<feature>` con base en la rama destino;

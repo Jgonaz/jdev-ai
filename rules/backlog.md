@@ -23,12 +23,7 @@ se crea una copia del mismo elemento en varias carpetas.
 
 El tipo es un metadato del elemento, no una subcarpeta. Se admiten al menos
 `finding`, `todo`, `fix` y `feature`; un proyecto puede añadir otros tipos si
-los necesita. Los estados iniciales son:
-
-- `pending`: registrado, pero todavía no iniciado.
-- `in-progress`: se está abordando.
-- `done`: resuelto o implementado.
-- `discarded`: descartado conscientemente, con el motivo documentado.
+los necesita. Un elemento `discarded` documenta el motivo del descarte.
 
 No es obligatorio crear un índice común. Los elementos pueden localizarse por
 su carpeta, nombre, tipo o metadatos.
@@ -135,15 +130,7 @@ elemento de backlog. El backlog no sustituye esa especificación.
 
 ## Límites frente a otras fuentes
 
-- **Backlog**: trabajo futuro accionable pendiente de abordar.
-- **Memoria**: conocimiento duradero y difícil de redescubrir, como causas de
-  bugs, workarounds o enfoques descartados; consulta [`memory.md`](memory.md).
-- **Historial**: resumen de cómo terminó una iteración y cómo retomarla;
-  consulta [`history.md`](history.md).
-- **OpenSpec**: requisitos, escenarios y diseño de cambios relevantes;
-  consulta [`workflows/feature.md`](../workflows/feature.md).
-- **Changelog**: hitos publicados por el proyecto.
-
-No copies transcripciones de sesiones ni dupliques en el backlog información
+El backlog recoge solo trabajo futuro accionable; el resto de fuentes se reparte
+según [`README.md`](README.md#dónde-va-cada-cosa). No copies transcripciones de sesiones ni dupliques en el backlog información
 que ya tenga una fuente autoritativa. Enlaza esa fuente cuando el pendiente
 dependa de ella.

@@ -10,15 +10,11 @@ Request y limpiar.
 ## Cuándo proponerlo
 
 Al recibir una tarea en el checkout principal de un proyecto de `projects/`,
-valora si es un cambio grande con los mismos criterios que deciden OpenSpec en
-[`workflows/feature.md`](../workflows/feature.md): comportamiento visible,
-contratos, datos o seguridad, varias partes del sistema o varias iteraciones.
-Si lo es, propón aislarlo antes de modificar nada e indica:
-
-- el nombre de la feature (`[a-z0-9._-]`, corto y descriptivo) y la rama
-  `feat/<feature>`;
-- la rama base, que es la rama actual del checkout principal;
-- si además propones OpenSpec, porque sus artefactos se crearán en el worktree.
+valora si es un cambio grande con los criterios de la propuesta inicial de
+[`workflows/feature.md`](../workflows/feature.md). Si lo es, propón aislarlo
+antes de modificar nada, indicando el nombre de la feature (`[a-z0-9._-]`,
+corto y descriptivo), la rama `feat/<feature>` y la rama base, que es la rama
+actual del checkout principal.
 
 Para cambios pequeños trabaja en el checkout principal sin proponerlo, salvo que
 la persona lo pida. Si lo pide expresamente («crea un worktree para…»), esa
@@ -26,9 +22,9 @@ petición ya es la aceptación: no vuelvas a preguntar. Si rechaza el
 aislamiento, trabaja en el checkout principal como siempre. No apliques esta
 regla al propio harness.
 
-Aceptar el worktree autoriza a crearlo, a hacer commits por hitos en
-`feat/<feature>` con el formato de commits de `AGENTS.md` y a subir esa rama a
-GitHub. No autoriza abrir la PR, integrar ni limpiar.
+Aceptar el worktree, o abrir la sesión con `--wt`, autoriza a crearlo, a hacer
+commits por hitos en `feat/<feature>` y a subir esa rama. No autoriza abrir la
+PR, integrar ni limpiar.
 
 ## Entrar en el worktree
 

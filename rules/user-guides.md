@@ -28,8 +28,7 @@ guías afectadas. Si una guía deja de ser útil o correcta, corrígela o elimí
 
 ## Cómo escribirlas
 
-Escribe en castellano de España salvo que el proyecto indique otro idioma. Usa
-lenguaje natural, sencillo y didáctico, como si el lector no recordase el
+Usa lenguaje natural, sencillo y didáctico, como si el lector no recordase el
 contexto previo. Mantén cada guía centrada en una necesidad concreta y explica,
 cuando resulte útil:
 
@@ -46,13 +45,8 @@ leerse desde cero.
 
 ## Separación de responsabilidades
 
-- OpenSpec define qué comportamiento debe tener una funcionalidad relevante.
-- Las guías explican a una persona cómo comprenderla y utilizarla.
-- La documentación técnica o los ADR describen arquitectura e implementación.
-- La memoria conserva conocimiento histórico difícil de redescubrir.
-- El historial recuerda cómo terminó una iteración y cómo continuarla.
-- `AGENTS.md` contiene reglas permanentes para los agentes.
-
+Las guías explican a una persona cómo comprender y utilizar una funcionalidad;
+el resto de fuentes se reparte según [`README.md`](README.md#dónde-va-cada-cosa).
 Las guías son documentación oficial del proyecto y prevalecen sobre memoria e
 historial. No dupliques contenido: enlaza la fuente autoritativa cuando una
 explicación completa ya exista en otro lugar.
