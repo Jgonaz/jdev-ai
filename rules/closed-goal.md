@@ -26,7 +26,9 @@ conversación está cerrada solo cuando se cumple todo lo que aplique:
 - no queda nada en curso que dependa de esta sesión;
 - la sesión está marcada como cerrada con `<harness>/bin/session-title --closed`
   según [`session-title.md`](session-title.md). Hazlo siempre como último paso,
-  haya o no worktree, y solo cuando lo anterior se cumpla.
+  haya o no worktree, y solo cuando lo anterior se cumpla. La única excepción
+  es una sesión abierta con `--wt`: ahí `bin/worktree remove` va después,
+  según [`worktrees.md`](worktrees.md).
 
 ## Autorización que concede
 
@@ -67,9 +69,9 @@ En Claude Code, pide esa confirmación siempre con la herramienta
 `AskUserQuestion`, en cuanto la detectes y antes de ejecutar la acción. No
 termines el turno con la pregunta en texto ni la repitas en turnos sucesivos:
 `/goal` relanza la conversación mientras el objetivo no se cumple y la pregunta
-en texto se convierte en un bucle sin respuesta. Esto incluye las aprobaciones
-para integrar o desplegar en producción y cualquier permiso que el entorno
-deniegue para una acción de esta lista.
+en texto se convierte en un bucle sin respuesta. Esto incluye los despliegues
+a producción y cualquier permiso que el entorno deniegue, aunque la acción esté
+autorizada en el apartado anterior.
 
 Formula una pregunta autocontenida: qué acción, sobre qué entorno o recurso y
 por qué la necesita el cierre, con opciones concretas (por ejemplo, «Aprobar y

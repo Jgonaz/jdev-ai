@@ -66,14 +66,22 @@ destino. Avisa de que abrirás una PR, esperarás a los checks de GitHub, la
 integrarás y eliminarás el worktree y la rama, local y remota. Tras la
 confirmación:
 
-1. En el worktree, integra la rama destino (`git merge <rama destino>`), resuelve
-   allí los conflictos, repite las validaciones y haz commit.
+1. En el worktree, integra la rama destino actualizada
+   (`git fetch origin && git merge origin/<rama destino>`; sin `origin`,
+   `git merge <rama destino>`), resuelve allí los conflictos, repite las
+   validaciones y haz commit.
 2. Abre la PR desde el worktree con
    `gh pr create --base <rama destino> --head feat/<feature>`. El título sigue
    Conventional Commits en castellano y la descripción resume qué cambia, por
    qué y cómo se ha validado. Si ya hay una PR abierta para la rama, reutilízala.
 3. Vuelve al checkout principal. En Claude Code, usa `ExitWorktree` con
-   `action: "keep"`: el worktree lo borra el script, no la herramienta.
+   `action: "keep"`: el worktree lo borra el script, no la herramienta. Si la
+   sesión se abrió con `agent <proyecto> --wt <feature>`, no hay nada de lo
+   que salir: ejecuta los pasos 4 y 5 con `$JDEV_MAIN_CHECKOUT` como
+   directorio de trabajo y deja el paso 5 para el final, después del 6 y del
+   historial, porque borra el directorio de la sesión. Si el entorno no te
+   deja escribir en el checkout principal, pide a la persona que ejecute ese
+   comando en su terminal.
 4. Ejecuta `<harness>/bin/worktree merge <feature>`. El script:
    - sube la rama;
    - espera a los checks de la PR;

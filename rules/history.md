@@ -5,8 +5,10 @@ bajo `.agent/history/`. Sus entradas son Markdown, agnósticas al agente y deben
 estar ignoradas por el Git del proyecto.
 
 Desde una sesión abierta en un worktree, escribe siempre en el
-`.agent/history/` del checkout principal (`$JDEV_MAIN_CHECKOUT`), nunca en el
-del worktree: al estar ignorado se perdería al eliminarlo. Indica en el resumen
+`.agent/history/` del checkout principal, nunca en el del worktree: al estar
+ignorado se perdería al eliminarlo. Su ruta es `$JDEV_MAIN_CHECKOUT` o, si la
+sesión no se abrió con `agent`, el directorio padre de
+`git rev-parse --path-format=absolute --git-common-dir`. Indica en el resumen
 la feature y la rama.
 
 El historial ayuda a recordar qué ocurrió y cómo continuar; no es una fuente de
