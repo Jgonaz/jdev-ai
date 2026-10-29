@@ -61,6 +61,23 @@ detente y pregunta aunque el modo esté activo:
 - modificar otros proyectos de `projects/`;
 - saltarse validaciones (`--no-verify`, desactivar tests o checks) para cerrar.
 
+### Cómo preguntar
+
+En Claude Code, pide esa confirmación siempre con la herramienta
+`AskUserQuestion`, en cuanto la detectes y antes de ejecutar la acción. No
+termines el turno con la pregunta en texto ni la repitas en turnos sucesivos:
+`/goal` relanza la conversación mientras el objetivo no se cumple y la pregunta
+en texto se convierte en un bucle sin respuesta. Esto incluye las aprobaciones
+para integrar o desplegar en producción y cualquier permiso que el entorno
+deniegue para una acción de esta lista.
+
+Formula una pregunta autocontenida: qué acción, sobre qué entorno o recurso y
+por qué la necesita el cierre, con opciones concretas (por ejemplo, «Aprobar y
+continuar» y «No; dejarlo pendiente»). Si la persona aprueba, continúa con el
+objetivo. Si la rechaza o no hay forma de preguntar, trata la acción como un
+bloqueo según el párrafo siguiente y no la vuelvas a plantear en esta
+conversación.
+
 Si un check falla o el merge no es posible, corrige y repite; no fuerces la
 integración. Si algo bloquea de verdad el cierre (credenciales, `gh` sin sesión,
 una acción de las anteriores), deja todo en un estado limpio y retomable y
