@@ -24,11 +24,9 @@ conversación está cerrada solo cuando se cumple todo lo que aplique:
   Si hay otra rama o PR abierta de la conversación, también está integrada en
   la rama principal y borrada;
 - no queda nada en curso que dependa de esta sesión;
-- la sesión está marcada como cerrada con `<harness>/bin/session-title --closed`
-  según [`session-title.md`](session-title.md). Hazlo siempre como último paso,
-  haya o no worktree, y solo cuando lo anterior se cumpla. La única excepción
-  es una sesión abierta con `--wt`: ahí `bin/worktree remove` va después,
-  según [`worktrees.md`](worktrees.md).
+- la sesión está marcada como cerrada según [`session-title.md`](session-title.md),
+  como último paso y solo cuando lo anterior se cumpla (en sesiones `--wt`,
+  justo antes de `bin/worktree remove`).
 
 ## Autorización que concede
 
@@ -91,4 +89,4 @@ Registra el historial según [`history.md`](history.md) con una sección
 «Decisiones» que recoja las asunciones tomadas sin preguntar, para que la
 persona pueda revisarlas. La respuesta final resume lo hecho, esas decisiones y
 la evidencia del cierre (validaciones, PR o commit integrado, worktree
-eliminado, sesión marcada con `[Closed]`).
+eliminado, sesión marcada como cerrada).

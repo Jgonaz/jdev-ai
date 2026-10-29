@@ -77,5 +77,5 @@ Lee cada regla cuando se dé su caso:
 - Cierre autónomo (`<harness>/rules/closed-goal.md`): «Continúa hasta dar esta
   conversación por closed», o `/goal Close`, autoriza todo lo anterior salvo
   acciones peligrosas o destructivas. Trabaja sin pedir confirmación hasta
-  cumplir todo el objetivo, incluida la integración en la rama principal, el
-  borrado del worktree y la marca `[Closed]`.
+  cumplir todo el objetivo, incluida la integración en la rama principal y el
+  borrado del worktree.
