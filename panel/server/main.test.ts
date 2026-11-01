@@ -20,6 +20,10 @@ describe('servidor', () => {
     mkdirSync(join(tmp, 'harness', 'projects'), { recursive: true });
     mkdirSync(join(tmp, 'dist'));
     writeFileSync(join(tmp, 'dist', 'index.html'), '<!doctype html><title>x</title>');
+    writeFileSync(join(tmp, 'dist', 'manifest.webmanifest'), '{"name":"jdev-ai"}');
+    mkdirSync(join(tmp, 'dist', 'icons'));
+    writeFileSync(join(tmp, 'dist', 'icons', 'icon-192.png'), 'png');
+    writeFileSync(join(tmp, 'dist', 'secreto.json'), '{}');
     srv = await startServer({
       harnessRoot: join(tmp, 'harness'),
       port: 0,
@@ -49,6 +53,19 @@ describe('servidor', () => {
     expect(((await r.json()) as Ajustes).theme.name).toBe('grafito');
   });
 
+  it('sirve sin token solo el manifiesto y los iconos de la PWA', async () => {
+    const m = await fetch(`${base}/manifest.webmanifest`);
+    expect(m.status).toBe(200);
+    expect(m.headers.get('content-type')).toContain('application/manifest+json');
+    expect((await fetch(`${base}/icons/icon-192.png`)).status).toBe(200);
+    expect((await fetch(`${base}/icons/no-existe.png`)).status).toBe(404);
+    expect((await fetch(`${base}/secreto.json`)).status).toBe(401);
+    expect((await fetch(`${base}/icons/..%2Fsecreto.json`)).status).toBe(401);
+    expect((await fetch(`${base}/`)).status).toBe(401);
+    expect((await fetch(`${base}/api/settings`)).status).toBe(401);
+    expect((await fetch(`${base}/manifest.webmanifest`, { method: 'POST' })).status).toBe(401);
+  });
+
   it('?token= fija una cookie HttpOnly SameSite=Strict y redirige sin el token', async () => {
     const r = await fetch(`${base}/?token=${token}&a=1`, { redirect: 'manual' });
     expect(r.status).toBe(302);
@@ -56,6 +73,7 @@ describe('servidor', () => {
     const cookie = r.headers.get('set-cookie')!;
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Strict');
+    expect(cookie).toContain('Max-Age=31536000');
     const siguiente = await fetch(`${base}/api/projects`, { headers: { Cookie: cookie.split(';')[0]! } });
     expect(siguiente.status).toBe(200);
     expect(((await siguiente.json()) as { projects: { id: string }[] }).projects.map((p) => p.id)).toEqual(['harness']);

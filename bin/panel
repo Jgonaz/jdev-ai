@@ -4,7 +4,7 @@ set -eu
 
 usage() {
     cat <<'EOF_USAGE'
-Uso: panel [--port N] [--open] [--regenerate-token]
+Uso: panel [--port N] [--open | --app] [--regenerate-token]
 
 Arranca el panel gráfico de jdev-ai: una aplicación web local (solo en
 127.0.0.1, con token) para ver y usar las terminales de agente. Imprime la URL
@@ -20,9 +20,11 @@ Opciones:
                       del panel o 4317).
   --open              Abre la URL en el navegador de Windows (wslview si existe;
                       si no, cmd.exe /c start). Para una ventana sin pestañas,
-                      abre la URL manualmente con el modo aplicación del
-                      navegador (por ejemplo, msedge --app=<url>): así Ctrl+W y
-                      Ctrl+T llegan a la terminal.
+                      usa --app.
+  --app               Abre el panel en una ventana de aplicación de Chrome (sin
+                      pestañas ni barra de direcciones). JDEV_PANEL_BROWSER=msedge
+                      usa Edge. Para tenerlo como aplicación instalada, ábrelo
+                      una vez y usa «Instalar jdev-ai» en el menú del navegador.
   --regenerate-token  Genera un token nuevo (invalida el anterior) antes de
                       arrancar.
   -h, --help          Muestra esta ayuda.
@@ -40,6 +42,7 @@ fail() {
 
 port=
 open_browser=
+app_mode=
 regenerate=
 
 while [ "$#" -gt 0 ]; do
@@ -55,6 +58,7 @@ while [ "$#" -gt 0 ]; do
             ;;
         --port=*) port=${1#--port=} ;;
         --open) open_browser=1 ;;
+        --app) open_browser=1; app_mode=1 ;;
         --regenerate-token) regenerate=1 ;;
         *) fail "opción desconocida: $1" ;;
     esac
@@ -128,6 +132,15 @@ if [ -n "$regenerate" ]; then
     printf 'Token regenerado.\n' >&2
 fi
 
+# Navegador del modo aplicación (--app): Chrome por defecto o Edge.
+app_browser=${JDEV_PANEL_BROWSER:-chrome}
+if [ -n "$app_mode" ]; then
+    case "$app_browser" in
+        chrome|msedge) ;;
+        *) fail "JDEV_PANEL_BROWSER debe ser chrome o msedge: $app_browser" ;;
+    esac
+fi
+
 if [ -n "$open_browser" ]; then
     if [ -n "$port" ]; then
         url=$(node "$server" --port "$port" --print-url) || fail "no se pudo calcular la URL de acceso"
@@ -141,7 +154,10 @@ if [ -n "$open_browser" ]; then
     (
         sleep 1
         kill -0 "$server_pid" 2>/dev/null || exit 0
-        if command -v wslview >/dev/null 2>&1; then
+        if [ -n "$app_mode" ] && command -v cmd.exe >/dev/null 2>&1; then
+            # Modo aplicación del navegador: ventana propia sin pestañas.
+            cmd.exe /c start "" "$app_browser" "--app=$url" >/dev/null 2>&1 || true
+        elif command -v wslview >/dev/null 2>&1; then
             wslview "$url" >/dev/null 2>&1 || true
         elif command -v cmd.exe >/dev/null 2>&1; then
             cmd.exe /c start "" "$url" >/dev/null 2>&1 || true

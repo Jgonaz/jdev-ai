@@ -81,7 +81,9 @@ export function isAuthorized(headers: IncomingHttpHeaders, token: string): boole
 }
 
 export function sessionCookie(token: string): string {
-  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict`;
+  // Persistente (un año) para que la aplicación instalada (PWA) siga dentro tras
+  // reiniciar el navegador; regenerar el token la invalida igualmente.
+  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`;
 }
 
 // Orígenes permitidos para los WebSocket y las peticiones que modifican datos:

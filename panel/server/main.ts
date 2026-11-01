@@ -64,7 +64,13 @@ const TIPOS: Record<string, string> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.map': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
+
+/** Recursos de la PWA que se sirven sin token: el manifiesto y sus iconos. */
+export function esRecursoPublico(pathname: string): boolean {
+  return pathname === '/manifest.webmanifest' || /^\/icons\/[a-z0-9-]+\.(png|svg)$/.test(pathname);
+}
 
 export type ServerOptions = {
   harnessRoot: string;
@@ -823,6 +829,13 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         'Cache-Control': 'no-store',
       });
       res.end();
+      return;
+    }
+
+    // El navegador pide el manifiesto y los iconos de la PWA sin credenciales
+    // (también al instalarla): son archivos estáticos sin datos y se sirven sin token.
+    if (esRecursoPublico(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
+      serveStatic(opts.distDir, url.pathname, res);
       return;
     }
 

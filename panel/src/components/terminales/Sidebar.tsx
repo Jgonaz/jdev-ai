@@ -7,7 +7,7 @@ import { formatRelative } from '../../lib/time.ts';
 import { useNow } from '../../lib/useNow.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
-import type { RecentSession, SessionInfo } from '../../types.ts';
+import type { ProjectInfo, RecentSession, SessionInfo } from '../../types.ts';
 import { IconChevron, IconClock, IconFilter } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
@@ -24,22 +24,6 @@ function SessionRow({ s, ahora, abierta, onOpen }: { s: SessionInfo; ahora: numb
       </span>
       <span className="srow__time">{formatRelative(s.updatedAt, ahora)}</span>
     </button>
-  );
-}
-
-function Group({ g, ahora }: { g: ProjectGroup; ahora: number }) {
-  const { visible, openSession } = useWorkspace();
-  return (
-    <section className="group" aria-label={g.project.name}>
-      <div className="group__head">
-        <Monogram project={g.project} />
-        <span className="group__name">{g.project.name}</span>
-        <span className="group__count">{g.sessions.length}</span>
-      </div>
-      {g.sessions.map((s) => (
-        <SessionRow key={s.name} s={s} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} />
-      ))}
-    </section>
   );
 }
 
@@ -64,41 +48,71 @@ function RecentRow({ r, ahora, onResume }: { r: RecentSession; ahora: number; on
   );
 }
 
-function RecentGroupView({ g, ahora }: { g: RecentGroup; ahora: number }) {
+/**
+ * Conversaciones anteriores de Claude del proyecto que no están en marcha en el
+ * panel (terminadas o abiertas en otra ventana). Plegadas por defecto: se
+ * retoman desde aquí y pasan a ser sesiones vivas del mismo proyecto.
+ */
+function Previous({ project, items, ahora }: { project: ProjectInfo; items: RecentSession[]; ahora: number }) {
   const { openResume } = useWorkspace();
+  const [abierto, setAbierto] = useState(false);
   const [expandido, setExpandido] = useState(false);
-  const { shown, hidden } = visibleRecent(g.items, expandido);
+  const { shown, hidden } = visibleRecent(items, expandido);
   return (
-    <div className="group" role="group" aria-label={`${g.project.name}: sesiones recientes`}>
-      <div className="group__head">
-        <Monogram project={g.project} />
-        <span className="group__name">{g.project.name}</span>
-        <span className="group__count">{g.items.length}</span>
-      </div>
-      {shown.map((r) => (
-        <RecentRow key={r.id} r={r} ahora={ahora} onResume={() => openResume(r)} />
-      ))}
-      {g.items.length > RECENT_COLLAPSED && (
-        <button type="button" className="rmore" aria-expanded={expandido} onClick={() => setExpandido(!expandido)}>
-          {expandido ? 'Ver menos' : `Ver más (${hidden})`}
-        </button>
+    <div className="prev" role="group" aria-label={`${project.name}: conversaciones anteriores`}>
+      <button type="button" className="prev__head" aria-expanded={abierto} onClick={() => setAbierto(!abierto)}>
+        <IconChevron size={11} className={`recent__chevron${abierto ? ' recent__chevron--open' : ''}`} />
+        <IconClock size={12} className="prev__icon" />
+        <span>Anteriores</span>
+        <span className="prev__count">{items.length}</span>
+      </button>
+      {abierto && (
+        <>
+          {shown.map((r) => (
+            <RecentRow key={r.id} r={r} ahora={ahora} onResume={() => openResume(r)} />
+          ))}
+          {items.length > RECENT_COLLAPSED && (
+            <button type="button" className="rmore" aria-expanded={expandido} onClick={() => setExpandido(!expandido)}>
+              {expandido ? 'Ver menos' : `Ver más (${hidden})`}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function RecentSection({ grupos, ahora }: { grupos: RecentGroup[]; ahora: number }) {
-  const [abierto, setAbierto] = useState(true);
-  const total = grupos.reduce((n, g) => n + g.items.length, 0);
-  if (total === 0) return null;
+type SidebarGroup = { project: ProjectInfo; sessions: SessionInfo[]; previous: RecentSession[] };
+
+/** Une las sesiones vivas y las anteriores por proyecto: primero los que tienen sesiones vivas. */
+function mergeGroups(vivas: ProjectGroup[], anteriores: RecentGroup[]): SidebarGroup[] {
+  const porId = new Map<string, SidebarGroup>();
+  for (const g of vivas) porId.set(g.project.id, { project: g.project, sessions: g.sessions, previous: [] });
+  for (const g of anteriores) {
+    const existente = porId.get(g.project.id);
+    if (existente) existente.previous = g.items;
+    else porId.set(g.project.id, { project: g.project, sessions: [], previous: g.items });
+  }
+  return [...porId.values()];
+}
+
+function Group({ g, ahora }: { g: SidebarGroup; ahora: number }) {
+  const { visible, openSession } = useWorkspace();
   return (
-    <section className="recent" aria-label="Sesiones recientes">
-      <button type="button" className="recent__head" aria-expanded={abierto} onClick={() => setAbierto(!abierto)}>
-        <IconChevron size={12} className={`recent__chevron${abierto ? ' recent__chevron--open' : ''}`} />
-        <span className="label-mono">Sesiones recientes</span>
-        <span className="group__count">{total}</span>
-      </button>
-      {abierto && grupos.map((g) => <RecentGroupView key={g.project.id} g={g} ahora={ahora} />)}
+    <section className="group" aria-label={g.project.name}>
+      <div className="group__head">
+        <Monogram project={g.project} />
+        <span className="group__name">{g.project.name}</span>
+        {g.sessions.length > 0 && (
+          <span className="group__count" title="Sesiones en marcha en el panel">
+            {g.sessions.length}
+          </span>
+        )}
+      </div>
+      {g.sessions.map((s) => (
+        <SessionRow key={s.name} s={s} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} />
+      ))}
+      {g.previous.length > 0 && <Previous project={g.project} items={g.previous} ahora={ahora} />}
     </section>
   );
 }
@@ -107,9 +121,9 @@ export function Sidebar() {
   const { sessions, projects, loaded, error, recent } = useSessions();
   const { prefs, setPrefs } = useWorkspace();
   const ahora = useNow();
-  const grupos = groupSessions(sessions, projects, { hideClosed: prefs.hideClosed });
-  const gruposRecientes = groupRecent(recent, projects, { hideClosed: prefs.hideClosed });
-  const oculta = sessions.length - grupos.reduce((n, g) => n + g.sessions.length, 0);
+  const vivas = groupSessions(sessions, projects, { hideClosed: prefs.hideClosed });
+  const grupos = mergeGroups(vivas, groupRecent(recent, projects, { hideClosed: prefs.hideClosed }));
+  const oculta = sessions.length - vivas.reduce((n, g) => n + g.sessions.length, 0);
 
   return (
     <aside className="sidebar" aria-label="Proyectos y sesiones">
@@ -134,7 +148,6 @@ export function Sidebar() {
       {loaded && grupos.length === 0 && (
         <p className="sidebar__empty">{error ?? (oculta > 0 ? 'Solo hay sesiones cerradas.' : 'Aún no hay sesiones.')}</p>
       )}
-      <RecentSection grupos={gruposRecientes} ahora={ahora} />
       <Legend sessions={sessions} />
     </aside>
   );

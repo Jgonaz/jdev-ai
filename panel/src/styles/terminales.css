@@ -622,30 +622,7 @@
   }
 }
 
-/* ---------- Sesiones recientes (atenuadas: no son terminales vivas) ---------- */
-.recent {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-.recent__head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
-  text-align: left;
-}
-.recent__head:hover {
-  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
-}
+/* ---------- Conversaciones anteriores (atenuadas: no son terminales vivas) ---------- */
 .recent__chevron {
   flex: none;
   transition: transform 0.12s;
@@ -657,6 +634,38 @@
   .recent__chevron {
     transition: none;
   }
+}
+/* Conversaciones anteriores dentro de cada proyecto (plegadas por defecto). */
+.prev {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.prev__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px 0 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+.prev__head:hover {
+  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
+  color: var(--fg);
+}
+.prev__icon {
+  flex: none;
+}
+.prev__count {
+  margin-left: auto;
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
 }
 .rrow {
   position: relative;

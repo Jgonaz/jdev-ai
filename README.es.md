@@ -271,8 +271,17 @@ Requisitos: Node 24, pnpm, tmux y un compilador para `node-pty` (en Ubuntu,
 
 ```sh
 pnpm --dir panel install
-bin/panel --open          # o bin/panel y abre la URL que imprime
+bin/panel --app           # ventana de aplicación; o --open, o abre la URL que imprime
 ```
+
+- **Como aplicación (PWA).** `bin/panel --app` abre el panel en una ventana
+  de aplicación de Chrome (`JDEV_PANEL_BROWSER=msedge` para Edge). Con el
+  panel abierto en Chrome o Edge, usa
+  «Instalar jdev-ai» en el menú del navegador: tendrás una ventana propia sin
+  pestañas, con su icono en la barra de tareas y en el menú Inicio. La
+  aplicación abre el panel en `http://localhost:4317`, así que `bin/panel`
+  tiene que estar en marcha; la cookie del token dura un año y se invalida al
+  regenerarlo.
 
 - **Sesiones en tmux.** Cada terminal es una sesión de un servidor tmux propio
   (`tmux -L jdev`). Cerrar el navegador o detener el panel no las termina, y
@@ -285,9 +294,9 @@ bin/panel --open          # o bin/panel y abre la URL que imprime
   una notificación deja la sesión esperando, guarda también su texto (recortado
   a 300 caracteres, tal como lo escribe Claude, en inglés). Codex, Copilot y
   OpenCode solo muestran si la sesión está viva.
-- **Sesiones recientes.** Bajo las terminales, la barra lateral lista por
-  proyecto (tres, con «Ver más») las sesiones recientes de Claude Code que no
-  están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de
+- **Conversaciones anteriores.** Dentro de cada proyecto de la barra lateral,
+  bajo sus sesiones en marcha, un apartado plegado «Anteriores (N)» lista (tres,
+  con «Ver más») las conversaciones de Claude Code que no están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de
   `CLAUDE_CONFIG_DIR`) del checkout principal y los worktrees, de los últimos
   30 días y con un máximo de 15 por proyecto. «Retomar en el panel» abre una
   terminal nueva con `bin/agent <proyecto> -- --resume <id>`. Cierra antes la
@@ -301,8 +310,8 @@ bin/panel --open          # o bin/panel y abre la URL que imprime
 - **Atajos.** `Ctrl+Alt+←/→` cambia de terminal, `Ctrl+Alt+N` abre una sesión
   nueva, `Ctrl+Alt+L` cambia la distribución y `Ctrl+Alt+Esc` saca el foco de
   la terminal a su pestaña (dentro de la terminal, Tab va a la shell). Para que el navegador no se
-  quede `Ctrl+W` o `Ctrl+T`, ábrelo en modo aplicación (por ejemplo,
-  `msedge --app=<url>`).
+  quede `Ctrl+T`, úsalo como aplicación (`bin/panel --app` o la PWA
+  instalada); `Ctrl+W` sigue cerrando la ventana.
 - **Seleccionar texto.** Con el ratón de tmux activo, usa Mayús + arrastrar.
 - **Inicio.** Es la pantalla al abrir el panel (en Ajustes > Apariencia >
   Inicio puedes elegir Terminales). Saluda según la hora con «Tu nombre» o, si
