@@ -261,8 +261,8 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 agente de todos los proyectos: barra lateral con las sesiones agrupadas por
 proyecto, su título y su estado (te espera, trabajando, en reposo o cerrada),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
-con `bin/agent` y ajustes de tema, fuentes, terminal y avisos. Inicio, Proyectos
-e Historial llegarán en versiones posteriores.
+con `bin/agent`, la pantalla Proyectos y ajustes de tema, fuentes, terminal y
+avisos. Inicio e Historial llegarán en versiones posteriores.
 
 Requisitos: Node 24, pnpm, tmux y un compilador para `node-pty` (en Ubuntu,
 `sudo apt install build-essential`). La primera vez:
@@ -300,6 +300,19 @@ bin/panel --open          # o bin/panel y abre la URL que imprime
   quede `Ctrl+W` o `Ctrl+T`, ábrelo en modo aplicación (por ejemplo,
   `msedge --app=<url>`).
 - **Seleccionar texto.** Con el ratón de tmux activo, usa Mayús + arrastrar.
+- **Proyectos.** Muestra el backlog de cada proyecto (`docs/backlog/` del
+  checkout principal) en columnas por estado, con filtros por tipo y prioridad
+  y búsqueda. El detalle de un elemento enseña su resumen, su cabecera y el
+  documento completo, y permite moverlo de estado («Pasar a por hacer» o
+  «Mover a…»): el panel lo mueve con `git mv`, actualiza `status` y `updated`
+  y deja el cambio sin commit, avisando de cuántos quedan pendientes.
+  «Confirmar cambios» abre un diálogo con los archivos, la rama y un mensaje
+  de commit propuesto y editable, y hace un commit solo de `docs/backlog/`
+  (respetando los hooks del proyecto y mostrando su salida si fallan) y, si se
+  marca, el push a su remoto.
+  «Trabajar en esto» abre Nueva sesión con un prompt para abordar el elemento,
+  sin moverlo. Las pestañas Worktrees y Guías muestran las ramas abiertas (con
+  sus sesiones y cambios) y las guías de `docs/user-guides/`.
 - **Imágenes.** Las rutas de imagen (png, jpg, gif, webp, svg) que aparecen en
   una terminal se pueden pulsar: clic las abre en un visor lateral con zoom y
   la tira de imágenes de esa terminal, y Ctrl+clic en una pestaña nueva. Solo

@@ -55,7 +55,7 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
               {Array.from({ length: Math.max(0, huecos) }, (_, i) => (
                 <div key={`hueco-${i}`} className="slot">
                   <span>Hueco libre</span>
-                  <button type="button" className="btn btn--ghost btn--sm" onClick={openDialog}>
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => openDialog()}>
                     <IconPlus size={13} />
                     Nueva sesión
                   </button>

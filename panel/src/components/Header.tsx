@@ -1,4 +1,4 @@
-import { routeHref } from '../lib/route.ts';
+import { projectHref, routeHref } from '../lib/route.ts';
 import type { Route } from '../lib/route.ts';
 import { waitingCount, waitingLabel } from '../lib/sessions.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
@@ -30,7 +30,9 @@ export function Header({ route }: { route: Route }) {
         <a className="nav__link" href={routeHref('terminales')} aria-current={route === 'terminales' ? 'page' : undefined}>
           Terminales
         </a>
-        <Disabled label="Proyectos" />
+        <a className="nav__link" href={projectHref()} aria-current={route === 'proyectos' ? 'page' : undefined}>
+          Proyectos
+        </a>
         <Disabled label="Historial" />
         <a className="nav__link" href={routeHref('ajustes')} aria-current={route === 'ajustes' ? 'page' : undefined}>
           Ajustes
@@ -48,7 +50,7 @@ export function Header({ route }: { route: Route }) {
               {waitingLabel(esperan)}
             </div>
           )}
-          <button type="button" className="btn btn--accent" onClick={openDialog}>
+          <button type="button" className="btn btn--accent" onClick={() => openDialog()}>
             <IconPlus size={14} />
             Nueva sesión
           </button>

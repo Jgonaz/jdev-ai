@@ -1,4 +1,17 @@
-import type { ProjectInfo, RecentSession, SessionInfo, SessionRequest, Settings } from './types.ts';
+import type {
+  BacklogDetail,
+  BacklogList,
+  BacklogState,
+  CommitPreview,
+  Guide,
+  GuideContent,
+  ProjectInfo,
+  RecentSession,
+  SessionInfo,
+  SessionRequest,
+  Settings,
+  WorktreeList,
+} from './types.ts';
 import type { SettingsPatch } from './lib/settingsPatch.ts';
 import { parseImageHeaders } from './lib/imageZoom.ts';
 import type { ImageMeta } from './lib/imageZoom.ts';
@@ -61,7 +74,92 @@ export const api = {
       method: 'DELETE',
       headers: { 'X-Jdev-Confirm': 'yes' },
     }),
+  backlog: (proyecto: string, signal?: AbortSignal) => request<BacklogList>(`${projectBase(proyecto)}/backlog`, { signal }),
+  backlogItem: (proyecto: string, item: string, signal?: AbortSignal) =>
+    request<{ item: BacklogDetail }>(`${projectBase(proyecto)}/backlog/${encodeURIComponent(item)}`, { signal }).then((r) => r.item),
+  commitPreview: (proyecto: string, signal?: AbortSignal) => request<CommitPreview>(`${projectBase(proyecto)}/backlog/commit-preview`, { signal }),
+  guides: (proyecto: string, signal?: AbortSignal) =>
+    request<{ guides: Guide[] }>(`${projectBase(proyecto)}/guides`, { signal }).then((r) => r.guides),
+  guide: (proyecto: string, ruta: string, signal?: AbortSignal) =>
+    request<GuideContent>(`${projectBase(proyecto)}/guides/content?${new URLSearchParams({ path: ruta }).toString()}`, { signal }),
+  worktrees: (proyecto: string, signal?: AbortSignal) => request<WorktreeList>(`${projectBase(proyecto)}/worktrees`, { signal }),
 };
+
+const projectBase = (proyecto: string) => `/api/projects/${encodeURIComponent(proyecto)}`;
+
+/** Resultado de mover un elemento: el 409 trae la versión actual del elemento. */
+export type MoveResult =
+  | { ok: true; item: BacklogDetail }
+  | { ok: false; status: number; error: string; item?: BacklogDetail };
+
+/** POST …/backlog/:itemId/move. No lanza: los rechazos (400, 409, 422, red) vuelven como resultado. */
+export async function moveBacklogItem(proyecto: string, item: string, to: BacklogState, etag: string): Promise<MoveResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${projectBase(proyecto)}/backlog/${encodeURIComponent(item)}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, etag }),
+    });
+  } catch {
+    return { ok: false, status: 0, error: 'No se pudo contactar con el panel.' };
+  }
+  if (res.ok) {
+    try {
+      return { ok: true, item: ((await res.json()) as { item: BacklogDetail }).item };
+    } catch {
+      return { ok: false, status: res.status, error: 'Respuesta del panel ilegible.' };
+    }
+  }
+  if (res.status === 401) return { ok: false, status: 401, error: await errorMessage(res) };
+  try {
+    const cuerpo = (await res.json()) as { error?: unknown; item?: BacklogDetail };
+    return {
+      ok: false,
+      status: res.status,
+      error: typeof cuerpo.error === 'string' ? cuerpo.error : `Error ${res.status}`,
+      ...(cuerpo.item ? { item: cuerpo.item } : {}),
+    };
+  } catch {
+    return { ok: false, status: res.status, error: `Error ${res.status}` };
+  }
+}
+
+/** Resultado del commit del backlog: 200 hecho, 207 commit sin push, otro estado rechazado (sin commit). */
+export type CommitResponse =
+  | { kind: 'ok'; commit: string; pushed: boolean; output: string }
+  | { kind: 'push-failed'; commit: string; error: string; output: string }
+  | { kind: 'failed'; status: number; error: string; output: string };
+
+/** POST …/backlog/commit. No lanza: los rechazos y los fallos de red vuelven como resultado. */
+export async function commitBacklog(
+  proyecto: string,
+  cuerpo: { message: string; push: boolean; fingerprint: string },
+): Promise<CommitResponse> {
+  let res: Response;
+  try {
+    res = await fetch(`${projectBase(proyecto)}/backlog/commit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    });
+  } catch {
+    return { kind: 'failed', status: 0, error: 'No se pudo contactar con el panel; revisa el estado del repositorio antes de reintentar.', output: '' };
+  }
+  if (res.status === 401) return { kind: 'failed', status: 401, error: await errorMessage(res), output: '' };
+  let datos: { commit?: unknown; pushed?: unknown; output?: unknown; error?: unknown } = {};
+  try {
+    datos = (await res.json()) as typeof datos;
+  } catch {
+    // Cuerpo ilegible: se trata con el estado HTTP.
+  }
+  const output = typeof datos.output === 'string' ? datos.output : '';
+  const error = typeof datos.error === 'string' ? datos.error : `Error ${res.status}`;
+  const commit = typeof datos.commit === 'string' ? datos.commit : '';
+  if (res.status === 200) return { kind: 'ok', commit, pushed: datos.pushed === true, output };
+  if (res.status === 207) return { kind: 'push-failed', commit, error, output };
+  return { kind: 'failed', status: res.status, error, output };
+}
 
 /** URL de un WebSocket del propio origen (ws o wss según la página). */
 export function wsUrl(ruta: string): string {

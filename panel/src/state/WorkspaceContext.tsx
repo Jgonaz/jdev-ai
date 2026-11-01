@@ -14,7 +14,7 @@ import {
 import type { Layout, UiPrefs, Workspace } from '../lib/workspace.ts';
 import { useSessions } from './SessionsContext.tsx';
 import { useSettings } from './SettingsContext.tsx';
-import type { RecentSession, SessionInfo } from '../types.ts';
+import type { LocationId, RecentSession, SessionInfo } from '../types.ts';
 
 type WorkspaceValue = {
   workspace: Workspace;
@@ -28,7 +28,9 @@ type WorkspaceValue = {
   /** Algún diálogo modal (nueva sesión o retomar) está abierto. */
   dialogOpen: boolean;
   newSessionOpen: boolean;
-  openDialog: () => void;
+  /** Valores con los que se abrió Nueva sesión (p. ej. desde Proyectos); null con los de siempre. */
+  newSessionInit: NewSessionInit | null;
+  openDialog: (init?: NewSessionInit) => void;
   closeDialog: () => void;
   /** Sesión reciente cuyo diálogo «Retomar en el panel» está abierto. */
   resumeTarget: RecentSession | null;
@@ -50,6 +52,15 @@ type WorkspaceValue = {
   takeFocusRequest: () => boolean;
 };
 
+/** Valores iniciales de Nueva sesión. */
+export type NewSessionInit = {
+  project?: string;
+  prompt?: string;
+  location?: LocationId;
+  /** Nombre del worktree existente (con location «existing-worktree»). */
+  worktree?: string;
+};
+
 /** Debajo de este ancho el panel de contexto no cabe junto a las terminales. */
 export const CONTEXT_NARROW_QUERY = '(max-width: 1100px)';
 const FOCUS_REQUEST_MS = 3000;
@@ -62,6 +73,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const guardado = useRef(loadWorkspace());
   const [workspace, dispatch] = useReducer(workspaceReducer, guardado.current ?? EMPTY_WORKSPACE);
   const [newSessionOpen, setDialogOpen] = useState(false);
+  const [newSessionInit, setNewSessionInit] = useState<NewSessionInit | null>(null);
   const [resumeTarget, setResumeTarget] = useState<RecentSession | null>(null);
   const narrow = useMediaQuery(CONTEXT_NARROW_QUERY);
   const [overlayOpen, setOverlayOpen] = useState(false);
@@ -111,7 +123,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const move = useCallback((delta: number) => dispatch({ type: 'move', delta }), []);
   const setLayout = useCallback((layout: Layout) => dispatch({ type: 'layout', layout }), []);
   const cycleLayout = useCallback(() => dispatch({ type: 'cycleLayout' }), []);
-  const openDialog = useCallback(() => setDialogOpen(true), []);
+  const openDialog = useCallback((init?: NewSessionInit) => {
+    setNewSessionInit(init ?? null);
+    setDialogOpen(true);
+  }, []);
   const closeDialog = useCallback(() => setDialogOpen(false), []);
   const openResume = useCallback((r: RecentSession) => setResumeTarget(r), []);
   const closeResume = useCallback(() => setResumeTarget(null), []);
@@ -153,6 +168,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       cycleLayout,
       dialogOpen,
       newSessionOpen,
+      newSessionInit,
       openDialog,
       closeDialog,
       resumeTarget,
@@ -179,6 +195,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       cycleLayout,
       dialogOpen,
       newSessionOpen,
+      newSessionInit,
       openDialog,
       closeDialog,
       resumeTarget,

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { api, wsUrl } from '../api.ts';
 import { sessionNamesKey } from '../lib/recent.ts';
 import { effectiveProject } from '../lib/sessions.ts';
-import type { ProjectInfo, RecentSession, SessionInfo } from '../types.ts';
+import type { CommitPhase, ProjectInfo, RecentSession, SessionInfo } from '../types.ts';
 import { useSettings } from './SettingsContext.tsx';
 
 type SessionsValue = {
@@ -23,6 +23,10 @@ type SessionsValue = {
   /** Sesiones recientes de Claude que se pueden retomar (sin las que ya están en el panel). */
   recent: RecentSession[];
   reloadRecent: () => void;
+  /** Suscribe a los avisos `{type:'backlog', project}` de /ws/events; devuelve la baja. */
+  onBacklogChange: (cb: (project: string) => void) => () => void;
+  /** Suscribe a las fases `{type:'backlog-commit', project, phase}` del commit del backlog; devuelve la baja. */
+  onBacklogCommitPhase: (cb: (project: string, phase: CommitPhase) => void) => () => void;
 };
 
 const Ctx = createContext<SessionsValue | null>(null);
@@ -43,6 +47,21 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentSession[]>([]);
   const recentSeq = useRef(0);
+  const backlogListeners = useRef(new Set<(project: string) => void>());
+  const onBacklogChange = useCallback((cb: (project: string) => void) => {
+    backlogListeners.current.add(cb);
+    return () => {
+      backlogListeners.current.delete(cb);
+    };
+  }, []);
+
+  const commitListeners = useRef(new Set<(project: string, phase: CommitPhase) => void>());
+  const onBacklogCommitPhase = useCallback((cb: (project: string, phase: CommitPhase) => void) => {
+    commitListeners.current.add(cb);
+    return () => {
+      commitListeners.current.delete(cb);
+    };
+  }, []);
 
   // Una respuesta lenta no debe pisar a otra más reciente.
   const reloadRecent = useCallback(() => {
@@ -103,10 +122,21 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       };
       ws.onmessage = (ev) => {
         try {
-          const msg = JSON.parse(String(ev.data)) as { type?: string; sessions?: SessionInfo[] };
+          const msg = JSON.parse(String(ev.data)) as { type?: string; sessions?: SessionInfo[]; project?: unknown; phase?: unknown };
           if (msg.type === 'sessions' && Array.isArray(msg.sessions)) {
             setSessions(msg.sessions);
             setLoaded(true);
+          } else if (msg.type === 'backlog' && typeof msg.project === 'string') {
+            const proyecto = msg.project;
+            for (const cb of backlogListeners.current) cb(proyecto);
+          } else if (
+            msg.type === 'backlog-commit' &&
+            typeof msg.project === 'string' &&
+            (msg.phase === 'commit' || msg.phase === 'push' || msg.phase === 'done' || msg.phase === 'error')
+          ) {
+            const proyecto = msg.project;
+            const fase = msg.phase;
+            for (const cb of commitListeners.current) cb(proyecto, fase);
           }
         } catch {
           // Mensaje ilegible: se ignora.
@@ -164,8 +194,8 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const valor = useMemo<SessionsValue>(
-    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent }),
-    [sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent],
+    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent, onBacklogChange, onBacklogCommitPhase }),
+    [sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent, onBacklogChange, onBacklogCommitPhase],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

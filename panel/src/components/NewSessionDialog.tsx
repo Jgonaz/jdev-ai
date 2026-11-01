@@ -27,21 +27,25 @@ function proyectoInicial(projects: readonly ProjectInfo[], activo: string | unde
 export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
   const { settings } = useSettings();
   const { projects, sessions, upsert } = useSessions();
-  const { workspace, closeDialog, openSession } = useWorkspace();
+  const { workspace, closeDialog, openSession, newSessionInit: init } = useWorkspace();
   const idProyecto = useId();
   const idPrompt = useId();
   const idAgente = useId();
   const idLugar = useId();
 
   const activa = sessions.find((s) => s.name === workspace.active);
-  const [proyecto, setProyecto] = useState(() => proyectoInicial(projects, activa?.project));
+  // Los valores iniciales (desde Proyectos) mandan sobre la terminal activa y los ajustes.
+  const sugerido = init?.project ?? activa?.project;
+  const [proyecto, setProyecto] = useState(() => proyectoInicial(projects, sugerido));
   // Si los proyectos llegan después de abrir el diálogo, se propone el que corresponde.
-  const proyectoId = projects.some((p) => p.id === proyecto) ? proyecto : proyectoInicial(projects, activa?.project);
+  const proyectoId = projects.some((p) => p.id === proyecto) ? proyecto : proyectoInicial(projects, sugerido);
   const [agente, setAgente] = useState<AgentId>(settings.newSession.agent);
-  const [lugar, setLugar] = useState<LocationId>(settings.newSession.location === 'worktree-nuevo' ? 'new-worktree' : 'main');
+  const [lugar, setLugar] = useState<LocationId>(
+    init?.location ?? (settings.newSession.location === 'worktree-nuevo' ? 'new-worktree' : 'main'),
+  );
   const [feature, setFeature] = useState('');
-  const [existente, setExistente] = useState('');
-  const [prompt, setPrompt] = useState('');
+  const [existente, setExistente] = useState(init?.worktree ?? '');
+  const [prompt, setPrompt] = useState(init?.prompt ?? '');
   const [junto, setJunto] = useState(true);
   const [preview, setPreview] = useState<Preview>({ estado: 'pendiente' });
   const [enviando, setEnviando] = useState(false);

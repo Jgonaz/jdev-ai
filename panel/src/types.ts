@@ -66,3 +66,67 @@ export type RecentSession = {
 
 /** Estado visual de una sesión: lo que se pinta en luces, chips y textos. */
 export type VisualState = 'waiting' | 'working' | 'idle' | 'closed' | 'alive' | 'ended';
+
+// ------------------------------------------------------------------ Backlog
+
+export type BacklogState = 'backlog' | 'todo' | 'in-progress' | 'done' | 'discarded';
+export type BacklogWarning = 'legacy' | 'invalid-yaml' | 'status-mismatch' | 'id-mismatch';
+
+/** Elemento de GET /api/projects/:id/backlog (campos de las tarjetas). */
+export type BacklogItem = {
+  /** Nombre del archivo sin `.md`. */
+  id: string;
+  file: string;
+  /** Estado según la carpeta (manda sobre el campo `status`). */
+  status: BacklogState;
+  title: string;
+  type: string | null;
+  priority: string | null;
+  created: string | null;
+  updated: string | null;
+  summary: string | null;
+  /** Tiempo estimado de lectura del resumen, en segundos (0 sin resumen). */
+  readSeconds: number;
+  warnings: BacklogWarning[];
+  etag: string;
+};
+
+/** Elemento completo de GET /api/projects/:id/backlog/:itemId. */
+export type BacklogDetail = BacklogItem & {
+  header: Record<string, unknown> | null;
+  /** Markdown tras el título `#`. */
+  body: string;
+  source: string;
+  /** Ruta relativa a la raíz del proyecto (docs/backlog/<estado>/<archivo>). */
+  path: string;
+};
+
+export type BacklogList = { items: BacklogItem[]; pending: number; hasBacklog: boolean };
+
+/** Cambio de un archivo de docs/backlog en la vista previa del commit. */
+export type CommitFile = { status: 'moved' | 'modified' | 'added' | 'deleted'; path: string; from?: string };
+
+/** GET /api/projects/:id/backlog/commit-preview. */
+export type CommitPreview = {
+  branch: string | null;
+  detached: boolean;
+  upstream: string | null;
+  remote: string | null;
+  files: CommitFile[];
+  message: string;
+  fingerprint: string;
+};
+
+export type CommitPhase = 'commit' | 'push' | 'done' | 'error';
+
+export type Guide = { path: string; title: string; updated: number };
+export type GuideContent = { path: string; title: string; source: string };
+
+export type WorktreeDetail = Worktree & {
+  ahead: number | null;
+  behind: number | null;
+  dirty: boolean | null;
+  /** Nombres de tmux de las sesiones del panel en este worktree. */
+  sessions: string[];
+};
+export type WorktreeList = { base: string | null; worktrees: WorktreeDetail[] };

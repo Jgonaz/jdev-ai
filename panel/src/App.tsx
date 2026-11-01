@@ -6,6 +6,7 @@ import { focusActiveTab } from './lib/focus.ts';
 import { useAlerts } from './lib/useAlerts.ts';
 import { useRoute } from './lib/route.ts';
 import { useShortcuts } from './lib/useShortcuts.ts';
+import { ProyectosScreen } from './screens/ProyectosScreen.tsx';
 import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { TerminalesScreen } from './screens/TerminalesScreen.tsx';
 import { ImagesProvider } from './state/ImagesContext.tsx';
@@ -14,7 +15,7 @@ import { SettingsProvider, useSettings } from './state/SettingsContext.tsx';
 import { WorkspaceProvider, useWorkspace } from './state/WorkspaceContext.tsx';
 
 function Shell() {
-  const { ruta, navegar, aviso, descartarAviso } = useRoute();
+  const { ruta, proyecto, elemento, navegar, reemplazar, aviso, descartarAviso } = useRoute();
   const { dialogOpen, newSessionOpen, resumeTarget, openDialog, move, cycleLayout, requestTerminalFocus } = useWorkspace();
   const { loadError } = useSettings();
   const irATerminales = useCallback(() => navegar('terminales'), [navegar]);
@@ -58,6 +59,7 @@ function Shell() {
         </div>
       )}
       <TerminalesScreen hidden={ruta !== 'terminales'} />
+      {ruta === 'proyectos' && <ProyectosScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
       {ruta === 'ajustes' && <SettingsScreen />}
       {aviso && (
         <div className="toast" role="status">

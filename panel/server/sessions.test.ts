@@ -281,6 +281,9 @@ describe('API de sesiones y terminal', () => {
       const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws/term/${nombre}`, { headers: wsHeaders() });
       const cierre = new Promise<string>((ok) => ws.on('close', (c, m) => ok(`${c} ${m.toString()}`)));
       await new Promise<void>((ok) => ws.once('open', () => ok()));
+      // El WebSocket se abre antes de que el cliente de tmux termine de adjuntarse:
+      // se espera a verlo en la lista para no desconectar «ningún cliente».
+      await vi.waitFor(async () => expect((await tmuxCli('list-clients', '-t', `=${nombre}`)).stdout.trim()).not.toBe(''), { timeout: 5000 });
       await tmuxCli('detach-client', '-s', `=${nombre}`);
       expect(await cierre).toBe('1000 terminal cerrada');
     });

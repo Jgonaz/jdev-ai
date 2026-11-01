@@ -17,9 +17,13 @@ import {
   sessionCookie,
   tokensMatch,
 } from './auth.ts';
+import { BacklogError, BacklogStore, BacklogWatcher, ITEM_ID_RE, pendingChanges, toListItem } from './backlog.ts';
+import { commitBacklog, commitPreview, validateCommitRequest } from './backlog-commit.ts';
+import { GuideError, listGuides, readGuide } from './guides.ts';
 import { ImageError, MAX_IMAGE_BYTES, SVG_CSP, defaultImageDirs, openImage } from './images.ts';
 import { claudeConfigDir, configDir, sessionStateDir, uploadsDir } from './paths.ts';
-import { listProjects } from './projects.ts';
+import { listProjects, worktreeDetails } from './projects.ts';
+import type { Project } from './projects.ts';
 import { RecentIndex } from './recent.ts';
 import { SessionService } from './sessions.ts';
 import { DEFAULT_PORT, readSettings, updateSettings } from './settings.ts';
@@ -84,6 +88,8 @@ export type ServerOptions = {
   /** Intervalos de relectura (ms), para pruebas. */
   pollMs?: number;
   stateFallbackMs?: number;
+  /** Relectura de respaldo del backlog (ms); por defecto 10 s. */
+  backlogFallbackMs?: number;
 };
 
 export type RunningServer = {
@@ -210,6 +216,13 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const subidas = opts.uploadsDir ?? uploadsDir();
   const carpetasImagen = opts.imageDirs ?? defaultImageDirs(opts.harnessRoot, subidas);
   const detenerLimpieza = startUploadCleanup(subidas);
+
+  const backlog = new BacklogStore();
+  const vigilanteBacklog = new BacklogWatcher({
+    projects: async () => (await sesiones.projectList()).map((p) => ({ id: p.id, path: p.path })),
+    onChange: (project) => broadcast({ type: 'backlog', project }),
+    fallbackMs: opts.backlogFallbackMs,
+  });
 
   const recientes = new RecentIndex({ projectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects') });
 
@@ -437,6 +450,141 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     }
   }
 
+  // Proyecto por identificador; si no está en la caché, se reintenta sin ella por si es nuevo.
+  async function findProject(id: string): Promise<Project | undefined> {
+    return (await sesiones.projectList()).find((p) => p.id === id) ?? (await sesiones.projectList(true)).find((p) => p.id === id);
+  }
+
+  // /api/projects/:id/{backlog,guides,worktrees}[/...]: lectura del backlog, las
+  // guías y los worktrees del proyecto, y cambio de estado de un elemento.
+  async function projectApi(
+    req: IncomingMessage,
+    res: ServerResponse,
+    pathname: string,
+    url: URL,
+    metodo: string,
+  ): Promise<void> {
+    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|worktrees)(?:\/(.*))?$/.exec(pathname);
+    if (!m) {
+      sendJson(res, 404, { error: 'no encontrado' });
+      return;
+    }
+    const soloMetodo = (permitido: string): boolean => {
+      if (metodo === permitido) return true;
+      res.setHeader('Allow', permitido);
+      sendJson(res, 405, { error: 'método no permitido' });
+      return false;
+    };
+    let id: string;
+    try {
+      id = decodeURIComponent(m[1]!);
+    } catch {
+      sendJson(res, 400, { error: 'identificador de proyecto no válido' });
+      return;
+    }
+    const recurso = m[2]!;
+    const resto = m[3] ?? '';
+    const proyecto = await findProject(id);
+    if (!proyecto) {
+      sendJson(res, 404, { error: 'El proyecto no existe.' });
+      return;
+    }
+
+    if (recurso === 'backlog') {
+      if (resto === '') {
+        if (!soloMetodo('GET')) return;
+        const [lista, pending] = await Promise.all([backlog.list(proyecto.path), pendingChanges(proyecto.path)]);
+        sendJson(res, 200, { items: lista.items.map(toListItem), pending, hasBacklog: lista.hasBacklog });
+        return;
+      }
+      if (resto === 'commit-preview') {
+        if (!soloMetodo('GET')) return;
+        try {
+          sendJson(res, 200, await commitPreview(proyecto.path));
+        } catch (err) {
+          if (!(err instanceof BacklogError)) throw err;
+          sendJson(res, err.status, { error: err.message });
+        }
+        return;
+      }
+      if (resto === 'commit') {
+        if (!soloMetodo('POST')) return;
+        const cuerpo = await parseJsonBody(req, res);
+        if (!cuerpo) return;
+        const fase = (phase: string) => broadcast({ type: 'backlog-commit', project: proyecto.id, phase });
+        try {
+          const peticion = validateCommitRequest({ message: cuerpo.message, push: cuerpo.push, fingerprint: cuerpo.fingerprint });
+          // En la cola de los movimientos: ningún `git mv` del panel se cuela a medias en el commit.
+          const r = await backlog.exclusive(proyecto.path, () => commitBacklog(proyecto.path, peticion, fase));
+          await vigilanteBacklog.mark(proyecto.id);
+          broadcast({ type: 'backlog', project: proyecto.id });
+          const { status, ...respuesta } = r;
+          sendJson(res, status, respuesta);
+        } catch (err) {
+          if (!(err instanceof BacklogError)) throw err;
+          sendJson(res, err.status, { error: err.message });
+        }
+        return;
+      }
+      const e = /^([^/]+)(\/move)?$/.exec(resto);
+      if (!e || !ITEM_ID_RE.test(e[1]!)) {
+        sendJson(res, e ? 400 : 404, { error: e ? 'Identificador de elemento no válido.' : 'no encontrado' });
+        return;
+      }
+      const itemId = e[1]!;
+      if (!e[2]) {
+        if (!soloMetodo('GET')) return;
+        const item = await backlog.get(proyecto.path, itemId);
+        if (!item) sendJson(res, 404, { error: 'El elemento no existe.' });
+        else sendJson(res, 200, { item });
+        return;
+      }
+      if (!soloMetodo('POST')) return;
+      const cuerpo = await parseJsonBody(req, res);
+      if (!cuerpo) return;
+      try {
+        const item = await backlog.move(proyecto.path, itemId, cuerpo.to, cuerpo.etag);
+        await vigilanteBacklog.mark(proyecto.id);
+        broadcast({ type: 'backlog', project: proyecto.id });
+        sendJson(res, 200, { item });
+      } catch (err) {
+        if (!(err instanceof BacklogError)) throw err;
+        if (err.status >= 500) console.error('Error moviendo el elemento del backlog:', err.message);
+        sendJson(res, err.status, err.item ? { error: err.message, item: err.item } : { error: err.message });
+      }
+      return;
+    }
+
+    if (recurso === 'guides') {
+      if (!soloMetodo('GET')) return;
+      if (resto === '') {
+        sendJson(res, 200, { guides: await listGuides(proyecto.path) });
+        return;
+      }
+      if (resto !== 'content') {
+        sendJson(res, 404, { error: 'no encontrado' });
+        return;
+      }
+      try {
+        sendJson(res, 200, await readGuide(proyecto.path, url.searchParams.get('path') ?? ''));
+      } catch (err) {
+        if (!(err instanceof GuideError)) throw err;
+        sendJson(res, err.status, { error: err.message });
+      }
+      return;
+    }
+
+    // worktrees
+    if (resto !== '') {
+      sendJson(res, 404, { error: 'no encontrado' });
+      return;
+    }
+    if (!soloMetodo('GET')) return;
+    // Sin caché: el cliente quiere ver los worktrees y ramas recién creados.
+    const actual = (await sesiones.projectList(true)).find((p) => p.id === proyecto.id) ?? proyecto;
+    sendJson(res, 200, await worktreeDetails(actual, await sesiones.refresh()));
+  }
+
   async function api(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
     const metodo = req.method ?? 'GET';
     // Una cookie SameSite=Strict ya frena el CSRF; además, si el navegador
@@ -480,6 +628,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       }
       const ajustes = readSettings(opts.configDir);
       sendJson(res, 200, { projects: await listProjects(opts.harnessRoot, ajustes.projects) });
+      return;
+    }
+    if (pathname.startsWith('/api/projects/')) {
+      await projectApi(req, res, pathname, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
       return;
     }
     if (pathname === '/api/recent') {
@@ -687,6 +839,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   }
 
   void sesiones.start();
+  void vigilanteBacklog.start();
 
   return new Promise((ok, ko) => {
     server.once('error', ko);
@@ -701,6 +854,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         close: () =>
           new Promise<void>((fin) => {
             sesiones.stop();
+            vigilanteBacklog.stop();
             detenerLimpieza();
             for (const c of clientes) c.terminate();
             for (const c of terminales) c.terminate();

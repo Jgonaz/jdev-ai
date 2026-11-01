@@ -26,7 +26,7 @@ export function EmptyState({ haySesiones }: { haySesiones: boolean }) {
           ? 'Elige una sesión en la barra lateral o crea una nueva.'
           : 'Las sesiones viven en tmux y siguen vivas aunque cierres el panel. Crea la primera para empezar.'}
       </p>
-      <button type="button" className="btn btn--accent btn--lg" onClick={openDialog}>
+      <button type="button" className="btn btn--accent btn--lg" onClick={() => openDialog()}>
         <IconPlus size={14} />
         {haySesiones ? 'Nueva sesión' : 'Crear la primera sesión'}
       </button>
