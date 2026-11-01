@@ -115,7 +115,7 @@ proponer trabajo:
 1. Lee las dos o tres últimas entradas del historial, por fecha y hora.
 2. Revisa los commits posteriores a la última entrada, los cambios locales sin
    commit, los cambios OpenSpec activos y sus tareas, y los elementos de
-   `docs/backlog/in-progress/` si existen.
+   `docs/backlog/in-progress/` y `docs/backlog/todo/` si existen.
 3. Contrasta el historial con esas fuentes y señala cualquier contradicción.
 
 Responde en lenguaje llano y breve, con este orden:

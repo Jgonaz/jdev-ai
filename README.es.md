@@ -294,8 +294,11 @@ Cuando el agente determine que OpenSpec puede ser adecuado, debe proponerlo ante
 ## Backlog de trabajo futuro
 
 Cada proyecto puede conservar sus pendientes en `docs/backlog/`, con un archivo
-Markdown por elemento dentro de `pending/`, `in-progress/`, `done/` o
-`discarded/`. Sirve para registrar explícitamente findings, TODOs, fixes o
+Markdown por elemento dentro de `backlog/` (por revisar, donde entra todo lo
+nuevo), `todo/` (por hacer, elegido por la persona para abordarse pronto),
+`in-progress/`, `done/` o `discarded/`. Cada elemento lleva una cabecera YAML
+con sus propiedades y un resumen breve en lenguaje llano antes del detalle.
+Sirve para registrar explícitamente findings, TODOs, fixes o
 features que no se van a abordar durante la tarea actual. La persona puede
 decir, por ejemplo, «apunta un finding» y el agente debe documentarlo, informar
 de su identificador y continuar con el trabajo en curso. Si detecta un hallazgo
