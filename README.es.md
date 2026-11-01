@@ -146,6 +146,8 @@ Playwright (`@playwright/mcp`, con versión fijada en el adaptador). Solo él ca
 ese MCP: arranca con el subagente y se cierra al terminar. El flujo completo está
 en [`rules/delegation.md`](rules/delegation.md#qa).
 
+- **Visto bueno.** El agente no lo lanza por su cuenta: te avisa, te dice si
+  recomienda lanzarlo y por qué, y espera tu respuesta.
 - **Entorno.** Prueba en el entorno de desarrollo salvo que indiques otro.
 - **Pruebas mutables.** Antes de crear, cambiar o borrar datos, o de provocar
   efectos externos, te muestra la lista de esas pruebas y espera tu

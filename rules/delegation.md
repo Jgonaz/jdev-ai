@@ -60,6 +60,14 @@ interfaz el orquestador puede delegar en el **QA**, sin capacidad de escritura,
 que la verifica de punta a punta en el navegador. No lo lances tras cada cambio
 menor, porque su coste es alto.
 
+- **Visto bueno previo.** No lances el QA sin el visto bueno explícito de la
+  persona, aunque la implementación cumpla las condiciones anteriores. Antes,
+  dile si recomiendas lanzarlo o no y por qué: qué riesgo cubriría (flujos o
+  pantallas afectados, cambios visuales frente a un diseño, regresiones
+  posibles) frente a su coste y a lo que ya cubren los tests y las
+  validaciones. Si te lo deniega o no responde, no lo lances. La petición
+  explícita de QA de la persona y el cierre autónomo
+  (`<harness>/rules/closed-goal.md`) cuentan como visto bueno.
 - **Encargo.** Pásale el alcance o el diff, la spec de OpenSpec si existe y la
   URL del artifact de Claude Design como referencia de diseño. Añade lo que la
   persona quiera que se pruebe y, solo si lo ha indicado, un entorno distinto

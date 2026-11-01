@@ -38,7 +38,8 @@ objetivo y no sea peligroso ni destructivo:
 - hacer commits, subir ramas, abrir la PR, integrarla en la rama principal y
   borrar el worktree y la rama ya integrada;
 - registrar backlog, crear guías o generar imágenes si aportan al objetivo;
-- lanzar las pruebas mutables del QA en el entorno de desarrollo;
+- lanzar el QA cuando lo justifiquen sus criterios y sus pruebas mutables en
+  el entorno de desarrollo;
 - decidir sobre el diseño previo en lugar de esperar: si no hay diseño cerrado
   en Claude Design, implementa siguiendo el estilo existente del proyecto.
 

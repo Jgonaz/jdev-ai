@@ -56,7 +56,7 @@ flowchart TD
     I --> J[Implementer: bounded task]
     J --> K[Validator: project validations]
     K --> L{Feature with UI?}
-    L -- yes --> M[QA: Playwright and design check]
+    L -- yes --> M[QA after your OK: Playwright and design check]
     L -- no --> N[Orchestrator final review]
     M --> N
     N --> O[Commit, push, PR and merge after your confirmation]
