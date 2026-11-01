@@ -18,6 +18,8 @@ export type SessionInfo = {
   alive: boolean;
   updatedAt: number;
   created: number;
+  /** Texto del aviso del agente mientras espera ('' si no espera o no se conoce). */
+  notice: string;
 };
 
 export type Worktree = { name: string; path: string; branch: string | null };
@@ -164,4 +166,25 @@ export type HistoryDetail = HistoryEntry & {
   hasPendingSection: boolean;
   pending: PendingPoint[];
   pendingNotes: string;
+};
+
+// ------------------------------------------------------------------- Inicio
+
+/** Proyecto de GET /api/overview. */
+export type OverviewProject = {
+  id: string;
+  branch: string | null;
+  backlog: { backlog: number; todo: number; inProgress: number };
+  worktrees: number;
+  /** Milisegundos desde la época (0 si no se conoce). */
+  lastActivity: number;
+  lastEntry: { title: string; state: HistoryState; file: string } | null;
+};
+
+/** GET /api/overview: resumen de los proyectos visibles para Inicio. */
+export type Overview = {
+  projects: OverviewProject[];
+  history: { openPending: number; entriesWithPending: number };
+  recent: HistoryEntry[];
+  gitName: string | null;
 };

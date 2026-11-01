@@ -30,6 +30,7 @@ const archivo = (extra: Partial<StateFile> = {}): StateFile => ({
   transcriptPath: '',
   cwd: '',
   tmuxSession: 'jdev-balanz-io-1',
+  message: '',
   ...extra,
 });
 
@@ -47,6 +48,15 @@ describe('parseStateFile', () => {
     // Escapes tal como los escribe el script: \" y \\ y ñ.
     const crudo = '{"session_id":"s1","state":"idle","project":"p\\"q","cwd":"/a\\\\b","worktree":"\\u00f1","tmux_session":""}';
     expect(parseStateFile(crudo)).toMatchObject({ project: 'p"q', cwd: '/a\\b', worktree: 'ñ' });
+  });
+
+  it('lee el mensaje del aviso solo si la sesión espera', () => {
+    expect(parseStateFile(JSON.stringify(base({ state: 'waiting', message: 'Claude needs your permission to use "Bash"' })))?.message).toBe(
+      'Claude needs your permission to use "Bash"',
+    );
+    expect(parseStateFile(JSON.stringify(base({ state: 'working', message: 'resto' })))?.message).toBe('');
+    expect(parseStateFile(JSON.stringify(base({ state: 'waiting' })))?.message).toBe('');
+    expect(parseStateFile(JSON.stringify(base({ state: 'waiting', message: 3 })))?.message).toBe('');
   });
 
   it('rechaza JSON roto, sin sesión o con un estado desconocido', () => {

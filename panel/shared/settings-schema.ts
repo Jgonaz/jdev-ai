@@ -11,6 +11,28 @@ export const CURSORS = ['bloque', 'barra', 'subrayado'] as const;
 export const LAYOUTS = [1, 2, 4, 'last'] as const;
 export const AGENTS = ['claude', 'codex', 'copilot', 'opencode'] as const;
 export const LOCATIONS = ['principal', 'worktree-nuevo'] as const;
+// Pantalla que muestra el panel al abrir su URL sin ruta.
+export const START_SCREENS = ['inicio', 'terminales'] as const;
+/** Longitud máxima de «Tu nombre», en caracteres (puntos de código, no unidades UTF-16). */
+export const PROFILE_NAME_MAX = 60;
+
+// Caracteres que «Tu nombre» no admite: de control (tabuladores y saltos
+// incluidos) y separadores de línea o párrafo.
+const NOMBRE_PROHIBIDO = /[\p{Cc}\p{Zl}\p{Zp}]/gu;
+
+/** Longitud de un texto en puntos de código: un emoji cuenta como uno. */
+export const codePointLength = (v: string): number => Array.from(v).length;
+
+/**
+ * Lo escrito en «Tu nombre», limpio mientras se escribe: los caracteres no
+ * admitidos pasan a ser un espacio y los espacios repetidos se colapsan en uno.
+ * No recorta ni la longitud ni los extremos, para no mover el cursor.
+ */
+export const cleanProfileName = (v: string): string => v.replace(NOMBRE_PROHIBIDO, ' ').replace(/ {2,}/g, ' ');
+
+/** Lo que valida el servidor, y el cliente antes de guardar: sin caracteres no admitidos y con PROFILE_NAME_MAX como mucho. */
+export const isValidProfileName = (v: unknown): v is string =>
+  typeof v === 'string' && codePointLength(v) <= PROFILE_NAME_MAX && !new RegExp(NOMBRE_PROHIBIDO.source, 'u').test(v);
 
 // Paleta fija de colores de proyecto (la misma que usa el servidor por defecto).
 export const PROJECT_PALETTE = ['#6fb7ff', '#ff8a6b', '#c79bff', '#f2a7c8', '#e9e1cf', '#6cc3b5'] as const;
@@ -35,6 +57,9 @@ export type Settings = {
   personality: { cursor: boolean; lights: boolean; ascii: boolean; greeting: boolean; grid: boolean };
   notifications: { system: boolean; counter: boolean; sound: boolean; onFinish: boolean };
   newSession: { agent: (typeof AGENTS)[number]; location: (typeof LOCATIONS)[number] };
+  /** Nombre para el saludo de Inicio; '' toma el primer nombre de `git config user.name`. */
+  profile: { name: string };
+  startScreen: (typeof START_SCREENS)[number];
   port: number;
   projects: Record<string, ProjectOverride>;
 };
@@ -59,6 +84,8 @@ export const DEFAULT_SETTINGS: Settings = {
   personality: { cursor: true, lights: true, ascii: true, greeting: true, grid: true },
   notifications: { system: false, counter: true, sound: false, onFinish: false },
   newSession: { agent: 'claude', location: 'principal' },
+  profile: { name: '' },
+  startScreen: 'inicio',
   port: DEFAULT_PORT,
   projects: {},
 };

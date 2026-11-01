@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { rememberHistoryFilters } from '../../lib/history.ts';
+import { historyHref, projectHref } from '../../lib/route.ts';
 import { attachCommand, fallbackProject, sessionPlace } from '../../lib/sessions.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
@@ -75,12 +77,27 @@ export function ContextPanel() {
         <p className="context__empty">Abre una terminal para ver aquí su proyecto, rama y worktree.</p>
       )}
 
-      <section className="context__section context__section--last" aria-labelledby="ctx-pronto">
-        <h2 id="ctx-pronto" className="context__h">
-          Backlog e historial
-        </h2>
-        <p className="context__soon">Backlog e historial: próximamente.</p>
-      </section>
+      {proyecto && (
+        <section className="context__section context__section--last" aria-labelledby="ctx-enlaces">
+          <h2 id="ctx-enlaces" className="context__h">
+            Backlog e historial
+          </h2>
+          <div className="context__links">
+            <a className="btn btn--ghost btn--sm" href={projectHref(proyecto.id)} aria-label={`Ver backlog de ${proyecto.name}`}>
+              Ver backlog
+            </a>
+            {/* Historial abre con el filtro recordado: se deja solo el de este proyecto. */}
+            <a
+              className="btn btn--ghost btn--sm"
+              href={historyHref()}
+              onClick={() => rememberHistoryFilters({ project: proyecto.id })}
+              aria-label={`Historial de ${proyecto.name}`}
+            >
+              Historial del proyecto
+            </a>
+          </div>
+        </section>
+      )}
     </aside>
   );
 }

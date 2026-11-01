@@ -363,6 +363,27 @@ export async function backlogSignature(projectPath: string): Promise<string> {
   return `${hasBacklog ? 1 : 0}|${entries.map((e) => `${e.state}/${e.file}:${etagDe(e)}`).join('|')}`;
 }
 
+/**
+ * Último cambio conocido de docs/backlog en milisegundos (0 sin backlog): el
+ * mtime más reciente entre sus elementos y sus carpetas de estado, que cambian
+ * al mover o borrar un elemento aunque los archivos no se modifiquen.
+ */
+export async function backlogLatestMtime(projectPath: string): Promise<number> {
+  const { hasBacklog, entries } = await scan(projectPath);
+  if (!hasBacklog) return 0;
+  let max = 0;
+  for (const e of entries) max = Math.max(max, e.mtimeMs);
+  for (const dir of [join(projectPath, BACKLOG_DIR), ...STATES.map((st) => join(projectPath, BACKLOG_DIR, st))]) {
+    try {
+      const st = await lstat(dir);
+      if (st.isDirectory()) max = Math.max(max, st.mtimeMs);
+    } catch {
+      // Carpeta de estado inexistente.
+    }
+  }
+  return Math.floor(max);
+}
+
 async function git(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('git', ['-C', cwd, ...args], { timeout: 10000, maxBuffer: 4 * 1024 * 1024 });
   return stdout;

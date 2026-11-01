@@ -98,6 +98,31 @@ describe('ajustes', () => {
     expect(antiguo.terminal.autoOpenImages).toBe(false);
   });
 
+  it('nombre del saludo y pantalla al abrir: valores por defecto y validación', () => {
+    expect(DEFAULT_SETTINGS.profile).toEqual({ name: '' });
+    expect(DEFAULT_SETTINGS.startScreen).toBe('inicio');
+    let s = updateSettings({ profile: { name: 'Jorge' }, startScreen: 'terminales' });
+    expect(s.profile.name).toBe('Jorge');
+    expect(s.startScreen).toBe('terminales');
+    // 60 caracteres (aunque sean multibyte) se admiten; 61, no.
+    s = updateSettings({ profile: { name: 'ñ'.repeat(60) } });
+    expect(s.profile.name).toBe('ñ'.repeat(60));
+    for (const malo of ['a'.repeat(61), 'Jor\nge', 'a\tb', 'x\u0000', 'a\u2028b', 3, null]) {
+      s = updateSettings({ profile: { name: malo } });
+      expect(s.profile.name).toBe('ñ'.repeat(60));
+    }
+    s = updateSettings({ startScreen: 'proyectos', profile: 'Jorge' });
+    expect(s.startScreen).toBe('terminales');
+    // El límite son puntos de código: 60 emojis caben, 61 no (como en el cliente).
+    expect(updateSettings({ profile: { name: '😀'.repeat(60) } }).profile.name).toBe('😀'.repeat(60));
+    expect(updateSettings({ profile: { name: '😀'.repeat(61) } }).profile.name).toBe('😀'.repeat(60));
+    // Vaciar el nombre vuelve al de Git.
+    expect(updateSettings({ profile: { name: '' } }).profile.name).toBe('');
+    // Un archivo antiguo sin las claves nuevas toma los valores por defecto.
+    writeFileSync(settingsPath(configDir()), JSON.stringify({ theme: { name: 'papel' } }));
+    expect(readSettings()).toMatchObject({ profile: { name: '' }, startScreen: 'inicio' });
+  });
+
   it('un archivo con JSON roto devuelve los valores por defecto', () => {
     updateSettings({ theme: { name: 'papel' } });
     writeFileSync(settingsPath(configDir()), '{no es json');

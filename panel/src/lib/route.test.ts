@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalProjectHref, historyHref, parseRoute, projectHref, resolveRoute } from './route.ts';
 
-const base = { project: null, item: null, soon: null, normalize: false };
+const base = { project: null, item: null, implicit: false, normalize: false };
 
 describe('resolveRoute', () => {
   it('conserva las rutas canónicas', () => {
     expect(resolveRoute('#/terminales')).toEqual({ ...base, route: 'terminales' });
     expect(resolveRoute('#/ajustes')).toEqual({ ...base, route: 'ajustes' });
-    expect(resolveRoute('')).toEqual({ ...base, route: 'terminales' });
+    expect(resolveRoute('#/inicio')).toEqual({ ...base, route: 'inicio' });
+  });
+
+  it('sin ruta muestra la pantalla al abrir', () => {
+    expect(resolveRoute('')).toEqual({ ...base, route: 'inicio', implicit: true });
+    expect(resolveRoute('#/')).toEqual({ ...base, route: 'inicio', implicit: true });
+    expect(resolveRoute('', 'terminales')).toEqual({ ...base, route: 'terminales', implicit: true });
+    // Una ruta explícita manda sobre el ajuste.
+    expect(resolveRoute('#/inicio', 'terminales').route).toBe('inicio');
   });
 
   it('reconoce Proyectos con proyecto y elemento opcionales', () => {
@@ -36,7 +44,7 @@ describe('resolveRoute', () => {
     // Sin archivo, o con codificación rota, se muestra la lista sola.
     expect(resolveRoute('#/historial/balanz.io')).toEqual({ ...base, route: 'historial' });
     expect(resolveRoute('#/historial/a/%E0%A4%A')).toEqual({ ...base, route: 'historial' });
-    expect(resolveRoute('#/historial/a/b/c')).toEqual({ ...base, route: 'terminales', normalize: true });
+    expect(resolveRoute('#/historial/a/b/c')).toEqual({ ...base, route: 'inicio', implicit: true, normalize: true });
   });
 
   it('historyHref codifica proyecto y archivo', () => {
@@ -45,13 +53,9 @@ describe('resolveRoute', () => {
     expect(historyHref('a b', 'x y.md')).toBe('#/historial/a%20b/x%20y.md');
   });
 
-  it('normaliza las secciones futuras y avisa de cuál era', () => {
-    expect(resolveRoute('#/inicio')).toEqual({ ...base, route: 'terminales', soon: 'Inicio', normalize: true });
-  });
-
-  it('normaliza las rutas desconocidas sin aviso', () => {
-    expect(resolveRoute('#/nada')).toEqual({ ...base, route: 'terminales', normalize: true });
-    expect(resolveRoute('#/proyectos/a/b/c')).toEqual({ ...base, route: 'terminales', normalize: true });
+  it('normaliza las rutas desconocidas a la pantalla al abrir', () => {
+    expect(resolveRoute('#/nada')).toEqual({ ...base, route: 'inicio', implicit: true, normalize: true });
+    expect(resolveRoute('#/proyectos/a/b/c', 'terminales')).toEqual({ ...base, route: 'terminales', implicit: true, normalize: true });
   });
 
   it('parseRoute devuelve solo la pantalla', () => {

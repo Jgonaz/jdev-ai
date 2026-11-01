@@ -26,6 +26,7 @@ function sesion(parche: Partial<SessionInfo> = {}): SessionInfo {
     alive: true,
     updatedAt: 0,
     created: 0,
+    notice: '',
     ...parche,
   };
 }

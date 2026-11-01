@@ -6,27 +6,20 @@ import { useWorkspace } from '../state/WorkspaceContext.tsx';
 import { IconPlus } from './Icons.tsx';
 import { Logo } from './Logo.tsx';
 
-function Disabled({ label }: { label: string }) {
-  return (
-    // Sin enlace real: esta pantalla llega en una versión posterior.
-    <span className="nav__link nav__link--disabled" role="link" aria-disabled="true" tabIndex={-1} title="Próximamente" aria-label={`${label} (próximamente)`}>
-      {label}
-    </span>
-  );
-}
-
-export function Header({ route }: { route: Route }) {
+export function Header({ route }: { route: Route | null }) {
   const { sessions } = useSessions();
   const { openDialog } = useWorkspace();
   const esperan = waitingCount(sessions);
 
   return (
     <header className="header">
-      <a className="header__logo" href={routeHref('terminales')} aria-label="jdev-ai, ir a Terminales">
+      <a className="header__logo" href={routeHref('inicio')} aria-label="jdev-ai, ir a Inicio">
         <Logo />
       </a>
       <nav className="nav" aria-label="Secciones">
-        <Disabled label="Inicio" />
+        <a className="nav__link" href={routeHref('inicio')} aria-current={route === 'inicio' ? 'page' : undefined}>
+          Inicio
+        </a>
         <a className="nav__link" href={routeHref('terminales')} aria-current={route === 'terminales' ? 'page' : undefined}>
           Terminales
         </a>

@@ -53,6 +53,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const guardando = useRef(false);
   const actual = useRef(settings);
   actual.current = settings;
+  // Cambia con cada edición local: una recarga que empezó antes se descarta.
+  const edicion = useRef(0);
 
   useEffect(() => {
     let cancelado = false;
@@ -70,6 +72,37 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       });
     return () => {
       cancelado = true;
+    };
+  }, []);
+
+  // No hay aviso de ajustes entre pestañas: al volver a la ventana se releen,
+  // salvo con cambios propios por guardar, para que otra pestaña (p. ej. la
+  // visibilidad de un proyecto) se refleje aquí.
+  useEffect(() => {
+    let enCurso = false;
+    const alVolver = () => {
+      if (document.visibilityState !== 'visible' || enCurso) return;
+      if (pendiente.current !== null || guardando.current) return;
+      enCurso = true;
+      const n = edicion.current;
+      api
+        .settings()
+        .then((s) => {
+          if (n !== edicion.current || pendiente.current !== null || guardando.current) return;
+          setSettings((previos) => (JSON.stringify(previos) === JSON.stringify(s) ? previos : s));
+        })
+        .catch(() => {
+          // Sin conexión se siguen usando los ajustes que ya había.
+        })
+        .finally(() => {
+          enCurso = false;
+        });
+    };
+    window.addEventListener('focus', alVolver);
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      window.removeEventListener('focus', alVolver);
+      document.removeEventListener('visibilitychange', alVolver);
     };
   }, []);
 
@@ -122,6 +155,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback(
     (parche: SettingsPatch) => {
+      edicion.current++;
       setSettings((s) => applyPatch(s, parche));
       setSaveState('saving');
       programar(parche);

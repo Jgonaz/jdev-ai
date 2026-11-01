@@ -553,8 +553,12 @@
   font-size: var(--text-sm2);
   overflow-wrap: anywhere;
 }
-.context__empty,
-.context__soon {
+.context__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.context__empty {
   padding: 0 16px;
   color: var(--fg-muted);
   font-size: var(--text-md);
@@ -562,9 +566,6 @@
 }
 .context__empty {
   padding-top: 14px;
-}
-.context__section .context__soon {
-  padding: 0;
 }
 
 /* ---------- Estado vacío ---------- */

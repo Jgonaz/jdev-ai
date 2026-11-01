@@ -29,6 +29,8 @@ export type StateFile = {
   transcriptPath: string;
   cwd: string;
   tmuxSession: string;
+  /** Texto del último aviso que dejó la sesión esperando ('' en el resto de estados). */
+  message: string;
 };
 
 const POLL_MS = 5000;
@@ -63,6 +65,7 @@ export function parseStateFile(contenido: string): StateFile | null {
     transcriptPath: texto(o.transcript_path),
     cwd: texto(o.cwd),
     tmuxSession: texto(o.tmux_session),
+    message: o.state === 'waiting' ? texto(o.message) : '',
   };
 }
 

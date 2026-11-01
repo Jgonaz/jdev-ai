@@ -263,8 +263,8 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 agente de todos los proyectos: barra lateral con las sesiones agrupadas por
 proyecto, su título y su estado (te espera, trabajando, en reposo o cerrada),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
-con `bin/agent`, las pantallas Proyectos e Historial y ajustes de tema,
-fuentes, terminal y avisos. Inicio llegará en una versión posterior.
+con `bin/agent`, las pantallas Inicio, Proyectos e Historial y ajustes de
+tema, fuentes, terminal y avisos.
 
 Requisitos: Node 24, pnpm, tmux y un compilador para `node-pty` (en Ubuntu,
 `sudo apt install build-essential`). La primera vez:
@@ -281,8 +281,10 @@ bin/panel --open          # o bin/panel y abre la URL que imprime
   el panel, con confirmación.
 - **Estados.** `bin/agent` registra en Claude Code unos hooks que ejecutan
   `bin/session-state` y guardan el estado de cada sesión en
-  `~/.local/state/jdev-ai/sessions/`, aunque el panel no esté abierto. Codex,
-  Copilot y OpenCode solo muestran si la sesión está viva.
+  `~/.local/state/jdev-ai/sessions/`, aunque el panel no esté abierto. Cuando
+  una notificación deja la sesión esperando, guarda también su texto (recortado
+  a 300 caracteres, tal como lo escribe Claude, en inglés). Codex, Copilot y
+  OpenCode solo muestran si la sesión está viva.
 - **Sesiones recientes.** Bajo las terminales, la barra lateral lista por
   proyecto (tres, con «Ver más») las sesiones recientes de Claude Code que no
   están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de
@@ -302,6 +304,19 @@ bin/panel --open          # o bin/panel y abre la URL que imprime
   quede `Ctrl+W` o `Ctrl+T`, ábrelo en modo aplicación (por ejemplo,
   `msedge --app=<url>`).
 - **Seleccionar texto.** Con el ratón de tmux activo, usa Mayús + arrastrar.
+- **Inicio.** Es la pantalla al abrir el panel (en Ajustes > Apariencia >
+  Inicio puedes elegir Terminales). Saluda según la hora con «Tu nombre» o, si
+  está vacío, con el primer nombre de `git config user.name`, y resume
+  proyectos, sesiones y worktrees, con los recuentos de sesiones que te
+  esperan, trabajando y en reposo. «Necesita tu atención» lista las sesiones
+  que te esperan, con el texto del aviso y «Responder», las marcadas como
+  cerradas que siguen abiertas, con «Revisar», y los pendientes abiertos del
+  historial, que llevan a Historial con «Solo con «Pendiente de ti»». Debajo,
+  una tarjeta por proyecto ordenada por actividad (sesiones, historial y
+  backlog) con su rama, sus sesiones, los recuentos de backlog, por hacer, en
+  curso y worktrees, el último registro y los accesos a sus terminales, su
+  backlog y una sesión nueva; al lado, las últimas entradas del historial.
+  Solo lee: no mueve, marca ni cierra nada.
 - **Proyectos.** Muestra el backlog de cada proyecto (`docs/backlog/` del
   checkout principal) en columnas por estado, con filtros por tipo y prioridad
   y búsqueda. El detalle de un elemento enseña su resumen, su cabecera y el

@@ -7,6 +7,9 @@
 #
 #   ${XDG_STATE_HOME:-$HOME/.local/state}/jdev-ai/sessions/<session_id>.json
 #
+# Si la sesión queda esperando por una notificación, guarda también su texto en
+# «message», recortado a 300 caracteres; en el resto de estados queda vacío.
+#
 # Solo escribe un archivo; no necesita que el panel esté arrancado, que lo leerá
 # al iniciarse. El proyecto, el agente y el worktree llegan por las variables
 # JDEV_PROJECT, JDEV_SESSION_AGENT y JDEV_WORKTREE que exporta bin/agent.
@@ -105,6 +108,34 @@ json_string() {
     '
 }
 
+# Recorta a $1 caracteres un valor ya escapado como cadena JSON sin partir una
+# secuencia de escape, un carácter UTF-8 ni un par sustituto \uXXXX; si recorta,
+# termina en «…». Trabaja por bytes (LC_ALL=C) para contar los caracteres
+# multibyte como uno solo.
+truncate_json() {
+    printf '%s' "$2" | LC_ALL=C awk -v max="$1" '
+        { buf = buf $0 }
+        END {
+            n = length(buf); i = 1; count = 0; out = ""
+            while (i <= n) {
+                c = substr(buf, i, 1)
+                if (c == "\\") {
+                    if (substr(buf, i + 1, 1) == "u") {
+                        len = 6
+                        if (substr(buf, i + 2, 4) ~ /^[dD][89abAB]/ && substr(buf, i + 6, 2) == "\\u" && substr(buf, i + 8, 4) ~ /^[dD][c-fC-F]/) len = 12
+                    } else len = 2
+                } else if (c ~ /[\300-\367]/) {
+                    len = 1
+                    while (substr(buf, i + len, 1) ~ /[\200-\277]/) len++
+                } else len = 1
+                if (count == max - 1 && i + len <= n) { out = out "\342\200\246"; break }
+                out = out substr(buf, i, len); count++; i += len
+            }
+            printf "%s", out
+        }
+    '
+}
+
 # Correspondencia evento -> estado: deja el resultado en new_state y devuelve 1
 # si el evento no cambia el estado (evento desconocido o Notification ajena).
 # Es lo más frágil del script, porque depende de cómo avisa Claude Code: usa
@@ -141,7 +172,14 @@ case "$session_id" in
 esac
 
 event=$(field hook_event_name)
-map_state "$event" "$(field notification_type)" "$(field message)" || exit 0
+message=$(field message)
+map_state "$event" "$(field notification_type)" "$message" || exit 0
+# El texto del aviso solo tiene sentido mientras la sesión espera a la persona.
+if [ "$new_state" = waiting ]; then
+    message=$(truncate_json 300 "$message")
+else
+    message=
+fi
 
 state_root=${XDG_STATE_HOME:-${HOME:-}/.local/state}
 [ -n "$state_root" ] && [ "$state_root" != "/.local/state" ] || exit 0
@@ -166,7 +204,8 @@ tmp=$(mktemp "$dir/.$session_id.XXXXXX") || exit 0
     printf '"worktree":%s,' "$(json_string "${JDEV_WORKTREE:-}")"
     printf '"transcript_path":"%s",' "$(field transcript_path)"
     printf '"cwd":"%s",' "$(field cwd)"
-    printf '"tmux_session":%s}\n' "$(json_string "$tmux_session")"
+    printf '"tmux_session":%s,' "$(json_string "$tmux_session")"
+    printf '"message":"%s"}\n' "$message"
 } > "$tmp" || exit 0
 mv -f -- "$tmp" "$dir/$session_id.json" && tmp=
 exit 0

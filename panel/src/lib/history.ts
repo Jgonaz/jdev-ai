@@ -46,6 +46,18 @@ export function saveHistoryFilters(f: HistoryFilters, storage: Pick<Storage, 'se
   }
 }
 
+/**
+ * Filtros con los que se abrirá Historial desde otra pantalla: parten de «sin
+ * filtros» y aplican solo los indicados. La vista (por fecha o por proyecto)
+ * se guarda aparte y se conserva.
+ */
+export function rememberHistoryFilters(
+  parche: Partial<HistoryFilters> = {},
+  storage: Pick<Storage, 'setItem'> | null = safeStorage(),
+): void {
+  saveHistoryFilters({ ...NO_HISTORY_FILTERS, ...parche }, storage);
+}
+
 export const hasFilters = (f: HistoryFilters): boolean => f.project !== '' || f.state !== '' || f.pending;
 
 /** Entradas que cumplen los filtros, solo de los proyectos indicados (los visibles). */

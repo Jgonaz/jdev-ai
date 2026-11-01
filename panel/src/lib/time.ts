@@ -15,10 +15,19 @@ export function formatRelative(desde: number, ahora: number): string {
   return meses < 12 ? `${meses} mes` : `${Math.floor(meses / 12)} a`;
 }
 
+export type Shift = 'mañana' | 'tarde' | 'noche';
+
+/** Franja del día: de 6 a 13 h mañana, de 14 a 20 h tarde y de 21 a 5 h noche (horas completas). */
+export function shiftOf(fecha: Date): Shift {
+  const h = fecha.getHours();
+  if (h >= 6 && h <= 13) return 'mañana';
+  if (h >= 14 && h <= 20) return 'tarde';
+  return 'noche';
+}
+
+const SALUDOS: Record<Shift, string> = { mañana: 'Buenos días', tarde: 'Buenas tardes', noche: 'Buenas noches' };
+
 /** Saludo según la hora local. */
 export function greeting(fecha: Date): string {
-  const h = fecha.getHours();
-  if (h >= 6 && h < 13) return 'Buenos días';
-  if (h >= 13 && h < 21) return 'Buenas tardes';
-  return 'Buenas noches';
+  return SALUDOS[shiftOf(fecha)];
 }

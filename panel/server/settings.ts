@@ -10,13 +10,15 @@ import {
   DEFAULT_SETTINGS,
   LAYOUTS,
   LOCATIONS,
+  START_SCREENS,
   THEMES,
+  isValidProfileName,
 } from '../shared/settings-schema.ts';
 import type { ProjectOverride, Settings } from '../shared/settings-schema.ts';
 
 // La estructura y los valores por defecto viven en shared/ para que el cliente
 // los comparta; aquí se reexportan para el resto del servidor.
-export { ACCENTS, AGENTS, CURSORS, DEFAULT_PORT, DEFAULT_SETTINGS, LAYOUTS, LOCATIONS, THEMES };
+export { ACCENTS, AGENTS, CURSORS, DEFAULT_PORT, DEFAULT_SETTINGS, LAYOUTS, LOCATIONS, START_SCREENS, THEMES };
 export type { ProjectOverride, Settings };
 
 // Esquema de validación: cada hoja devuelve true si el valor es aceptable. Los
@@ -44,6 +46,9 @@ const entero =
 const fuente: Hoja = (v) => typeof v === 'string' && v.length <= 200 && /^[\p{L}\p{N} ,'"._-]+$/u.test(v);
 const monograma: Hoja = (v) => typeof v === 'string' && /^[\p{L}\p{N}]{1,2}$/u.test(v);
 const color: Hoja = (v) => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
+// Nombre del saludo: texto corto de una línea (sin caracteres de control ni
+// separadores de línea), con la misma regla que el cliente; '' vuelve al nombre de Git.
+const nombre: Hoja = isValidProfileName;
 
 const ESQUEMA: Record<string, Nodo> = {
   theme: { grupo: { name: enumerado(...THEMES), followSystem: booleano, accent: enumerado(...ACCENTS) } },
@@ -67,6 +72,8 @@ const ESQUEMA: Record<string, Nodo> = {
     grupo: { system: booleano, counter: booleano, sound: booleano, onFinish: booleano },
   },
   newSession: { grupo: { agent: enumerado(...AGENTS), location: enumerado(...LOCATIONS) } },
+  profile: { grupo: { name: nombre } },
+  startScreen: enumerado(...START_SCREENS),
   port: entero(1024, 65535),
   projects: { registro: { mono: monograma, color, visible: booleano } },
 };

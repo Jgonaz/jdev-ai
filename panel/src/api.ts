@@ -7,6 +7,7 @@ import type {
   GuideContent,
   HistoryDetail,
   HistoryEntry,
+  Overview,
   ProjectInfo,
   RecentSession,
   SessionInfo,
@@ -85,6 +86,7 @@ export const api = {
   guide: (proyecto: string, ruta: string, signal?: AbortSignal) =>
     request<GuideContent>(`${projectBase(proyecto)}/guides/content?${new URLSearchParams({ path: ruta }).toString()}`, { signal }),
   worktrees: (proyecto: string, signal?: AbortSignal) => request<WorktreeList>(`${projectBase(proyecto)}/worktrees`, { signal }),
+  overview: (signal?: AbortSignal) => request<Overview>('/api/overview', { signal }),
   history: (signal?: AbortSignal) => request<{ entries: HistoryEntry[] }>('/api/history', { signal }).then((r) => r.entries),
   historyEntry: (proyecto: string, archivo: string, signal?: AbortSignal) =>
     request<{ entry: HistoryDetail }>(historyBase(proyecto, archivo), { signal }).then((r) => r.entry),

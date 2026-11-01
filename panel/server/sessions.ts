@@ -22,6 +22,11 @@ export type SessionInfo = {
   /** Milisegundos desde la época del último cambio conocido. */
   updatedAt: number;
   created: number;
+  /**
+   * Texto del aviso del agente mientras la sesión espera (p. ej. el permiso que
+   * pide), tal como llega de Claude; '' si no espera o no se conoce.
+   */
+  notice: string;
   /** Comando equivalente de bin/agent, si se conoce (solo en la respuesta de creación). */
   command?: string;
 };
@@ -221,6 +226,7 @@ export class SessionService {
         alive: s.alive,
         updatedAt: lastChange(s.created, file),
         created: s.created,
+        notice: file && s.alive && file.state === 'waiting' ? file.message : '',
       });
     }
     lista.sort((a, b) => a.created - b.created || a.name.localeCompare(b.name));

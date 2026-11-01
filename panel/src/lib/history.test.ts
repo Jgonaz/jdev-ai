@@ -16,6 +16,7 @@ import {
   longDate,
   plainText,
   projectOptions,
+  rememberHistoryFilters,
   resumePrompt,
   saveHistoryFilters,
   saveHistoryView,
@@ -132,6 +133,20 @@ describe('filtros', () => {
     expect(loadHistoryFilters(roto)).toEqual(NO_HISTORY_FILTERS);
     expect(() => saveHistoryFilters(f, roto)).not.toThrow();
     expect(loadHistoryFilters(null)).toEqual(NO_HISTORY_FILTERS);
+  });
+
+  it('al abrir Historial desde otra pantalla quita los filtros y conserva la vista', () => {
+    const datos = new Map<string, string>();
+    const almacen = { getItem: (k: string) => datos.get(k) ?? null, setItem: (k: string, v: string) => void datos.set(k, v) };
+    saveHistoryFilters({ project: 'balanz.io', state: 'bloqueada', pending: true }, almacen);
+    saveHistoryView('project', almacen);
+    rememberHistoryFilters({}, almacen);
+    expect(loadHistoryFilters(almacen)).toEqual(NO_HISTORY_FILTERS);
+    expect(loadHistoryView(almacen)).toBe('project');
+    rememberHistoryFilters({ project: 'jdev-ai' }, almacen);
+    expect(loadHistoryFilters(almacen)).toEqual({ ...NO_HISTORY_FILTERS, project: 'jdev-ai' });
+    rememberHistoryFilters({ pending: true }, almacen);
+    expect(loadHistoryFilters(almacen)).toEqual({ ...NO_HISTORY_FILTERS, pending: true });
   });
 });
 

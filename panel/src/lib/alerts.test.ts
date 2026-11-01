@@ -16,6 +16,7 @@ function s(name: string, state: SessionInfo['state'], parche: Partial<SessionInf
     alive: true,
     updatedAt: 0,
     created: 0,
+    notice: '',
     ...parche,
   };
 }

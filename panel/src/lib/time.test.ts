@@ -31,11 +31,14 @@ describe('formatRelative', () => {
 
 describe('greeting', () => {
   it.each([
+    [6, 'Buenos días'],
     [7, 'Buenos días'],
-    [12, 'Buenos días'],
-    [15, 'Buenas tardes'],
-    [22, 'Buenas noches'],
+    [13, 'Buenos días'],
+    [14, 'Buenas tardes'],
+    [20, 'Buenas tardes'],
+    [21, 'Buenas noches'],
     [3, 'Buenas noches'],
+    [5, 'Buenas noches'],
   ])('a las %i h', (hora, esperado) => {
     expect(greeting(new Date(2026, 10, 1, hora))).toBe(esperado);
   });

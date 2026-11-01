@@ -23,6 +23,8 @@ import { GuideError, listGuides, readGuide } from './guides.ts';
 import { HistoryError, HistoryStore, historyDirs, historySignature, isHistoryState, toListEntry } from './history.ts';
 import { ImageError, MAX_IMAGE_BYTES, SVG_CSP, defaultImageDirs, openImage } from './images.ts';
 import { claudeConfigDir, configDir, sessionStateDir, uploadsDir } from './paths.ts';
+import { buildOverview, readGitName } from './overview.ts';
+import type { Overview } from './overview.ts';
 import { listProjects, worktreeDetails } from './projects.ts';
 import type { Project } from './projects.ts';
 import { RecentIndex } from './recent.ts';
@@ -238,7 +240,45 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
 
   const recientes = new RecentIndex({ projectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects') });
 
+  // Resumen de Inicio: se calcula al pedirlo y se reutiliza hasta el siguiente
+  // aviso de sesiones, backlog o historial (o 10 s, por los cambios de rama y
+  // worktrees que no avisan). No hay evento propio: el cliente vuelve a pedirlo
+  // con esos avisos, con debounce, y al volver a la ventana.
+  const RESUMEN_TTL_MS = 10000;
+  let resumen: { at: number; valor: Promise<Overview> } | null = null;
+  let nombreGit: Promise<string | null> | null = null;
+  const invalidarResumen = () => {
+    resumen = null;
+  };
+  function overview(): Promise<Overview> {
+    if (resumen && Date.now() - resumen.at < RESUMEN_TTL_MS) return resumen.valor;
+    nombreGit ??= readGitName(opts.harnessRoot);
+    const valor = (async () => {
+      const todos = await sesiones.projectList();
+      // La visibilidad se lee de los ajustes actuales, no de la caché de proyectos.
+      const ajustes = readSettings(opts.configDir).projects;
+      const visibles = todos.filter((p) => (Object.hasOwn(ajustes, p.id) ? ajustes[p.id]!.visible : undefined) ?? true);
+      return buildOverview({
+        projects: visibles,
+        allProjects: todos,
+        sessions: sesiones.list(),
+        backlog,
+        history: historial,
+        gitName: await nombreGit,
+      });
+    })();
+    const entrada = { at: Date.now(), valor };
+    resumen = entrada;
+    // Un fallo no se queda en la caché.
+    valor.catch(() => {
+      if (resumen === entrada) resumen = null;
+    });
+    return valor;
+  }
+
   function broadcast(mensaje: unknown): void {
+    const tipo = (mensaje as { type?: unknown } | null)?.type;
+    if (tipo === 'sessions' || tipo === 'backlog' || tipo === 'history') invalidarResumen();
     const texto = JSON.stringify(mensaje);
     for (const c of clientes) if (c.readyState === WebSocket.OPEN) c.send(texto);
   }
@@ -694,6 +734,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
           return;
         }
         sendJson(res, 200, updateSettings(parche, opts.configDir));
+        invalidarResumen();
         return;
       }
       res.setHeader('Allow', 'GET, PUT');
@@ -727,6 +768,15 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       // Se actualiza la lista de sesiones del panel para no ofrecer las que ya están en él.
       await sesiones.refresh();
       sendJson(res, 200, { recent: await recientes.list(await sesiones.projectList(), sesiones.panelSessionIds()) });
+      return;
+    }
+    if (pathname === '/api/overview') {
+      if (metodo !== 'GET') {
+        res.setHeader('Allow', 'GET');
+        sendJson(res, 405, { error: 'método no permitido' });
+        return;
+      }
+      sendJson(res, 200, await overview());
       return;
     }
     if (pathname === '/api/image') {

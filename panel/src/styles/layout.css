@@ -74,10 +74,6 @@ a.nav__link:hover {
   color: var(--fg);
   background: var(--bg-raised);
 }
-.nav__link--disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
 
 .banner {
   flex: none;
@@ -89,21 +85,6 @@ a.nav__link:hover {
 }
 .banner--error {
   color: var(--danger);
-}
-
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 44px;
-  transform: translateX(-50%);
-  z-index: 60;
-  padding: 8px 14px;
-  border: 1px solid var(--line-strong, var(--line));
-  border-radius: 8px;
-  background: var(--bg-panel);
-  color: var(--fg);
-  font-size: var(--text-sm2);
-  box-shadow: var(--shadow);
 }
 
 .screen {

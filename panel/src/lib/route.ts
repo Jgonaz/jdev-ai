@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export type Route = 'terminales' | 'proyectos' | 'historial' | 'ajustes';
+export type Route = 'inicio' | 'terminales' | 'proyectos' | 'historial' | 'ajustes';
 
-/** Secciones del diseño que aún no existen. */
-export const FUTURE_SECTIONS: Record<string, string> = {
-  inicio: 'Inicio',
-};
+/** Pantalla que se muestra con la URL sin ruta (ajuste «Pantalla al abrir»). */
+export type StartScreen = 'inicio' | 'terminales';
 
 export type ResolvedRoute = {
   route: Route;
@@ -15,9 +13,9 @@ export type ResolvedRoute = {
    */
   project: string | null;
   item: string | null;
-  /** Nombre de la sección futura pedida (para el aviso «Próximamente»). */
-  soon: string | null;
-  /** El hash pedido no es canónico y debe sustituirse por `#/terminales`. */
+  /** La URL no lleva ruta: la pantalla es la de «Pantalla al abrir». */
+  implicit: boolean;
+  /** El hash pedido no es una ruta conocida y debe quitarse (vuelve a la pantalla al abrir). */
   normalize: boolean;
 };
 
@@ -30,11 +28,11 @@ const decodificar = (s: string | undefined): string | null => {
   }
 };
 
-export function resolveRoute(hash: string): ResolvedRoute {
+export function resolveRoute(hash: string, start: StartScreen = 'inicio'): ResolvedRoute {
   const clave = hash.replace(/^#\/?/, '');
-  const base = { project: null, item: null, soon: null, normalize: false };
-  if (clave === 'ajustes') return { ...base, route: 'ajustes' };
-  if (clave === 'terminales' || clave === '') return { ...base, route: 'terminales' };
+  const base = { project: null, item: null, implicit: false, normalize: false };
+  if (clave === '') return { ...base, route: start, implicit: true };
+  if (clave === 'ajustes' || clave === 'terminales' || clave === 'inicio') return { ...base, route: clave };
   const partes = clave.split('/');
   if (partes[0] === 'proyectos' && partes.length <= 3) {
     return { ...base, route: 'proyectos', project: decodificar(partes[1]), item: decodificar(partes[2]) };
@@ -45,8 +43,7 @@ export function resolveRoute(hash: string): ResolvedRoute {
     // Una entrada necesita proyecto y archivo; si falta alguno se muestra la lista sola.
     return project && item ? { ...base, route: 'historial', project, item } : { ...base, route: 'historial' };
   }
-  const futura = Object.hasOwn(FUTURE_SECTIONS, clave) ? FUTURE_SECTIONS[clave]! : null;
-  return { ...base, route: 'terminales', soon: futura, normalize: true };
+  return { ...base, route: start, implicit: true, normalize: true };
 }
 
 export function parseRoute(hash: string): Route {
@@ -86,29 +83,29 @@ export function canonicalProjectHref(
 }
 
 /**
- * Enrutado mínimo por hash: no hace falta una librería para cuatro pantallas.
- * Las rutas futuras y las desconocidas se normalizan a `#/terminales` (con
- * replaceState, para que Atrás no vuelva a la ruta rota) y las futuras
- * devuelven su nombre en `aviso` para decir «Próximamente».
+ * Enrutado mínimo por hash: no hace falta una librería para cinco pantallas.
+ * Sin ruta se muestra la pantalla de `start` (y la sigue si cambia el ajuste);
+ * las rutas desconocidas se quitan de la URL con replaceState, para que Atrás
+ * no vuelva a la ruta rota.
  */
-export function useRoute(): {
+export function useRoute(start: StartScreen): {
   ruta: Route;
   proyecto: string | null;
   elemento: string | null;
+  /** La pantalla sale de «Pantalla al abrir» (URL sin ruta). */
+  implicita: boolean;
   navegar: (r: Route) => void;
   /** Sustituye el hash sin añadir una entrada al historial (Atrás no vuelve a la URL corregida). */
   reemplazar: (hash: string) => void;
-  aviso: string | null;
-  descartarAviso: () => void;
 } {
-  const [resuelta, setResuelta] = useState<ResolvedRoute>(() => resolveRoute(window.location.hash));
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [hash, setHash] = useState(() => window.location.hash);
   useEffect(() => {
     const aplicar = () => {
-      const r = resolveRoute(window.location.hash);
-      if (r.normalize) window.history.replaceState(null, '', routeHref('terminales'));
-      if (r.soon) setAviso(r.soon);
-      setResuelta(r);
+      const actual = window.location.hash;
+      if (resolveRoute(actual).normalize) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        setHash('');
+      } else setHash(actual);
     };
     aplicar();
     window.addEventListener('hashchange', aplicar);
@@ -118,10 +115,17 @@ export function useRoute(): {
     window.location.hash = routeHref(r);
   }, []);
   // replaceState no emite hashchange: se actualiza el estado a mano.
-  const reemplazar = useCallback((hash: string) => {
-    window.history.replaceState(null, '', hash);
-    setResuelta(resolveRoute(hash));
+  const reemplazar = useCallback((nuevo: string) => {
+    window.history.replaceState(null, '', nuevo);
+    setHash(nuevo);
   }, []);
-  const descartarAviso = useCallback(() => setAviso(null), []);
-  return { ruta: resuelta.route, proyecto: resuelta.project, elemento: resuelta.item, navegar, reemplazar, aviso, descartarAviso };
+  const resuelta = useMemo(() => resolveRoute(hash, start), [hash, start]);
+  return {
+    ruta: resuelta.route,
+    proyecto: resuelta.project,
+    elemento: resuelta.item,
+    implicita: resuelta.implicit,
+    navegar,
+    reemplazar,
+  };
 }

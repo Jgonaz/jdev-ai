@@ -30,6 +30,7 @@ type Sesion = {
   closed: boolean;
   alive: boolean;
   updatedAt: number;
+  notice: string;
   command?: string;
 };
 
@@ -202,6 +203,7 @@ describe('API de sesiones y terminal', () => {
         transcript_path: transcript,
         cwd: tmp,
         tmux_session: nombre,
+        message: 'Claude needs your permission to use Bash',
       };
       mkdirSync(join(tmp, 'state'), { recursive: true });
       writeFileSync(join(tmp, 'state', 's1.json'), JSON.stringify(estado));
@@ -209,11 +211,18 @@ describe('API de sesiones y terminal', () => {
         expect(eventos.at(-1)?.sessions?.[0]).toMatchObject({ state: 'waiting', tracked: true, title: 'Revisar login', closed: true });
       });
       const lista = ((await (await api('GET', '/api/sessions')).json()) as { sessions: Sesion[] }).sessions;
-      expect(lista[0]).toMatchObject({ state: 'waiting', title: 'Revisar login', closed: true, alive: true });
+      expect(lista[0]).toMatchObject({
+        state: 'waiting',
+        title: 'Revisar login',
+        closed: true,
+        alive: true,
+        notice: 'Claude needs your permission to use Bash',
+      });
 
       // Un cambio de estado se empuja solo.
       writeFileSync(join(tmp, 'state', 's1.json'), JSON.stringify({ ...estado, state: 'working', updated_at: new Date(Date.now() + 1000).toISOString() }));
       await vi.waitFor(() => expect(eventos.at(-1)?.sessions?.[0]?.state).toBe('working'));
+      expect(eventos.at(-1)?.sessions?.[0]?.notice).toBe('');
     });
 
     it('/ws/term/<sesión> muestra la salida y responde a resize y a la entrada', async () => {
