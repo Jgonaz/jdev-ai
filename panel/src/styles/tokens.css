@@ -1,0 +1,286 @@
+/*
+ * Tokens de diseño. Cada tema es un bloque :root[data-theme=…] con los mismos
+ * nombres de variable; el acento se elige aparte con data-accent y las fuentes
+ * y tamaños llegan de los ajustes (--font-*, --fs-ui). xterm.js lee las
+ * variables --term-* y --ansi-* de aquí, así que terminales y panel comparten tema.
+ */
+
+:root {
+  /* Fuentes y escala: --fs-ui y --font-* los pone el cliente desde los ajustes. */
+  --font-ui: 'Instrument Sans', system-ui, sans-serif;
+  --font-title: 'Martian Mono', ui-monospace, monospace;
+  --font-term: 'JetBrains Mono', ui-monospace, monospace;
+  --fs-ui: 14;
+  --u: calc(var(--fs-ui) / 14);
+  --text-2xs: calc(10.5px * var(--u));
+  --text-xs: calc(11px * var(--u));
+  --text-sm: calc(12px * var(--u));
+  --text-sm2: calc(12.5px * var(--u));
+  --text-md: calc(13px * var(--u));
+  --text-base: calc(14px * var(--u));
+  --text-lg: calc(18px * var(--u));
+  --text-xl: calc(22px * var(--u));
+  --text-2xl: calc(26px * var(--u));
+
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --header-h: 52px;
+  --sidebar-w: 280px;
+  --context-w: 320px;
+}
+
+/* ---------- Grafito (por defecto): oscuro neutro ---------- */
+:root,
+:root[data-theme='grafito'] {
+  color-scheme: dark;
+  --bg: #0f1113;
+  --bg-panel: #131619;
+  --bg-surface: #16191c;
+  --bg-raised: #1f2328;
+  --bg-term: #0b0d0f;
+  --bg-input: #0f1113;
+  --bg-switch: #1c2024;
+  --line: #2a2f35;
+  --line-strong: #3a4048;
+  --line-soft: #22262b;
+  --fg: #e8e6e1;
+  --fg-soft: #c9c6bf;
+  --fg-muted: #9aa1a9;
+  --fg-faint: #7d848c;
+  --fg-dim: #4b525a;
+  --link: #8ab4f8;
+  --link-hover: #b3cdfa;
+  --waiting: #f0b25a;
+  --waiting-text: #f5c27a;
+  --waiting-ink: #1a1408;
+  --waiting-bg: #241d12;
+  --waiting-line: #4a3a20;
+  --waiting-head: #1c1810;
+  --waiting-ring: #6b5228;
+  --working: #6cc3b5;
+  --working-text: #6cc3b5;
+  --working-bg: #12221f;
+  --working-line: #24443f;
+  --danger: #ff7b6b;
+  --danger-ink: #1a0a07;
+  --mono-ink: #0f1113;
+  --overlay: rgba(5, 6, 8, 0.6);
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  --term-bg: #0b0d0f;
+  --term-text: #d6d3cc;
+  --term-selection: rgba(138, 180, 248, 0.3);
+  --ansi-black: #2a2f35;
+  --ansi-red: #ff7b6b;
+  --ansi-green: #6cc3b5;
+  --ansi-yellow: #f0b25a;
+  --ansi-blue: #8ab4f8;
+  --ansi-magenta: #c79bff;
+  --ansi-cyan: #6fd3e6;
+  --ansi-white: #d6d3cc;
+  --ansi-bright-black: #7d848c;
+  --ansi-bright-red: #ff9d85;
+  --ansi-bright-green: #8fd9cc;
+  --ansi-bright-yellow: #f5c27a;
+  --ansi-bright-blue: #b3cdfa;
+  --ansi-bright-magenta: #dcbcff;
+  --ansi-bright-cyan: #9be3f0;
+  --ansi-bright-white: #ffffff;
+}
+
+/* ---------- Fósforo: oscuro cálido, papel y tinta ---------- */
+:root[data-theme='fosforo'] {
+  color-scheme: dark;
+  --bg: #12110e;
+  --bg-panel: #181612;
+  --bg-surface: #1c1a15;
+  --bg-raised: #25221b;
+  --bg-term: #0d0c0a;
+  --bg-input: #12110e;
+  --bg-switch: #201e18;
+  --line: #34302a;
+  --line-strong: #4a453c;
+  --line-soft: #2a2721;
+  --fg: #efe8da;
+  --fg-soft: #d3ccbd;
+  --fg-muted: #a39b8b;
+  --fg-faint: #8b8374;
+  --fg-dim: #5a5548;
+  --link: #e6b866;
+  --link-hover: #f3cf91;
+  --waiting: #f0b25a;
+  --waiting-text: #f5c27a;
+  --waiting-ink: #1a1408;
+  --waiting-bg: #2a2012;
+  --waiting-line: #524020;
+  --waiting-head: #211a0f;
+  --waiting-ring: #7a5c28;
+  --working: #7cc4a8;
+  --working-text: #7cc4a8;
+  --working-bg: #14211b;
+  --working-line: #29473b;
+  --danger: #ff8466;
+  --danger-ink: #1a0a07;
+  --mono-ink: #12110e;
+  --overlay: rgba(6, 5, 3, 0.62);
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --term-bg: #0d0c0a;
+  --term-text: #e3dccb;
+  --term-selection: rgba(230, 184, 102, 0.28);
+  --ansi-black: #34302a;
+  --ansi-red: #ff8466;
+  --ansi-green: #7cc4a8;
+  --ansi-yellow: #f0b25a;
+  --ansi-blue: #8fb6ee;
+  --ansi-magenta: #cfa0e8;
+  --ansi-cyan: #6fd3e6;
+  --ansi-white: #e3dccb;
+  --ansi-bright-black: #8b8374;
+  --ansi-bright-red: #ffa088;
+  --ansi-bright-green: #9bdac2;
+  --ansi-bright-yellow: #f5c27a;
+  --ansi-bright-blue: #b3cdfa;
+  --ansi-bright-magenta: #e1bff2;
+  --ansi-bright-cyan: #9be3f0;
+  --ansi-bright-white: #fffaf0;
+}
+
+/* ---------- Papel: claro, tinta sobre crema ---------- */
+:root[data-theme='papel'] {
+  color-scheme: light;
+  --bg: #f6f1e6;
+  --bg-panel: #ebe4d4;
+  --bg-surface: #fbf7ee;
+  --bg-raised: #e0d8c4;
+  --bg-term: #fffdf8;
+  --bg-input: #fffdf8;
+  --bg-switch: #d9d1bd;
+  --line: #cfc6b0;
+  --line-strong: #857a62;
+  --line-soft: #ddd5c1;
+  --fg: #1f2328;
+  --fg-soft: #3a3f45;
+  --fg-muted: #565c63;
+  --fg-faint: #5f656c;
+  --fg-dim: #8c8f94;
+  --link: #1a56b0;
+  --link-hover: #0f3f8a;
+  --waiting: #b87400;
+  --waiting-text: #7a4e00;
+  --waiting-ink: #1a1408;
+  --waiting-bg: #f7e6c4;
+  --waiting-line: #d8b46a;
+  --waiting-head: #f3e4c2;
+  --waiting-ring: #c9a05a;
+  --working: #1b7a68;
+  --working-text: #17695a;
+  --working-bg: #d9eadf;
+  --working-line: #9cc7b8;
+  --danger: #b3361f;
+  --danger-ink: #ffffff;
+  --mono-ink: #1f2328;
+  /* Contorno de los monogramas: los colores claros (crema) se pierden sobre el papel. */
+  --mono-edge: #857a62;
+  --overlay: rgba(60, 50, 30, 0.4);
+  --shadow: 0 24px 64px rgba(60, 50, 30, 0.25);
+  --term-bg: #fffdf8;
+  --term-text: #1f2328;
+  --term-selection: rgba(26, 86, 176, 0.22);
+  --ansi-black: #1f2328;
+  --ansi-red: #b3361f;
+  --ansi-green: #17695a;
+  --ansi-yellow: #7a4e00;
+  --ansi-blue: #1a56b0;
+  --ansi-magenta: #6f3fb0;
+  --ansi-cyan: #0b6577;
+  --ansi-white: #5b6168;
+  --ansi-bright-black: #656b72;
+  --ansi-bright-red: #c0391f;
+  --ansi-bright-green: #1b7a68;
+  --ansi-bright-yellow: #8a5a00;
+  --ansi-bright-blue: #1f5fc4;
+  --ansi-bright-magenta: #7d4cc4;
+  --ansi-bright-cyan: #0b6f82;
+  --ansi-bright-white: #2a2f35;
+}
+
+/* ---------- Alto contraste: negro puro, bordes marcados ---------- */
+:root[data-theme='contraste'] {
+  color-scheme: dark;
+  --bg: #000000;
+  --bg-panel: #0a0a0a;
+  --bg-surface: #0a0a0a;
+  --bg-raised: #1c1c1c;
+  --bg-term: #000000;
+  --bg-input: #000000;
+  --bg-switch: #1c1c1c;
+  --line: #b0b0b0;
+  --line-strong: #ffffff;
+  --line-soft: #8a8a8a;
+  --fg: #ffffff;
+  --fg-soft: #f0f0f0;
+  --fg-muted: #cfcfcf;
+  --fg-faint: #b8b8b8;
+  --fg-dim: #8a8a8a;
+  --link: #8cc4ff;
+  --link-hover: #bfe0ff;
+  --waiting: #ffc247;
+  --waiting-text: #ffd27a;
+  --waiting-ink: #000000;
+  --waiting-bg: #2a1d00;
+  --waiting-line: #ffc247;
+  --waiting-head: #1f1600;
+  --waiting-ring: #ffc247;
+  --working: #5fe0cc;
+  --working-text: #5fe0cc;
+  --working-bg: #002a24;
+  --working-line: #5fe0cc;
+  --danger: #ff8a7a;
+  --danger-ink: #000000;
+  --mono-ink: #000000;
+  --overlay: rgba(0, 0, 0, 0.75);
+  --shadow: 0 0 0 1px #ffffff;
+  --term-bg: #000000;
+  --term-text: #ffffff;
+  --term-selection: rgba(140, 196, 255, 0.4);
+  --ansi-black: #4a4a4a;
+  --ansi-red: #ff8a7a;
+  --ansi-green: #5fe0cc;
+  --ansi-yellow: #ffc247;
+  --ansi-blue: #8cc4ff;
+  --ansi-magenta: #d8aaff;
+  --ansi-cyan: #7fe8f5;
+  --ansi-white: #f0f0f0;
+  --ansi-bright-black: #b8b8b8;
+  --ansi-bright-red: #ffb0a4;
+  --ansi-bright-green: #8ff0df;
+  --ansi-bright-yellow: #ffd98a;
+  --ansi-bright-blue: #bfe0ff;
+  --ansi-bright-magenta: #e8ccff;
+  --ansi-bright-cyan: #b0f2fa;
+  --ansi-bright-white: #ffffff;
+}
+
+/* ---------- Acentos ---------- */
+:root {
+  --accent: #f0b25a;
+  --accent-text: var(--accent);
+  --accent-ink: #1a1408;
+  --accent-bg: color-mix(in srgb, var(--accent) 9%, var(--bg-panel));
+  --accent-line: color-mix(in srgb, var(--accent) 30%, var(--bg-panel));
+  --accent-on: var(--accent-ink);
+  --term-cursor: var(--accent-text);
+}
+:root[data-accent='ambar'] { --accent: #f0b25a; }
+:root[data-accent='menta'] { --accent: #6cc3b5; }
+:root[data-accent='lavanda'] { --accent: #b9a6ff; }
+:root[data-accent='coral'] { --accent: #ff8a6b; }
+:root[data-accent='cian'] { --accent: #6fd3e6; }
+
+/* En esquema claro, el acento como texto, filete o relleno de interruptor necesita una versión más oscura. */
+:root[data-scheme='light'] { --accent-on: #ffffff; }
+:root[data-scheme='light'][data-accent='ambar'] { --accent-text: #7a4e00; }
+:root[data-scheme='light'][data-accent='menta'] { --accent-text: #17695a; }
+:root[data-scheme='light'][data-accent='lavanda'] { --accent-text: #5236c4; }
+:root[data-scheme='light'][data-accent='coral'] { --accent-text: #b13c1c; }
+:root[data-scheme='light'][data-accent='cian'] { --accent-text: #0b6577; }

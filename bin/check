@@ -7,7 +7,7 @@ set -eu
 
 # Si bin/check se lanza desde una sesión abierta con bin/agent, hereda las
 # variables del panel y alteran la salida que se comprueba.
-unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING JDEV_MAIN_CHECKOUT JDEV_WORKTREE
+unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING JDEV_MAIN_CHECKOUT JDEV_WORKTREE JDEV_PROJECT
 
 harness_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 work=$(mktemp -d)
@@ -22,7 +22,7 @@ check() {
 
 # Harness temporal con un proyecto de prueba y su historial.
 mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/adapters/claude" "$work/h/projects/demo/.agent/history" "$work/bin"
-cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/session-title" "$harness_root/bin/worktree" "$work/h/bin/"
+cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/session-title" "$harness_root/bin/session-state" "$harness_root/bin/worktree" "$work/h/bin/"
 cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
 cp "$harness_root/adapters/claude/agents.json" "$work/h/adapters/claude/"
@@ -60,14 +60,14 @@ printf -- '- [x] Hecha\n- [ ] Pendiente\n  - [ ] Subtarea\n' > "$work/h/projects
 
 # Agentes simulados: guardan sus argumentos separados por NUL, seguidos del
 # aviso que el launcher exporta para el panel, además del directorio de
-# lanzamiento (.cwd) y las variables de worktree (.env).
+# lanzamiento (.cwd) y las variables de worktree y proyecto (.env).
 verified=$(sed -n 's/^codex_verified_version=//p' "$harness_root/bin/agent")
 for name in codex claude copilot; do
     cat > "$work/bin/$name" <<EOF
 #!/bin/sh
 [ "\${1:-}" = "--version" ] && { echo "codex-cli \${FAKE_CODEX_VERSION:-$verified}"; exit 0; }
 pwd -P > "$work/$name.cwd"
-printf '%s\\n%s\\n' "\${JDEV_MAIN_CHECKOUT:-}" "\${JDEV_WORKTREE:-}" > "$work/$name.env"
+printf '%s\\n%s\\n%s\\n' "\${JDEV_MAIN_CHECKOUT:-}" "\${JDEV_WORKTREE:-}" "\${JDEV_PROJECT:-}" > "$work/$name.env"
 printf '%s\\n' "\${PLAYWRIGHT_MCP_OUTPUT_DIR:-}" > "$work/$name.qa"
 for x in "\$@" "JDEV_SESSION_WARNING=\${JDEV_SESSION_WARNING:-}"; do printf '%s\\0' "\$x"; done > "$work/$name.args"
 EOF
@@ -83,6 +83,8 @@ check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
 check "sintaxis de bin/session-status" 'sh -n "$harness_root/bin/session-status"'
 check "sintaxis de bin/subagent-notice" 'sh -n "$harness_root/bin/subagent-notice"'
 check "sintaxis de bin/session-title" 'sh -n "$harness_root/bin/session-title"'
+check "sintaxis de bin/session-state" 'sh -n "$harness_root/bin/session-state"'
+check "sintaxis de bin/panel" 'sh -n "$harness_root/bin/panel"'
 check "sin argumentos muestra la ayuda" 'run && grep -q "^Uso:" "$work/out"'
 
 check "claude por defecto" 'run demo && [ -f "$work/claude.args" ] && [ ! -f "$work/codex.args" ]'
@@ -127,6 +129,94 @@ check "aviso: fork con el modelo de la sesión" 'notice "{\"tool_input\":{\"suba
 check "aviso: modelo indicado en la llamada" 'notice "{\"tool_input\":{\"subagent_type\":\"Explore\",\"model\":\"sonnet\"}}" | grep -q "Subagente Explore · sonnet \[medium\]\"}$"'
 check "aviso: entrada no válida sin salida" '[ -z "$(notice basura)" ]'
 check "claude recibe el hook de títulos" 'run demo && args claude | grep -q "\"UserPromptSubmit\":\[{\"hooks\":\[{.*session-title. --hook"'
+
+# Hooks de estado y de título en el --settings de Claude, y proyecto exportado.
+settings() { args claude | sed -n '/^--settings$/{n;p;}'; }
+check "claude registra session-state en todos sus eventos" 'run demo && for ev in SessionStart UserPromptSubmit PostToolUse Notification Stop SessionEnd; do settings | grep -q "\"$ev\":\[.*session-state. --hook" || return 1; done'
+check "claude conserva los hooks anteriores junto a session-state" 'run demo && s=$(settings) && printf "%s" "$s" | grep -q "startup|clear.*session-status. --hook" && printf "%s" "$s" | grep -q "subagent-notice" && printf "%s" "$s" | grep -q "session-title. --hook"'
+if command -v python3 >/dev/null 2>&1; then
+    cat > "$work/hooks.py" <<'EOF'
+import json, sys
+
+hooks = json.load(sys.stdin)["hooks"]
+
+def commands(event, matcher=None):
+    found = []
+    for group in hooks.get(event, []):
+        if matcher is None or group.get("matcher") == matcher:
+            found += [h["command"] for h in group["hooks"]]
+    return found
+
+def has(event, name, matcher=None):
+    return any(name in c for c in commands(event, matcher))
+
+ok = (
+    has("SessionStart", "session-status", "startup|clear")
+    and has("PreToolUse", "subagent-notice", "Agent")
+    and has("UserPromptSubmit", "session-title")
+    and all(has(e, "session-state") for e in ("SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"))
+    # El de session-state en SessionStart no lleva matcher: cubre resume y compact.
+    and any("session-state" in c for g in hooks["SessionStart"] if "matcher" not in g for c in [h["command"] for h in g["hooks"]])
+)
+sys.exit(0 if ok else 1)
+EOF
+    check "el --settings de claude es JSON válido con todos los hooks" 'run demo && settings | python3 -I "$work/hooks.py"'
+else
+    printf 'aviso: sin python3 no se valida el JSON del --settings de claude\n'
+fi
+check "agent exporta JDEV_PROJECT con el checkout principal" 'run demo && [ "$(sed -n 3p "$work/claude.env")" = "demo" ] && (cd "$work/h" && run . ) && [ "$(sed -n 3p "$work/claude.env")" = "h" ]'
+check "claude falla sin session-state" 'mv "$work/h/bin/session-state" "$work/session-state" && ! run demo; r=$?; mv "$work/session-state" "$work/h/bin/session-state"; [ $r -eq 0 ] && grep -q "estado de sesión" "$work/out"'
+
+# Estado de sesión: session-state escribe un archivo por sesión.
+ss_state="$work/state"
+ss_file="$ss_state/jdev-ai/sessions/s1.json"
+ss() {
+    printf '%s' "$1" | XDG_STATE_HOME="${SS_HOME:-$ss_state}" JDEV_PROJECT=demo JDEV_SESSION_AGENT=claude JDEV_WORKTREE=feat \
+        "$work/h/bin/session-state" --hook > "$work/ss.out" 2>&1
+}
+ss_quiet() { [ ! -s "$work/ss.out" ]; }
+ss_json_ok() {
+    command -v python3 >/dev/null 2>&1 || return 0
+    python3 -I -c 'import json,sys; json.load(open(sys.argv[1]))' "$1"
+}
+command -v python3 >/dev/null 2>&1 || printf 'aviso: sin python3 no se valida el JSON de session-state\n'
+# $1 evento, $2 campos extra del hook, $3 estado esperado (vacío si no escribe).
+ss_expect() {
+    rm -rf "$ss_state"
+    ss "{\"session_id\":\"s1\",\"hook_event_name\":\"$1\",\"cwd\":\"/p\"$2}" && ss_quiet || return 1
+    if [ -z "$3" ]; then [ ! -e "$ss_file" ]; return; fi
+    ss_json_ok "$ss_file" && [ "$(sed -n 's/.*"state":"\([a-z]*\)".*/\1/p' "$ss_file")" = "$3" ]
+}
+check "session-state: SessionStart es idle" 'ss_expect SessionStart "" idle'
+check "session-state: UserPromptSubmit es working" 'ss_expect UserPromptSubmit "" working'
+check "session-state: PostToolUse es working" 'ss_expect PostToolUse "" working'
+check "session-state: Stop es idle" 'ss_expect Stop "" idle'
+check "session-state: SessionEnd es ended" 'ss_expect SessionEnd "" ended'
+check "session-state: Notification de permiso por tipo es waiting" 'ss_expect Notification ",\"notification_type\":\"permission_prompt\",\"message\":\"x\"" waiting'
+check "session-state: Notification de pregunta por tipo es waiting" 'ss_expect Notification ",\"notification_type\":\"elicitation_dialog\"" waiting'
+check "session-state: Notification de inactividad por tipo es idle" 'ss_expect Notification ",\"notification_type\":\"idle_prompt\",\"message\":\"Claude needs your permission\"" idle'
+check "session-state: Notification de otro tipo no cambia el estado" 'ss_expect Notification ",\"notification_type\":\"auth_success\",\"message\":\"Claude needs your permission\"" ""'
+check "session-state: Notification de permiso por mensaje es waiting" 'ss_expect Notification ",\"message\":\"Claude needs your permission to use Bash\"" waiting'
+check "session-state: Notification de pregunta por mensaje es waiting" 'ss_expect Notification ",\"message\":\"CLAUDE NEEDS YOUR input\"" waiting'
+check "session-state: Notification de inactividad por mensaje es idle" 'ss_expect Notification ",\"message\":\"Claude is waiting for your input\"" idle'
+check "session-state: Notification ajena por mensaje no cambia el estado" 'ss_expect Notification ",\"message\":\"Hola\"" ""'
+check "session-state: Notification sin mensaje ni tipo no cambia el estado" 'ss_expect Notification "" ""'
+check "session-state: evento desconocido no escribe" 'ss_expect PreCompact "" ""'
+check "session-state: evento ajeno no pisa el estado anterior" 'ss_expect Stop "" idle && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Notification\",\"message\":\"Hola\"}" && grep -q "\"state\":\"idle\"" "$ss_file"'
+check "session-state: guarda los campos esperados" 'ss_expect UserPromptSubmit ",\"transcript_path\":\"/t/s1.jsonl\"" working && grep -q "^{\"session_id\":\"s1\",\"state\":\"working\",\"event\":\"UserPromptSubmit\",\"updated_at\":\"[0-9]\{4\}-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z\",\"project\":\"demo\",\"agent\":\"claude\",\"worktree\":\"feat\",\"transcript_path\":\"/t/s1.jsonl\",\"cwd\":\"/p\",\"tmux_session\":\"\"}\$" "$ss_file"'
+check "session-state: escapa comillas y barras invertidas" 'rm -rf "$ss_state"; printf "%s" "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\",\"cwd\":\"/tmp/a\\\"b\\\\c\",\"transcript_path\":\"/t/\\u00e1.jsonl\"}" | XDG_STATE_HOME="$ss_state" JDEV_PROJECT="p\"q\\r" "$work/h/bin/session-state" --hook && ss_json_ok "$ss_file" && grep -qF "\"cwd\":\"/tmp/a\\\"b\\\\c\"" "$ss_file" && grep -qF "\"project\":\"p\\\"q\\\\r\"" "$ss_file" && { ! command -v python3 >/dev/null 2>&1 || python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d[\"cwd\"]==\"/tmp/a\\\"b\\\\c\" and d[\"project\"]==\"p\\\"q\\\\r\" else 1)" "$ss_file"; }'
+check "session-state: ignora claves dentro de otros valores" 'rm -rf "$ss_state"; ss "{\"message\":\"\\\"session_id\\\":\\\"x\\\"\",\"nested\":{\"session_id\":\"y\"},\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && [ -f "$ss_file" ] && [ "$(ls "$ss_state/jdev-ai/sessions" | wc -l)" -eq 1 ]'
+check "session-state: session_id no válido no escribe" 'rm -rf "$ss_state"; for id in "a\\\"b" "a/b" "..\\/x" "a b" ""; do ss "{\"session_id\":\"$id\",\"hook_event_name\":\"Stop\"}" && ss_quiet || return 1; done; ss "{\"hook_event_name\":\"Stop\"}" && ss_quiet && [ ! -e "$ss_state" ]'
+check "session-state: entrada vacía o basura sale 0 sin salida" 'rm -rf "$ss_state"; for in in "" "basura" "{\"session_id\":\"s1\"" "[1,2" "{\"session_id\":\"s1\",\"hook_event_name\":\"St\\xp\"}" "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\\"; do ss "$in" && ss_quiet || return 1; done; [ ! -e "$ss_state" ]'
+check "session-state: directorio no escribible sale 0 sin salida" ': > "$work/no-dir"; SS_HOME="$work/no-dir" ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && ss_quiet'
+check "session-state: directorio de sesiones de solo lectura sale 0 sin salida" '[ "$(id -u)" -eq 0 ] || { rm -rf "$ss_state"; mkdir -p "$ss_state/jdev-ai/sessions"; chmod 500 "$ss_state/jdev-ai/sessions"; ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}"; r=$?; chmod 700 "$ss_state/jdev-ai/sessions"; [ $r -eq 0 ] && ss_quiet && [ ! -e "$ss_file" ]; }'
+check "session-state: no deja temporales" 'rm -rf "$ss_state"; for e in SessionStart UserPromptSubmit Stop SessionEnd; do ss "{\"session_id\":\"s1\",\"hook_event_name\":\"$e\"}"; done; ss "{\"session_id\":\"s2\",\"hook_event_name\":\"Stop\"}"; [ -z "$(find "$ss_state/jdev-ai/sessions" -type f ! -name "*.json")" ] && [ "$(ls "$ss_state/jdev-ai/sessions" | wc -l)" -eq 2 ]'
+mkdir -p "$work/tmuxbin"
+printf '#!/bin/sh\n[ -z "${FAKE_TMUX_FAIL:-}" ] || exit 1\necho sesion-x\n' > "$work/tmuxbin/tmux"
+chmod +x "$work/tmuxbin/tmux"
+check "session-state: guarda la sesión de tmux si hay \$TMUX" 'rm -rf "$ss_state"; PATH="$work/tmuxbin:$PATH" TMUX=/x ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"sesion-x\"" "$ss_file"'
+check "session-state: tmux sin \$TMUX o que falla deja la sesión vacía" 'rm -rf "$ss_state"; PATH="$work/tmuxbin:$PATH" ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"\"" "$ss_file" && rm -f "$ss_file" && PATH="$work/tmuxbin:$PATH" TMUX=/x FAKE_TMUX_FAIL=1 ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"\"" "$ss_file"'
+check "session-state: sin --hook muestra el uso y sale con 2" '"$work/h/bin/session-state" >/dev/null 2>"$work/ss.err"; r1=$?; "$work/h/bin/session-state" otra >/dev/null 2>&1; r2=$?; [ $r1 -eq 2 ] && [ $r2 -eq 2 ] && grep -q "^Uso:" "$work/ss.err"'
 
 # Títulos de sesión sobre un transcript simulado de Claude Code.
 mkdir -p "$work/claude/projects/p"
@@ -355,6 +445,15 @@ check "panel en un worktree: historial del principal, feature y rama" 'psummary 
 check "panel en el principal: lista los worktrees abiertos" 'psummary "$wtp" && grep -q "^│ Worktrees abiertos: .*lanz" "$work/out" && grep -q "agent wtp --wt <nombre>" "$work/out" && ! grep -q "^│ Worktree " "$work/out" && [ "$(grep -vc "^[┌│└]" "$work/out")" -eq 0 ]'
 check "panel sin worktrees no añade líneas de worktree" 'psummary "$work/h/projects/demo" && ! grep -q "Worktree" "$work/out"'
 check "panel en modo hook desde un worktree" 'echo "{}" | psummary "$wtp_trees/lanz" --hook && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "Worktree lanz · rama feat/lanz" "$work/out"'
+
+# Panel gráfico: solo si sus dependencias están instaladas, para que el núcleo
+# del harness se siga validando sin Node.
+if [ -d "$harness_root/panel/node_modules" ]; then
+    check "panel: typecheck" 'pnpm --dir "$harness_root/panel" typecheck > "$work/panel.out" 2>&1 || { tail -20 "$work/panel.out"; false; }'
+    check "panel: tests" 'pnpm --dir "$harness_root/panel" test > "$work/panel.out" 2>&1 || { tail -30 "$work/panel.out"; false; }'
+else
+    printf 'aviso: panel/node_modules no existe; se omiten las comprobaciones del panel gráfico (pnpm --dir panel install)\n'
+fi
 
 if [ "$failures" -gt 0 ]; then
     printf '\n%s comprobaciones fallidas\n' "$failures"

@@ -255,16 +255,63 @@ puertos, bases de datos locales, cachés ni servicios, y que dos features que
 tocan los mismos archivos chocarán igualmente al integrarse. La política
 completa está en [`rules/worktrees.md`](rules/worktrees.md).
 
+## Panel gráfico
+
+`bin/panel` abre en el navegador un panel local que reúne las terminales de
+agente de todos los proyectos: barra lateral con las sesiones agrupadas por
+proyecto, su título y su estado (te espera, trabajando, en reposo o cerrada),
+terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
+con `bin/agent` y ajustes de tema, fuentes, terminal y avisos. Inicio, Proyectos
+e Historial llegarán en versiones posteriores.
+
+Requisitos: Node 24, pnpm, tmux y un compilador para `node-pty` (en Ubuntu,
+`sudo apt install build-essential`). La primera vez:
+
+```sh
+pnpm --dir panel install
+bin/panel --open          # o bin/panel y abre la URL que imprime
+```
+
+- **Sesiones en tmux.** Cada terminal es una sesión de un servidor tmux propio
+  (`tmux -L jdev`). Cerrar el navegador o detener el panel no las termina, y
+  puedes entrar desde cualquier terminal con `tmux -L jdev attach -t <sesión>`
+  (el menú de cada terminal copia el comando). Las sesiones se terminan desde
+  el panel, con confirmación.
+- **Estados.** `bin/agent` registra en Claude Code unos hooks que ejecutan
+  `bin/session-state` y guardan el estado de cada sesión en
+  `~/.local/state/jdev-ai/sessions/`, aunque el panel no esté abierto. Codex,
+  Copilot y OpenCode solo muestran si la sesión está viva.
+- **Sesiones recientes.** Bajo las terminales, la barra lateral lista por
+  proyecto (tres, con «Ver más») las sesiones recientes de Claude Code que no
+  están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de
+  `CLAUDE_CONFIG_DIR`) del checkout principal y los worktrees, de los últimos
+  30 días y con un máximo de 15 por proyecto. «Retomar en el panel» abre una
+  terminal nueva con `bin/agent <proyecto> -- --resume <id>`. Cierra antes la
+  sesión en su ventana original: dos procesos sobre la misma conversación se
+  pisarían el historial. El panel avisa de las que tuvieron actividad en los
+  últimos 3 minutos porque pueden seguir abiertas en otra ventana.
+- **Seguridad.** El servidor solo escucha en `127.0.0.1` (puerto 4317 por
+  defecto, `--port` para otro) y exige un token que se guarda en
+  `~/.config/jdev-ai/panel-token`; `bin/panel --regenerate-token` lo cambia.
+  Los ajustes se guardan en `~/.config/jdev-ai/panel.json`.
+- **Atajos.** `Ctrl+Alt+←/→` cambia de terminal, `Ctrl+Alt+N` abre una sesión
+  nueva, `Ctrl+Alt+L` cambia la distribución y `Ctrl+Alt+Esc` saca el foco de
+  la terminal a su pestaña (dentro de la terminal, Tab va a la shell). Para que el navegador no se
+  quede `Ctrl+W` o `Ctrl+T`, ábrelo en modo aplicación (por ejemplo,
+  `msedge --app=<url>`).
+- **Seleccionar texto.** Con el ratón de tmux activo, usa Mayús + arrastrar.
+
 ## Validación del harness
 
-Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/worktree` o los archivos que inyectan, ejecuta:
+Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/session-state`, `bin/worktree`, `bin/panel` o los archivos que inyectan, ejecuta:
 
 ```sh
 bin/check
 ```
 
 Prueba el launcher sobre un harness temporal con agentes simulados: no lanza
-agentes reales ni toca `projects/`.
+agentes reales ni toca `projects/`. Si `panel/node_modules` existe, ejecuta
+además el typecheck y los tests del panel gráfico; si no, lo avisa y los omite.
 
 ## Fuentes de contexto y continuidad
 

@@ -25,7 +25,8 @@ JDEV_CODEX_ORCHESTRATOR_MODEL, JDEV_CODEX_ORCHESTRATOR_EFFORT,
 JDEV_CODEX_IMPLEMENTER_MODEL y JDEV_CODEX_IMPLEMENTER_EFFORT.
 
 Con Claude, la sesión usa el modelo que tengas configurado y se registran los
-subagentes de adapters/claude/agents.json, cada uno con su modelo. Las
+subagentes de adapters/claude/agents.json, cada uno con su modelo, y los hooks
+que guardan su estado para el panel gráfico (bin/session-state). Las
 evidencias del qa van a PLAYWRIGHT_MCP_OUTPUT_DIR (por defecto, ${TMPDIR:-/tmp}/jdev-qa/<proyecto>).
 EOF
 }
@@ -279,7 +280,11 @@ cd -- "$project_dir"
 
 JDEV_MAIN_CHECKOUT=$main_checkout
 JDEV_WORKTREE=$worktree_name
-export JDEV_MAIN_CHECKOUT JDEV_WORKTREE
+# Nombre del proyecto para el estado de sesión que lee el panel gráfico: el de la
+# carpeta del checkout principal, también en un worktree y en el propio harness
+# (donde es la carpeta del harness, normalmente jdev-ai).
+JDEV_PROJECT=${main_checkout##*/}
+export JDEV_MAIN_CHECKOUT JDEV_WORKTREE JDEV_PROJECT
 
 # El panel se pinta dentro de la sesión mediante un hook SessionStart: si se
 # imprimiera aquí, la interfaz del agente lo borraría al arrancar. El comando
@@ -302,18 +307,24 @@ esac
 hook_command="'$session_status' --hook"
 subagent_notice="$harness_root/bin/subagent-notice"
 session_title="$harness_root/bin/session-title"
+session_state="$harness_root/bin/session-state"
 
 if [ "$agent_command" = "claude" ]; then
     [ -x "$subagent_notice" ] || fail "no se encuentra el aviso de subagentes: $subagent_notice"
     [ -x "$session_title" ] || fail "no se encuentra el script de títulos de sesión: $session_title"
+    [ -x "$session_state" ] || fail "no se encuentra el script de estado de sesión: $session_state"
     # PreToolUse sobre Agent avisa de cada delegación con su subagente y modelo.
     # UserPromptSubmit quita la marca [Closed] del título al retomar la sesión.
+    # session-state registra el estado de la sesión para el panel gráfico: va en
+    # un SessionStart propio, sin matcher, para cubrir también resume y compact,
+    # y se añade a los hooks de UserPromptSubmit sin tocar los anteriores.
     # --add-dir acepta varios valores, así que va antes de otra opción para no
     # absorber el prompt que llegue en "$@".
+    state_hook="{\"type\":\"command\",\"command\":\"'$session_state' --hook\"}"
     exec claude \
         ${worktree_git_dir:+--add-dir} ${worktree_git_dir:+"$worktree_git_dir"} \
         ${worktree_history_dir:+--add-dir} ${worktree_history_dir:+"$worktree_history_dir"} \
-        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]}],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_title' --hook\"}]}]}}" \
+        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]},{\"hooks\":[$state_hook]}],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_title' --hook\"},$state_hook]}],\"PostToolUse\":[{\"hooks\":[$state_hook]}],\"Notification\":[{\"hooks\":[$state_hook]}],\"Stop\":[{\"hooks\":[$state_hook]}],\"SessionEnd\":[{\"hooks\":[$state_hook]}]}}" \
         --agents "$claude_agents" \
         "$@"
 fi

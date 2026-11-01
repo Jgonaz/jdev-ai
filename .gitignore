@@ -10,3 +10,7 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Panel gráfico: dependencias y compilación del cliente.
+/panel/node_modules/
+/panel/dist/

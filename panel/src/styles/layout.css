@@ -1,0 +1,116 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 560px;
+  background: var(--bg);
+}
+
+/* ---------- Cabecera ---------- */
+.header {
+  flex: 0 0 var(--header-h);
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-panel);
+}
+.header__logo {
+  color: var(--fg);
+  border-radius: var(--radius-sm);
+}
+.header__logo:hover {
+  color: var(--fg);
+}
+.header__right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header__path {
+  margin-left: auto;
+  font-family: var(--font-term);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: -0.6px;
+}
+.logo__tilde {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+.logo__cursor {
+  margin-left: 2px;
+  color: var(--accent-text);
+  animation: blink 1.1s steps(1) infinite;
+}
+:root[data-cursor='off'] .logo__cursor {
+  animation: none;
+}
+
+.nav {
+  display: flex;
+  gap: 4px;
+}
+.nav__link {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+}
+a.nav__link:hover {
+  color: var(--fg);
+}
+.nav__link[aria-current='page'] {
+  color: var(--fg);
+  background: var(--bg-raised);
+}
+.nav__link--disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.banner {
+  flex: none;
+  padding: 6px 16px;
+  font-size: var(--text-sm2);
+  background: var(--waiting-bg);
+  color: var(--waiting-text);
+  border-bottom: 1px solid var(--waiting-line);
+}
+.banner--error {
+  color: var(--danger);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--fg);
+  font-size: var(--text-sm2);
+  box-shadow: var(--shadow);
+}
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.screen--terminales {
+  flex-direction: column;
+}

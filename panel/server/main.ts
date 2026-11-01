@@ -1,0 +1,681 @@
+import { createReadStream, statSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import type { Duplex } from 'node:stream';
+import { extname, join, normalize, resolve, sep } from 'node:path';
+import { spawn } from 'node-pty';
+import type { IPty } from 'node-pty';
+import { WebSocket, WebSocketServer } from 'ws';
+import {
+  isAuthorized,
+  isHostAllowed,
+  isOriginAllowed,
+  loadOrCreateToken,
+  regenerateToken,
+  sessionCookie,
+  tokensMatch,
+} from './auth.ts';
+import { claudeConfigDir, configDir, sessionStateDir } from './paths.ts';
+import { listProjects } from './projects.ts';
+import { RecentIndex } from './recent.ts';
+import { SessionService } from './sessions.ts';
+import { DEFAULT_PORT, readSettings, updateSettings } from './settings.ts';
+import {
+  SessionInputError,
+  TmuxError,
+  attachCommand,
+  isPanelSessionName,
+  planSession,
+  sessionExists,
+  tmuxConfig,
+} from './tmux.ts';
+import type { TmuxConfig } from './tmux.ts';
+
+const MAX_BODY = 64 * 1024;
+
+// Tamaño de terminal aceptado en /ws/term: se ajusta a estos límites.
+const TERM_COLS = { min: 20, max: 500, def: 80 };
+const TERM_ROWS = { min: 5, max: 300, def: 24 };
+// Si el cliente va más lento que la terminal, se pausa el pty por encima de esto.
+const TERM_BACKPRESSURE = 1024 * 1024;
+const CODIGO_SESION_NO_ENCONTRADA = 4404;
+
+const TIPOS: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.map': 'application/json; charset=utf-8',
+};
+
+export type ServerOptions = {
+  harnessRoot: string;
+  /** Puerto de escucha; 0 deja que el sistema elija uno libre. */
+  port: number;
+  token: string;
+  distDir: string;
+  configDir: string;
+  /** Orígenes adicionales permitidos (p. ej. el servidor de desarrollo de Vite). */
+  extraOrigins?: string[];
+  /** tmux del panel; por defecto, socket JDEV_PANEL_TMUX_SOCKET o «jdev». */
+  tmux?: TmuxConfig;
+  /** Directorio de estado de sesiones; por defecto, el de XDG_STATE_HOME. */
+  stateDir?: string;
+  /** Directorio de configuración de Claude (con projects/ dentro); por defecto, CLAUDE_CONFIG_DIR o ~/.claude. */
+  claudeConfigDir?: string;
+  /** Intervalos de relectura (ms), para pruebas. */
+  pollMs?: number;
+  stateFallbackMs?: number;
+};
+
+export type RunningServer = {
+  server: Server;
+  port: number;
+  /** Envía un mensaje JSON a todos los clientes de /ws/events. */
+  broadcast: (mensaje: unknown) => void;
+  close: () => Promise<void>;
+};
+
+function sendJson(res: ServerResponse, status: number, cuerpo: unknown): void {
+  const texto = JSON.stringify(cuerpo);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(texto),
+    'Cache-Control': 'no-store',
+  });
+  res.end(texto);
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((ok, ko) => {
+    const trozos: Buffer[] = [];
+    let total = 0;
+    req.on('data', (t: Buffer) => {
+      total += t.length;
+      if (total > MAX_BODY) {
+        ko(new Error('cuerpo demasiado grande'));
+        req.destroy();
+        return;
+      }
+      trozos.push(t);
+    });
+    req.on('end', () => ok(Buffer.concat(trozos).toString('utf8')));
+    req.on('error', ko);
+  });
+}
+
+// Sirve un archivo de dist/ sin salir de ese directorio; si no existe y no
+// parece un recurso (sin extensión), devuelve index.html para el cliente.
+function serveStatic(distDir: string, pathname: string, res: ServerResponse): void {
+  const raiz = resolve(distDir);
+  let ruta: string;
+  try {
+    ruta = normalize(join(raiz, decodeURIComponent(pathname)));
+  } catch {
+    sendJson(res, 400, { error: 'ruta no válida' });
+    return;
+  }
+  if (ruta !== raiz && !ruta.startsWith(raiz + sep)) {
+    sendJson(res, 403, { error: 'ruta no permitida' });
+    return;
+  }
+  // El navegador pide /favicon.ico por su cuenta aunque index.html declare un icono.
+  if (pathname === '/favicon.ico') {
+    res.writeHead(204, { 'Cache-Control': 'public, max-age=86400' });
+    res.end();
+    return;
+  }
+  const esArchivo = (p: string) => {
+    try {
+      return statSync(p).isFile();
+    } catch {
+      return false;
+    }
+  };
+  let archivo = ruta;
+  if (!esArchivo(archivo)) {
+    if (extname(pathname) !== '') {
+      sendJson(res, 404, { error: 'no encontrado' });
+      return;
+    }
+    archivo = join(raiz, 'index.html');
+    if (!esArchivo(archivo)) {
+      sendJson(res, 404, { error: 'falta panel/dist: ejecuta «pnpm --dir panel build» o usa bin/panel' });
+      return;
+    }
+  }
+  res.writeHead(200, {
+    'Content-Type': TIPOS[extname(archivo).toLowerCase()] ?? 'application/octet-stream',
+    'Content-Length': statSync(archivo).size,
+    'Cache-Control': archivo.endsWith('index.html') ? 'no-cache' : 'public, max-age=3600',
+  });
+  createReadStream(archivo).pipe(res);
+}
+
+function clampInt(valor: number, lim: { min: number; max: number }): number {
+  return Math.min(lim.max, Math.max(lim.min, valor));
+}
+
+// Parámetro entero de la query: undefined si falta, NaN si no es un entero.
+function intParam(url: URL, nombre: string): number | undefined {
+  const v = url.searchParams.get(nombre);
+  if (v === null) return undefined;
+  return /^[0-9]{1,6}$/.test(v) ? Number(v) : Number.NaN;
+}
+
+function planInputFromQuery(url: URL): Record<string, string> {
+  const entrada: Record<string, string> = {};
+  for (const k of ['project', 'agent', 'location', 'feature', 'prompt', 'resume']) {
+    const v = url.searchParams.get(k);
+    if (v !== null) entrada[k] = v;
+  }
+  return entrada;
+}
+
+export function startServer(opts: ServerOptions): Promise<RunningServer> {
+  const extra = opts.extraOrigins ?? [];
+  let puerto = opts.port;
+  const tmux = opts.tmux ?? tmuxConfig(opts.harnessRoot);
+  const wss = new WebSocketServer({ noServer: true });
+  const clientes = new Set<WebSocket>();
+  const terminales = new Set<WebSocket>();
+
+  const sesiones = new SessionService({
+    tmux,
+    stateDir: opts.stateDir ?? sessionStateDir(),
+    listProjects: async () => listProjects(opts.harnessRoot, readSettings(opts.configDir).projects),
+    onChange: (lista) => broadcast({ type: 'sessions', sessions: lista }),
+    pollMs: opts.pollMs,
+    stateFallbackMs: opts.stateFallbackMs,
+  });
+
+  const recientes = new RecentIndex({ projectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects') });
+
+  function broadcast(mensaje: unknown): void {
+    const texto = JSON.stringify(mensaje);
+    for (const c of clientes) if (c.readyState === WebSocket.OPEN) c.send(texto);
+  }
+
+  async function parseJsonBody(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | null> {
+    let cuerpo: unknown;
+    try {
+      const texto = await readBody(req);
+      cuerpo = texto.trim() === '' ? {} : JSON.parse(texto);
+    } catch {
+      sendJson(res, 400, { error: 'JSON no válido' });
+      return null;
+    }
+    if (typeof cuerpo !== 'object' || cuerpo === null || Array.isArray(cuerpo)) {
+      sendJson(res, 400, { error: 'se esperaba un objeto' });
+      return null;
+    }
+    return cuerpo as Record<string, unknown>;
+  }
+
+  // Valida la petición de sesión y devuelve el plan, o responde 400.
+  async function planFrom(entrada: unknown, res: ServerResponse) {
+    try {
+      // Sin caché: un worktree recién creado debe poder elegirse enseguida.
+      const proyectos = await sesiones.projectList(true);
+      const plan = planSession(entrada, proyectos, opts.harnessRoot);
+      if (plan.resume) {
+        // El transcript debe existir y pertenecer al mismo proyecto y worktree: Claude
+        // solo encuentra la sesión desde el directorio donde se creó.
+        const origen = await recientes.locate(proyectos, plan.resume);
+        if (!origen) throw new SessionInputError('No se encuentra la sesión a retomar en este proyecto.');
+        if (origen.project !== plan.project) {
+          throw new SessionInputError(`La sesión a retomar pertenece al proyecto «${origen.project}», no a «${plan.project}».`);
+        }
+        if (origen.worktree !== plan.worktree) {
+          throw new SessionInputError(
+            origen.worktree
+              ? `La sesión a retomar es del worktree «${origen.worktree}»: elige «Worktree existente» con ese worktree.`
+              : 'La sesión a retomar es del checkout principal, no de un worktree.',
+          );
+        }
+      }
+      return plan;
+    } catch (e) {
+      if (e instanceof SessionInputError) {
+        sendJson(res, 400, { error: e.message });
+        return null;
+      }
+      throw e;
+    }
+  }
+
+  async function sessionsApi(
+    req: IncomingMessage,
+    res: ServerResponse,
+    pathname: string,
+    url: URL,
+    metodo: string,
+  ): Promise<void> {
+    const noPermitido = (permitidos: string) => {
+      res.setHeader('Allow', permitidos);
+      sendJson(res, 405, { error: 'método no permitido' });
+    };
+
+    if (pathname === '/api/sessions') {
+      if (metodo === 'GET') {
+        // El socket de tmux real permite que el cliente muestre un comando de adjuntar correcto.
+        sendJson(res, 200, { sessions: await sesiones.refresh(), tmuxSocket: tmux.socket });
+        return;
+      }
+      if (metodo === 'POST') {
+        const cuerpo = await parseJsonBody(req, res);
+        if (!cuerpo) return;
+        const plan = await planFrom(cuerpo, res);
+        if (!plan) return;
+        if (cuerpo.dryRun === true) {
+          sendJson(res, 200, { dryRun: true, command: plan.command, args: plan.agentArgs });
+          return;
+        }
+        try {
+          const sesion = await sesiones.create(plan, { historyLimit: readSettings(opts.configDir).terminal.scrollback });
+          sendJson(res, 201, { session: sesion, command: plan.command });
+        } catch (e) {
+          console.error('Error creando la sesión:', e);
+          sendJson(res, 500, {
+            error: `No se pudo crear la sesión de tmux${e instanceof TmuxError ? `: ${e.stderr.trim() || e.message}` : ''}`,
+          });
+        }
+        return;
+      }
+      noPermitido('GET, POST');
+      return;
+    }
+
+    if (pathname === '/api/sessions/preview') {
+      if (metodo !== 'GET') return noPermitido('GET');
+      const plan = await planFrom(planInputFromQuery(url), res);
+      if (plan) sendJson(res, 200, { dryRun: true, command: plan.command, args: plan.agentArgs });
+      return;
+    }
+
+    const m = /^\/api\/sessions\/([^/]+)$/.exec(pathname);
+    if (m) {
+      if (metodo !== 'DELETE') return noPermitido('DELETE');
+      let nombre: string;
+      try {
+        nombre = decodeURIComponent(m[1]!);
+      } catch {
+        sendJson(res, 400, { error: 'nombre de sesión no válido' });
+        return;
+      }
+      if (!isPanelSessionName(nombre)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se pueden terminar sesiones del panel (jdev-*)' });
+        return;
+      }
+      // Terminar una sesión es destructivo: exige confirmación explícita.
+      let confirmado = req.headers['x-jdev-confirm'] === 'yes';
+      if (!confirmado) {
+        const cuerpo = await readBody(req).then((t) => (t.trim() === '' ? {} : JSON.parse(t) as unknown)).catch(() => ({}));
+        confirmado = typeof cuerpo === 'object' && cuerpo !== null && (cuerpo as { confirm?: unknown }).confirm === true;
+      }
+      if (!confirmado) {
+        sendJson(res, 400, {
+          error: 'Falta la confirmación: envía la cabecera «X-Jdev-Confirm: yes» o el cuerpo {"confirm":true}.',
+        });
+        return;
+      }
+      if (!(await sesiones.kill(nombre))) {
+        sendJson(res, 404, { error: 'la sesión no existe' });
+        return;
+      }
+      sendJson(res, 200, { deleted: true, name: nombre });
+      return;
+    }
+    sendJson(res, 404, { error: 'no encontrado' });
+  }
+
+  async function api(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
+    const metodo = req.method ?? 'GET';
+    // Una cookie SameSite=Strict ya frena el CSRF; además, si el navegador
+    // declara un origen en una petición que modifica datos, debe ser el propio.
+    if (metodo !== 'GET' && metodo !== 'HEAD') {
+      const origen = req.headers.origin;
+      if (origen !== undefined && !isOriginAllowed(origen, puerto, extra)) {
+        sendJson(res, 403, { error: 'origen no permitido' });
+        return;
+      }
+    }
+    if (pathname === '/api/settings') {
+      if (metodo === 'GET') {
+        sendJson(res, 200, readSettings(opts.configDir));
+        return;
+      }
+      if (metodo === 'PUT') {
+        let parche: unknown;
+        try {
+          parche = JSON.parse(await readBody(req));
+        } catch {
+          sendJson(res, 400, { error: 'JSON no válido' });
+          return;
+        }
+        if (typeof parche !== 'object' || parche === null || Array.isArray(parche)) {
+          sendJson(res, 400, { error: 'se esperaba un objeto' });
+          return;
+        }
+        sendJson(res, 200, updateSettings(parche, opts.configDir));
+        return;
+      }
+      res.setHeader('Allow', 'GET, PUT');
+      sendJson(res, 405, { error: 'método no permitido' });
+      return;
+    }
+    if (pathname === '/api/projects') {
+      if (metodo !== 'GET') {
+        res.setHeader('Allow', 'GET');
+        sendJson(res, 405, { error: 'método no permitido' });
+        return;
+      }
+      const ajustes = readSettings(opts.configDir);
+      sendJson(res, 200, { projects: await listProjects(opts.harnessRoot, ajustes.projects) });
+      return;
+    }
+    if (pathname === '/api/recent') {
+      if (metodo !== 'GET') {
+        res.setHeader('Allow', 'GET');
+        sendJson(res, 405, { error: 'método no permitido' });
+        return;
+      }
+      // Se actualiza la lista de sesiones del panel para no ofrecer las que ya están en él.
+      await sesiones.refresh();
+      sendJson(res, 200, { recent: await recientes.list(await sesiones.projectList(), sesiones.panelSessionIds()) });
+      return;
+    }
+    if (pathname === '/api/sessions' || pathname.startsWith('/api/sessions/')) {
+      await sessionsApi(req, res, pathname, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
+      return;
+    }
+    sendJson(res, 404, { error: 'no encontrado' });
+  }
+
+  const server = createServer((req, res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+
+    const rechazar = () => {
+      res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end('401: se requiere el token del panel. Abre la URL que imprime bin/panel (con ?token=...).\n');
+    };
+
+    if (!isHostAllowed(req.headers.host, puerto)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('403: cabecera Host no permitida.\n');
+      return;
+    }
+
+    const url = new URL(req.url ?? '/', `http://127.0.0.1:${puerto}`);
+
+    // ?token= válido: fija la cookie y redirige a la misma URL sin el token,
+    // para que no quede en la barra de direcciones ni en el historial.
+    const enUrl = url.searchParams.get('token');
+    if (enUrl !== null && (req.method === 'GET' || req.method === 'HEAD') && tokensMatch(opts.token, enUrl)) {
+      url.searchParams.delete('token');
+      res.writeHead(302, {
+        'Set-Cookie': sessionCookie(opts.token),
+        Location: url.pathname + url.search,
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return;
+    }
+
+    if (!isAuthorized(req.headers, opts.token)) {
+      rechazar();
+      return;
+    }
+
+    const manejar = url.pathname.startsWith('/api/')
+      ? api(req, res, url.pathname)
+      : Promise.resolve(
+          req.method === 'GET' || req.method === 'HEAD'
+            ? serveStatic(opts.distDir, url.pathname, res)
+            : sendJson(res, 405, { error: 'método no permitido' }),
+        );
+    manejar.catch((e: unknown) => {
+      console.error('Error atendiendo la petición:', e);
+      if (!res.headersSent) sendJson(res, 500, { error: 'error interno' });
+      else res.end();
+    });
+  });
+
+  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const rechazar = (codigo: string) => {
+      socket.write(`HTTP/1.1 ${codigo}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+      socket.destroy();
+    };
+    const url = new URL(req.url ?? '/', `http://127.0.0.1:${puerto}`);
+    if (!isHostAllowed(req.headers.host, puerto)) return rechazar('403 Forbidden');
+    if (!isAuthorized(req.headers, opts.token)) return rechazar('401 Unauthorized');
+    if (!isOriginAllowed(req.headers.origin, puerto, extra)) return rechazar('403 Forbidden');
+    if (url.pathname === '/ws/events') {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        clientes.add(ws);
+        ws.on('close', () => clientes.delete(ws));
+        ws.on('error', () => clientes.delete(ws));
+        ws.send(JSON.stringify({ type: 'hello' }));
+        ws.send(JSON.stringify({ type: 'sessions', sessions: sesiones.list() }));
+      });
+      return;
+    }
+
+    const m = /^\/ws\/term\/([^/]+)$/.exec(url.pathname);
+    if (!m) return rechazar('404 Not Found');
+    let nombre: string;
+    try {
+      nombre = decodeURIComponent(m[1]!);
+    } catch {
+      return rechazar('400 Bad Request');
+    }
+    if (!isPanelSessionName(nombre)) return rechazar('404 Not Found');
+    const cols = intParam(url, 'cols');
+    const rows = intParam(url, 'rows');
+    if (Number.isNaN(cols) || Number.isNaN(rows)) return rechazar('400 Bad Request');
+    terminal(req, socket, head, nombre, clampInt(cols ?? TERM_COLS.def, TERM_COLS), clampInt(rows ?? TERM_ROWS.def, TERM_ROWS)).catch(
+      (e: unknown) => {
+        console.error('Error abriendo la terminal:', e);
+        socket.destroy();
+      },
+    );
+  });
+
+  // Terminal de una sesión: un cliente `tmux attach` dentro de un pty conectado
+  // al WebSocket. Cerrar el WebSocket mata ese cliente, no la sesión.
+  async function terminal(
+    req: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+    nombre: string,
+    cols: number,
+    rows: number,
+  ): Promise<void> {
+    const existe = await sessionExists(tmux, nombre);
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      if (!existe) {
+        ws.close(CODIGO_SESION_NO_ENCONTRADA, 'sesión no encontrada');
+        return;
+      }
+      terminales.add(ws);
+      let pty: IPty;
+      try {
+        const a = attachCommand(tmux, nombre);
+        pty = spawn(a.file, a.args, {
+          name: 'xterm-256color',
+          cols,
+          rows,
+          cwd: opts.harnessRoot,
+          env: a.env as Record<string, string>,
+          encoding: null, // salida en bruto: el cliente decodifica UTF-8 sin cortar caracteres
+        });
+      } catch (e) {
+        console.error('No se pudo adjuntar a tmux:', e);
+        terminales.delete(ws);
+        ws.close(1011, 'no se pudo abrir la terminal');
+        return;
+      }
+      let pausado = false;
+      pty.onData((datos: string | Buffer) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        ws.send(datos, { binary: true }, () => {
+          if (pausado && ws.bufferedAmount < TERM_BACKPRESSURE / 4) {
+            pausado = false;
+            pty.resume();
+          }
+        });
+        if (!pausado && ws.bufferedAmount > TERM_BACKPRESSURE) {
+          pausado = true;
+          pty.pause();
+        }
+      });
+      pty.onExit(() => {
+        terminales.delete(ws);
+        if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'terminal cerrada');
+      });
+      ws.on('message', (datos: Buffer, binario: boolean) => {
+        if (!binario) {
+          const texto = datos.toString('utf8');
+          // Único mensaje de control: {"type":"resize","cols":N,"rows":N}.
+          if (texto.startsWith('{')) {
+            try {
+              const c = JSON.parse(texto) as { type?: unknown; cols?: unknown; rows?: unknown };
+              if (c.type === 'resize') {
+                if (Number.isInteger(c.cols) && Number.isInteger(c.rows)) {
+                  pty.resize(clampInt(c.cols as number, TERM_COLS), clampInt(c.rows as number, TERM_ROWS));
+                }
+                return;
+              }
+            } catch {
+              // No es JSON: es entrada normal.
+            }
+          }
+          pty.write(texto);
+          return;
+        }
+        pty.write(datos);
+      });
+      const cerrar = () => {
+        terminales.delete(ws);
+        try {
+          pty.kill();
+        } catch {
+          // Ya había terminado.
+        }
+      };
+      ws.on('close', cerrar);
+      ws.on('error', cerrar);
+    });
+  }
+
+  void sesiones.start();
+
+  return new Promise((ok, ko) => {
+    server.once('error', ko);
+    server.listen(opts.port, '127.0.0.1', () => {
+      server.off('error', ko);
+      const direccion = server.address();
+      puerto = typeof direccion === 'object' && direccion ? direccion.port : opts.port;
+      ok({
+        server,
+        port: puerto,
+        broadcast,
+        close: () =>
+          new Promise<void>((fin) => {
+            sesiones.stop();
+            for (const c of clientes) c.terminate();
+            for (const c of terminales) c.terminate();
+            wss.close();
+            server.close(() => fin());
+            server.closeAllConnections();
+          }),
+      });
+    });
+  });
+}
+
+function parsePort(valor: string | undefined, origen: string): number | undefined {
+  if (valor === undefined || valor === '') return undefined;
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    console.error(`Error: puerto no válido en ${origen}: ${valor}`);
+    process.exit(2);
+  }
+  return n;
+}
+
+function parseArgs(argv: string[]): { port?: number; regenerateToken: boolean; printUrl: boolean } {
+  let port: number | undefined;
+  let regenerar = false;
+  let printUrl = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a === '--port') port = parsePort(argv[++i], '--port');
+    else if (a.startsWith('--port=')) port = parsePort(a.slice(7), '--port');
+    else if (a === '--regenerate-token') regenerar = true;
+    // Solo imprime la URL de acceso, sin escuchar; lo usa bin/panel --open.
+    else if (a === '--print-url') printUrl = true;
+    else {
+      console.error(`Error: opción desconocida: ${a}`);
+      process.exit(2);
+    }
+  }
+  return { port, regenerateToken: regenerar, printUrl };
+}
+
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
+  const dir = configDir();
+  const harnessRoot = resolve(import.meta.dirname, '..', '..');
+  // Prioridad del puerto: argumento, variable de entorno, ajuste y valor por defecto.
+  const ajustes = readSettings(dir);
+  const port = args.port ?? parsePort(process.env.JDEV_PANEL_PORT, 'JDEV_PANEL_PORT') ?? ajustes.port ?? DEFAULT_PORT;
+  const token = args.regenerateToken ? regenerateToken(dir) : loadOrCreateToken(dir);
+  if (args.printUrl) {
+    console.log(`http://localhost:${port}/?token=${token}`);
+    return;
+  }
+  const extraOrigins = (process.env.JDEV_PANEL_DEV_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter((o) => o !== '');
+
+  const corriendo = await startServer({
+    harnessRoot,
+    port,
+    token,
+    distDir: join(harnessRoot, 'panel', 'dist'),
+    configDir: dir,
+    extraOrigins,
+  });
+
+  if (args.regenerateToken) console.log('Token regenerado.');
+  console.log(`Panel gráfico escuchando en http://127.0.0.1:${corriendo.port}`);
+  console.log(`Abre: http://localhost:${corriendo.port}/?token=${token}`);
+
+  const parar = () => {
+    corriendo.close().finally(() => process.exit(0));
+  };
+  process.on('SIGINT', parar);
+  process.on('SIGTERM', parar);
+}
+
+if (import.meta.main) {
+  main().catch((e: unknown) => {
+    const codigo = (e as NodeJS.ErrnoException).code;
+    console.error(
+      codigo === 'EADDRINUSE'
+        ? 'Error: el puerto ya está en uso; elige otro con --port.'
+        : `Error: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    process.exit(1);
+  });
+}

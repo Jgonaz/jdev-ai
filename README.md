@@ -36,6 +36,7 @@ When you work on several projects with several coding agents, the same questions
 - **Backlog, user guides and images.** Future work is recorded in the project's `docs/backlog/` only after you confirm, landing in `backlog/` until you move it to `todo/`, with a YAML header and a short plain-language summary; didactic guides go in `docs/user-guides/`; the agent proposes generating missing images (via Codex) but never does so without confirmation.
 - **Design first.** For non-trivial interface changes, the agent proposes closing the designs in Claude Design before implementing, and the approved design becomes the reference for implementation and QA.
 - **Autonomous close.** `/goal Close` (or "Continúa hasta dar esta conversación por closed") makes the agent work without asking until everything is done: validated, integrated into the main branch, worktree removed and the session titled `[Closed]`. It still asks before dangerous or destructive actions ([`rules/closed-goal.md`](rules/closed-goal.md)).
+- **Graphical panel.** `bin/panel` serves a local web panel (127.0.0.1, token-protected) that gathers the agent terminals of every project: sessions grouped by project with title and state (waiting for you, working, idle, closed), one/two/four-column layouts, a new-session dialog that runs `bin/agent`, and theme, font, terminal and notification settings. Terminals live in a dedicated tmux server (`tmux -L jdev`), so they survive closing the browser. Recent Claude Code sessions opened elsewhere can be resumed inside the panel (`--resume`) once you close their original window. Requires Node 24, pnpm, tmux and a C/C++ toolchain for `node-pty`; run `pnpm --dir panel install` once.
 - **Self-validation.** `bin/check` tests the launcher and helper scripts against a temporary harness with simulated agents. It launches no real agent and does not touch `projects/`.
 
 ## Typical flow
@@ -73,8 +74,9 @@ rules/           Shared policies: delegation, worktrees, history, memory,
                  backlog, user guides, images, design, session title, close
 workflows/       Common processes (feature.md: OpenSpec, worktree and design proposals)
 adapters/        Per-provider subagent definitions (claude, codex)
-bin/             agent, check, worktree, session-status, session-title,
-                 subagent-notice
+bin/             agent, check, worktree, panel, session-status, session-state,
+                 session-title, subagent-notice
+panel/           Graphical panel (Node + React), the only part with dependencies
 openspec/        Specs and changes of the harness itself
 projects/        Your projects, one Git repository each (ignored by this repo)
 ```

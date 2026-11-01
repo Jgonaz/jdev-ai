@@ -1,0 +1,172 @@
+#!/bin/sh
+
+# Estado de la sesión de Claude Code para el panel gráfico (bin/panel). Es un
+# hook de Claude Code (SessionStart, UserPromptSubmit, PostToolUse, Notification,
+# Stop y SessionEnd): recibe el evento en JSON por stdin y deja el estado de la
+# sesión en
+#
+#   ${XDG_STATE_HOME:-$HOME/.local/state}/jdev-ai/sessions/<session_id>.json
+#
+# Solo escribe un archivo; no necesita que el panel esté arrancado, que lo leerá
+# al iniciarse. El proyecto, el agente y el worktree llegan por las variables
+# JDEV_PROJECT, JDEV_SESSION_AGENT y JDEV_WORKTREE que exporta bin/agent.
+#
+#   session-state --hook   lee el evento de stdin y actualiza el estado.
+#
+# Nunca interrumpe al agente: en modo hook, ante cualquier problema termina con
+# código 0 y sin salida alguna.
+
+set -u
+
+usage() {
+    printf 'Uso: session-state --hook   (el evento del hook llega por stdin)\n' >&2
+    exit 2
+}
+
+[ $# -eq 1 ] && [ "$1" = "--hook" ] || usage
+
+exec >/dev/null 2>&1
+tmp=
+trap '[ -z "$tmp" ] || rm -f "$tmp"; exit 0' EXIT HUP INT TERM
+
+# Una entrada interactiva no es un hook: no espera a que se escriba nada.
+[ -t 0 ] && exit 0
+input=$(cat) || exit 0
+[ -n "$input" ] || exit 0
+
+# Valor del campo de texto «$1» del objeto JSON de primer nivel, tal como viene
+# escapado (listo para volver a escribirlo entre comillas). Recorre el texto
+# para no confundir una clave con el contenido de otro valor; si el texto no es
+# JSON bien formado hasta el campo, no imprime nada.
+field() {
+    printf '%s\n' "$input" | awk -v key="$1" '
+        { buf = buf (NR > 1 ? " " : "") $0 }
+        END {
+            gsub(/[\001-\037]/, " ", buf)
+            n = length(buf); depth = 0; expect = ""; curkey = ""
+            for (i = 1; i <= n; i++) {
+                c = substr(buf, i, 1)
+                if (c == "{" || c == "[") {
+                    depth++
+                    if (depth == 1) expect = "key"
+                } else if (c == "}" || c == "]") {
+                    depth--
+                } else if (depth == 1 && c == ":") {
+                    expect = "value"
+                } else if (depth == 1 && c == ",") {
+                    expect = "key"
+                } else if (c == "\"") {
+                    j = i + 1
+                    while (j <= n) {
+                        ch = substr(buf, j, 1)
+                        if (ch == "\\") {
+                            nx = substr(buf, j + 1, 1)
+                            if (nx == "u") {
+                                if (substr(buf, j + 2, 4) !~ /^[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/) exit
+                                j += 6
+                            } else if (nx != "" && index("\"\\/bfnrt", nx) > 0) {
+                                j += 2
+                            } else exit
+                        } else if (ch == "\"") {
+                            break
+                        } else {
+                            j++
+                        }
+                    }
+                    if (j > n) exit
+                    if (depth == 1) {
+                        s = substr(buf, i + 1, j - i - 1)
+                        if (expect == "key") {
+                            curkey = s
+                        } else if (expect == "value") {
+                            if (curkey == key) { print s; exit }
+                            expect = ""
+                        }
+                    }
+                    i = j
+                }
+            }
+        }
+    '
+}
+
+# Escapa un valor del entorno como cadena JSON.
+json_string() {
+    printf '%s' "$1" | awk '
+        BEGIN { ORS = ""; print "\"" }
+        {
+            gsub(/\\/, "\\\\")
+            gsub(/"/, "\\\"")
+            gsub(/[\001-\037]/, " ")
+            if (NR > 1) print " "
+            print
+        }
+        END { print "\"" }
+    '
+}
+
+# Correspondencia evento -> estado: deja el resultado en new_state y devuelve 1
+# si el evento no cambia el estado (evento desconocido o Notification ajena).
+# Es lo más frágil del script, porque depende de cómo avisa Claude Code: usa
+# notification_type si llega y, si no, el texto del mensaje.
+#   $1 evento, $2 notification_type, $3 message
+map_state() {
+    case "$1" in
+        SessionStart|Stop) new_state=idle ;;
+        UserPromptSubmit|PostToolUse) new_state=working ;;
+        SessionEnd) new_state=ended ;;
+        Notification)
+            if [ -n "$2" ]; then
+                case "$2" in
+                    permission_prompt|elicitation_dialog) new_state=waiting ;;
+                    idle_prompt) new_state=idle ;;
+                    *) return 1 ;;
+                esac
+            else
+                lowered=$(printf '%s' "$3" | tr '[:upper:]' '[:lower:]')
+                case "$lowered" in
+                    *permission*|*"needs your"*) new_state=waiting ;;
+                    *"waiting for your input"*) new_state=idle ;;
+                    *) return 1 ;;
+                esac
+            fi
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+session_id=$(field session_id)
+case "$session_id" in
+    ""|*[!A-Za-z0-9-]*) exit 0 ;;
+esac
+
+event=$(field hook_event_name)
+map_state "$event" "$(field notification_type)" "$(field message)" || exit 0
+
+state_root=${XDG_STATE_HOME:-${HOME:-}/.local/state}
+[ -n "$state_root" ] && [ "$state_root" != "/.local/state" ] || exit 0
+dir="$state_root/jdev-ai/sessions"
+mkdir -p -- "$dir" || exit 0
+
+tmux_session=
+if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+    tmux_session=$(tmux display-message -p ${TMUX_PANE:+-t "$TMUX_PANE"} '#S' 2>/dev/null | head -n 1) || tmux_session=
+fi
+
+# El temporal vive en el mismo directorio para que mv sea una renombración
+# atómica; el punto inicial evita que se lea como una sesión.
+tmp=$(mktemp "$dir/.$session_id.XXXXXX") || exit 0
+{
+    printf '{"session_id":"%s",' "$session_id"
+    printf '"state":"%s",' "$new_state"
+    printf '"event":"%s",' "$event"
+    printf '"updated_at":"%s",' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '"project":%s,' "$(json_string "${JDEV_PROJECT:-}")"
+    printf '"agent":%s,' "$(json_string "${JDEV_SESSION_AGENT:-}")"
+    printf '"worktree":%s,' "$(json_string "${JDEV_WORKTREE:-}")"
+    printf '"transcript_path":"%s",' "$(field transcript_path)"
+    printf '"cwd":"%s",' "$(field cwd)"
+    printf '"tmux_session":%s}\n' "$(json_string "$tmux_session")"
+} > "$tmp" || exit 0
+mv -f -- "$tmp" "$dir/$session_id.json" && tmp=
+exit 0

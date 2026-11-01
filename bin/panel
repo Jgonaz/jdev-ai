@@ -1,0 +1,157 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+    cat <<'EOF_USAGE'
+Uso: panel [--port N] [--open] [--regenerate-token]
+
+Arranca el panel gráfico de jdev-ai: una aplicación web local (solo en
+127.0.0.1, con token) para ver y usar las terminales de agente. Imprime la URL
+de acceso, con el token: http://localhost:<puerto>/?token=...
+
+Requiere Node 24 o superior, pnpm, tmux y las dependencias del panel
+(pnpm --dir panel install). Si falta algo, lo indica y termina sin instalar
+nada. Si panel/dist falta o hay cambios en panel/src o panel/index.html más
+recientes que la compilación, ejecuta antes «pnpm --dir panel build».
+
+Opciones:
+  --port N            Puerto de escucha (por defecto, JDEV_PANEL_PORT, el ajuste
+                      del panel o 4317).
+  --open              Abre la URL en el navegador de Windows (wslview si existe;
+                      si no, cmd.exe /c start). Para una ventana sin pestañas,
+                      abre la URL manualmente con el modo aplicación del
+                      navegador (por ejemplo, msedge --app=<url>): así Ctrl+W y
+                      Ctrl+T llegan a la terminal.
+  --regenerate-token  Genera un token nuevo (invalida el anterior) antes de
+                      arrancar.
+  -h, --help          Muestra esta ayuda.
+
+Las sesiones viven en tmux (servidor -L jdev), así que sobreviven al cierre del
+panel y se pueden abrir desde cualquier terminal con «tmux -L jdev attach -t
+<sesión>».
+EOF_USAGE
+}
+
+fail() {
+    printf 'Error: %s\n' "$1" >&2
+    exit 1
+}
+
+port=
+open_browser=
+regenerate=
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --port)
+            [ "$#" -ge 2 ] || fail "--port requiere un número de puerto"
+            port=$2
+            shift
+            ;;
+        --port=*) port=${1#--port=} ;;
+        --open) open_browser=1 ;;
+        --regenerate-token) regenerate=1 ;;
+        *) fail "opción desconocida: $1" ;;
+    esac
+    shift
+done
+
+if [ -n "$port" ]; then
+    case "$port" in
+        *[!0-9]*|"") fail "el puerto debe ser un número entre 1 y 65535: $port" ;;
+    esac
+    [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || fail "el puerto debe estar entre 1 y 65535: $port"
+fi
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+harness_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+panel_dir="$harness_root/panel"
+server="$panel_dir/server/main.ts"
+
+# Se reúnen todas las carencias para indicarlas de una vez, sin instalar nada.
+missing=
+if ! command -v node >/dev/null 2>&1; then
+    missing="$missing
+  - Node 24 o superior no está instalado. Instálalo, por ejemplo, con nvm: nvm install 24"
+else
+    node_major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+    case "$node_major" in
+        ""|*[!0-9]*) node_major=0 ;;
+    esac
+    if [ "$node_major" -lt 24 ]; then
+        missing="$missing
+  - Node $node_major no es suficiente: hace falta Node 24 o superior (por ejemplo, nvm install 24)"
+    fi
+fi
+if ! command -v pnpm >/dev/null 2>&1; then
+    missing="$missing
+  - pnpm no está instalado. Instálalo con: corepack enable pnpm (o npm install -g pnpm)"
+fi
+if ! command -v tmux >/dev/null 2>&1; then
+    missing="$missing
+  - tmux no está instalado. Instálalo con: sudo apt install tmux"
+fi
+if [ ! -d "$panel_dir/node_modules" ]; then
+    missing="$missing
+  - Faltan las dependencias del panel. Instálalas con: pnpm --dir '$panel_dir' install"
+fi
+if [ -n "$missing" ]; then
+    printf 'Error: faltan requisitos para arrancar el panel:%s\n' "$missing" >&2
+    exit 1
+fi
+
+[ -f "$server" ] || fail "no se encuentra el servidor del panel: $server"
+
+# La compilación es necesaria si no existe o si algo del cliente es más
+# reciente que ella.
+dist_index="$panel_dir/dist/index.html"
+needs_build=
+if [ ! -f "$dist_index" ]; then
+    needs_build=1
+elif [ -n "$(find "$panel_dir/src" "$panel_dir/index.html" -newer "$dist_index" -print -quit 2>/dev/null)" ]; then
+    needs_build=1
+fi
+if [ -n "$needs_build" ]; then
+    printf 'Compilando el cliente del panel...\n' >&2
+    pnpm --dir "$panel_dir" build >&2 || fail "falló «pnpm --dir panel build»"
+fi
+
+# El token se regenera en un paso aparte: así, el arranque posterior (y la URL
+# de --open) usan ya el token nuevo sin regenerarlo dos veces.
+if [ -n "$regenerate" ]; then
+    node "$server" --regenerate-token --print-url >/dev/null || fail "no se pudo regenerar el token"
+    printf 'Token regenerado.\n' >&2
+fi
+
+if [ -n "$open_browser" ]; then
+    if [ -n "$port" ]; then
+        url=$(node "$server" --port "$port" --print-url) || fail "no se pudo calcular la URL de acceso"
+    else
+        url=$(node "$server" --print-url) || fail "no se pudo calcular la URL de acceso"
+    fi
+    server_pid=$$
+    # Tras el exec de abajo este proceso pasa a ser el servidor, con el mismo
+    # PID. Se abre el navegador solo si sigue vivo al cabo de un momento (si el
+    # puerto estaba ocupado habrá terminado y no se envía el token a otro servicio).
+    (
+        sleep 1
+        kill -0 "$server_pid" 2>/dev/null || exit 0
+        if command -v wslview >/dev/null 2>&1; then
+            wslview "$url" >/dev/null 2>&1 || true
+        elif command -v cmd.exe >/dev/null 2>&1; then
+            cmd.exe /c start "" "$url" >/dev/null 2>&1 || true
+        else
+            printf 'No se encontró wslview ni cmd.exe; abre manualmente: %s\n' "$url" >&2
+        fi
+    ) &
+fi
+
+if [ -n "$port" ]; then
+    exec node "$server" --port "$port"
+fi
+exec node "$server"
