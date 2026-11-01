@@ -1,7 +1,7 @@
 import { execFile, execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -106,8 +106,9 @@ describe('API de sesiones y terminal', () => {
   it('empieza sin sesiones aunque el servidor tmux no esté arrancado', async () => {
     const r = await api('GET', '/api/sessions');
     expect(r.status).toBe(200);
-    // Expone el socket real para que el cliente no suponga «jdev».
-    expect(await r.json()).toEqual({ sessions: [], tmuxSocket: sock });
+    // Expone el socket real para que el cliente no suponga «jdev», y el HOME
+    // para expandir las rutas «~/…» de las imágenes.
+    expect(await r.json()).toEqual({ sessions: [], tmuxSocket: sock, home: homedir() });
   });
 
   it('dryRun y preview devuelven el comando sin ejecutar nada', async () => {

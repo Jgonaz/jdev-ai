@@ -7,7 +7,7 @@ set -eu
 
 # Si bin/check se lanza desde una sesión abierta con bin/agent, hereda las
 # variables del panel y alteran la salida que se comprueba.
-unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING JDEV_MAIN_CHECKOUT JDEV_WORKTREE JDEV_PROJECT
+unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING JDEV_MAIN_CHECKOUT JDEV_WORKTREE JDEV_PROJECT JDEV_SURFACE
 
 harness_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 work=$(mktemp -d)
@@ -69,6 +69,7 @@ for name in codex claude copilot; do
 pwd -P > "$work/$name.cwd"
 printf '%s\\n%s\\n%s\\n' "\${JDEV_MAIN_CHECKOUT:-}" "\${JDEV_WORKTREE:-}" "\${JDEV_PROJECT:-}" > "$work/$name.env"
 printf '%s\\n' "\${PLAYWRIGHT_MCP_OUTPUT_DIR:-}" > "$work/$name.qa"
+printf '%s\\n' "\${JDEV_SURFACE:-}" > "$work/$name.surface"
 for x in "\$@" "JDEV_SESSION_WARNING=\${JDEV_SESSION_WARNING:-}"; do printf '%s\\0' "\$x"; done > "$work/$name.args"
 EOF
     chmod +x "$work/bin/$name"
@@ -76,7 +77,7 @@ done
 
 agent="$work/h/bin/agent"
 status="$work/h/bin/session-status"
-run() { rm -f "$work"/*.args "$work"/*.cwd "$work"/*.env "$work"/*.qa; PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
+run() { rm -f "$work"/*.args "$work"/*.cwd "$work"/*.env "$work"/*.qa "$work"/*.surface; PATH="$work/bin:$PATH" "$agent" "$@" > "$work/out" 2>&1; }
 args() { tr '\0' '\n' < "$work/$1.args"; }
 
 check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
@@ -151,7 +152,8 @@ def has(event, name, matcher=None):
     return any(name in c for c in commands(event, matcher))
 
 ok = (
-    has("SessionStart", "session-status", "startup|clear")
+    has("SessionStart", "session-status' --hook", "startup|clear")
+    and has("SessionStart", "session-status' --context", "startup|resume|clear|compact")
     and has("PreToolUse", "subagent-notice", "Agent")
     and has("UserPromptSubmit", "session-title")
     and all(has(e, "session-state") for e in ("SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"))
@@ -164,8 +166,28 @@ EOF
 else
     printf 'aviso: sin python3 no se valida el JSON del --settings de claude\n'
 fi
+check "claude registra el contexto de superficie sin tocar el resumen" 'run demo && s=$(settings) && printf "%s" "$s" | grep -q "{\"matcher\":\"startup|resume|clear|compact\",\"hooks\":\[{\"type\":\"command\",\"command\":\"[^\"]*session-status. --context\"}\]}" && printf "%s" "$s" | grep -q "{\"matcher\":\"startup|clear\",\"hooks\":\[{\"type\":\"command\",\"command\":\"[^\"]*session-status. --hook\"}\]}"'
 check "agent exporta JDEV_PROJECT con el checkout principal" 'run demo && [ "$(sed -n 3p "$work/claude.env")" = "demo" ] && (cd "$work/h" && run . ) && [ "$(sed -n 3p "$work/claude.env")" = "h" ]'
 check "claude falla sin session-state" 'mv "$work/h/bin/session-state" "$work/session-state" && ! run demo; r=$?; mv "$work/session-state" "$work/h/bin/session-state"; [ $r -eq 0 ] && grep -q "estado de sesión" "$work/out"'
+
+# Superficie de trabajo: JDEV_SURFACE se valida y exporta en bin/agent, y
+# session-status --context la comunica al modelo.
+check "JDEV_SURFACE por defecto es terminal para todos los agentes" 'for a in claude codex copilot; do run demo --$a && [ "$(cat "$work/$a.surface")" = "terminal" ] || return 1; done'
+check "JDEV_SURFACE=panel se respeta" '(export JDEV_SURFACE=panel; run demo && [ "$(cat "$work/claude.surface")" = "panel" ] && run demo --codex && [ "$(cat "$work/codex.surface")" = "panel" ])'
+check "JDEV_SURFACE vacía equivale a terminal" '(export JDEV_SURFACE=; run demo && [ "$(cat "$work/claude.surface")" = "terminal" ])'
+check "JDEV_SURFACE no válida falla sin lanzar el agente" 'for v in Panel web "panel " "pa nel"; do ! (export JDEV_SURFACE="$v"; run demo) || return 1; [ ! -f "$work/claude.args" ] && grep -q "JDEV_SURFACE debe ser panel o terminal" "$work/out" || return 1; done; ! (export JDEV_SURFACE=x; run demo --codex) && [ ! -f "$work/codex.args" ]'
+check "session-status --context: panel en una sola línea JSON" 'echo "{}" | JDEV_SURFACE=panel "$status" --context > "$work/out" && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Superficie: panel gráfico de jdev-ai (JDEV_SURFACE=panel)\. La persona ve imágenes y lee de pasada: para enseñar una, ponla justo debajo del párrafo al que se refiere, en su propia línea y con este formato: — 📸 <ruta absoluta>  <qué mirar en ella>\. Detalles en $work/h/rules/surface\.md\.\"}}$" "$work/out"'
+check "session-status --context: terminal por defecto" 'echo "{}" | "$status" --context > "$work/out" && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "\"additionalContext\":\"Superficie: terminal (JDEV_SURFACE=terminal)\. La persona no ve imágenes\. Sigue $work/h/rules/surface\.md\.\"}}$" "$work/out" && JDEV_SURFACE=terminal "$status" --context < /dev/null | cmp -s - "$work/out"'
+check "session-status --context: valor no válido sale 0 sin salida" 'JDEV_SURFACE=otra "$status" --context < /dev/null > "$work/out" 2>"$work/err"; r=$?; [ $r -eq 0 ] && [ ! -s "$work/out" ] && [ ! -s "$work/err" ]'
+check "session-status --context: no depende del directorio ni del repositorio" '(cd "$work" && JDEV_SURFACE=panel "$status" --context < /dev/null) | grep -q "Detalles en $work/h/rules/surface\.md\."'
+# Una ruta con comillas y barras invertidas debe escaparse en el JSON.
+weird_dir="$work/q\\y\"z"
+weird_json='q\\y\"z'
+check "session-status --context: la ruta con caracteres especiales se escapa" 'mkdir -p "$weird_dir/bin" && cp "$status" "$weird_dir/bin/" && "$weird_dir/bin/session-status" --context < /dev/null > "$work/out" && grep -qF "$weird_json/rules/surface.md" "$work/out" && { ! command -v python3 >/dev/null 2>&1 || python3 -I -c "import json,sys; json.load(open(sys.argv[1]))" "$work/out"; }'
+if command -v python3 >/dev/null 2>&1; then
+    check "session-status --context: JSON válido con el texto de cada superficie" 'for v in panel terminal; do JDEV_SURFACE=$v "$status" --context < /dev/null | python3 -I -c "import json,sys; d=json.load(sys.stdin)[\"hookSpecificOutput\"]; sys.exit(0 if d[\"hookEventName\"]==\"SessionStart\" and \"JDEV_SURFACE=$v\" in d[\"additionalContext\"] and d[\"additionalContext\"].endswith(\"/rules/surface.md.\") else 1)" || return 1; done'
+fi
+check "session-status: opción desconocida sigue fallando con el uso" '"$status" --nada >/dev/null 2>"$work/err"; r=$?; [ $r -eq 2 ] && grep -q "\[--hook|--context\]" "$work/err"'
 
 # Estado de sesión: session-state escribe un archivo por sesión.
 ss_state="$work/state"

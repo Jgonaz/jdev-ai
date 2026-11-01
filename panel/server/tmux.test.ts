@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,7 @@ import {
   killServer,
   killSession,
   listSessions,
+  paneCurrentPath,
   planSession,
   sessionExists,
   shellQuote,
@@ -222,6 +223,55 @@ describe('tmux con un socket aislado', () => {
     // No se creó ninguna sesión extra por interpretar «;» como separador.
     expect((await listSessions(cfg)).filter((x) => x.project === 'fitnessia').map((x) => x.name)).toEqual([s.name]);
     await killSession(cfg, s.name);
+  });
+
+  it('arranca las sesiones con JDEV_SURFACE=panel, también al retomar, aunque el panel tenga otra', async () => {
+    const salida = join(tmp, 'surface.txt');
+    const cfgEnv = tmuxConfig(HARNESS, {}, {
+      socket: sock,
+      launcher: () => ['sh', '-c', `printf '%s' "$JDEV_SURFACE" > '${salida}'; sleep 60`],
+    });
+    const previo = process.env.JDEV_SURFACE;
+    process.env.JDEV_SURFACE = 'terminal';
+    try {
+      const nueva = await createSession(cfgEnv, plan({ project: 'fitnessia' }));
+      await vi.waitFor(() => expect(readFileSync(salida, 'utf8')).toBe('panel'));
+      expect(tmux('show-environment', '-t', `=${nueva.name}`, 'JDEV_SURFACE').trim()).toBe('JDEV_SURFACE=panel');
+      await killSession(cfg, nueva.name);
+
+      rmSync(salida);
+      const id = '0a1b2c3d-1111-4222-8333-444455556666';
+      const retomada = await createSession(cfgEnv, plan({ project: 'fitnessia', resume: id }));
+      await vi.waitFor(() => expect(readFileSync(salida, 'utf8')).toBe('panel'));
+      await killSession(cfg, retomada.name);
+    } finally {
+      if (previo === undefined) delete process.env.JDEV_SURFACE;
+      else process.env.JDEV_SURFACE = previo;
+    }
+  });
+
+  it('obtiene el directorio actual del panel de una sesión y su cambio', async () => {
+    const destino = realpathSync(tmp);
+    const otro = join(destino, 'otro dir ');
+    mkdirSync(otro, { recursive: true });
+    const cfgDir = tmuxConfig(HARNESS, {}, {
+      socket: sock,
+      launcher: () => ['sh', '-c', `cd '${otro}' && sleep 60`],
+    });
+    const s = await createSession(cfgDir, plan({ project: 'fitnessia' }));
+    // La sesión se crea con -c <harness>; el agente cambia de carpeta y tmux lo refleja.
+    await vi.waitFor(async () => expect(await paneCurrentPath(cfg, s.name)).toBe(otro));
+    await killSession(cfg, s.name);
+    const enHarness = await createSession(cfg, plan({ project: 'fitnessia' }));
+    await vi.waitFor(async () => expect(await paneCurrentPath(cfg, enHarness.name)).toBe(realpathSync(HARNESS)));
+    await killSession(cfg, enHarness.name);
+  });
+
+  it('el directorio del panel es null si la sesión no existe o el nombre no es del panel', async () => {
+    expect(await paneCurrentPath(cfg, 'jdev-nada-9')).toBeNull();
+    expect(await paneCurrentPath(cfg, 'otra')).toBeNull();
+    expect(await paneCurrentPath(cfg, 'jdev-x-1; kill-server')).toBeNull();
+    expect(await paneCurrentPath(cfg, '=jdev-x-1')).toBeNull();
   });
 
   it('deja la sesión terminada (no viva) cuando el proceso acaba', async () => {

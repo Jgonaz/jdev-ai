@@ -12,6 +12,8 @@ export const LOCATION_IDS = ['main', 'new-worktree', 'existing-worktree'] as con
 export type LocationId = (typeof LOCATION_IDS)[number];
 
 export const DEFAULT_SOCKET = 'jdev';
+// Valor de JDEV_SURFACE de las sesiones que crea el panel.
+export const PANEL_SURFACE = 'panel';
 export const MAX_PROMPT_LENGTH = 20000;
 // Id de una sesión de Claude (UUID en minúsculas), tal como nombra sus transcripts.
 const RESUME_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -334,6 +336,23 @@ export async function sessionExists(cfg: TmuxConfig, name: string): Promise<bool
   return (await listSessions(cfg)).some((s) => s.name === name);
 }
 
+// Directorio actual del panel activo de una sesión del panel (el del proceso
+// del agente, que puede haber cambiado de carpeta), o null si la sesión no
+// existe. Sirve para resolver rutas relativas que aparecen en su terminal.
+export async function paneCurrentPath(cfg: TmuxConfig, name: string): Promise<string | null> {
+  if (!isPanelSessionName(name)) return null;
+  let salida: string;
+  try {
+    salida = (await runTmux(cfg, ['display-message', '-p', '-t', `=${name}:`, '#{pane_current_path}'])).stdout;
+  } catch (e) {
+    if (sinServidor(e) || (e instanceof TmuxError && /can't find (session|pane)/i.test(e.stderr))) return null;
+    throw e;
+  }
+  // Solo se quita el salto de línea final: una ruta puede acabar en espacio.
+  const ruta = salida.replace(/\r?\n$/, '');
+  return ruta.startsWith('/') ? ruta : null;
+}
+
 function sanitizeProject(project: string): string {
   const s = project
     .toLowerCase()
@@ -375,10 +394,17 @@ export async function createSession(
   const argv = cfg.launcher ? cfg.launcher(plan.agentArgs) : plan.argv;
   if (argv.length === 0) throw new Error('el lanzador no devolvió ningún comando');
   const base = sanitizeProject(plan.project);
-  const entorno = FORWARDED_ENV.flatMap((k) => {
-    const v = process.env[k];
-    return v === undefined || v === '' ? [] : ['-e', arg(`${k}=${v}`)];
-  });
+  const entorno = [
+    ...FORWARDED_ENV.flatMap((k) => {
+      const v = process.env[k];
+      return v === undefined || v === '' ? [] : ['-e', arg(`${k}=${v}`)];
+    }),
+    // Superficie de trabajo (rules/surface.md). Va siempre, también al retomar
+    // una sesión, porque --resume arranca un proceso nuevo; bin/agent la valida
+    // y la exporta, y no se hereda del entorno del panel.
+    '-e',
+    `JDEV_SURFACE=${PANEL_SURFACE}`,
+  ];
 
   for (let intento = 0; intento < 5; intento++) {
     const name = nextName(await listSessions(cfg), base);

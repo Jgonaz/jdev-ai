@@ -51,6 +51,18 @@ export function TerminalSection() {
           onChange={(v) => update({ terminal: { copyOnSelect: v } })}
         />
         <CheckRow label="Mostrar la barra de estado estilo tmux" checked={t.tmuxBar} onChange={(v) => update({ terminal: { tmuxBar: v } })} />
+        <CheckRow
+          label="Vista previa al pasar el ratón"
+          hint="Muestra una miniatura con el nombre y las dimensiones al pasar el ratón por una ruta de imagen."
+          checked={t.hoverPreview}
+          onChange={(v) => update({ terminal: { hoverPreview: v } })}
+        />
+        <CheckRow
+          label="Abrir el visor al aparecer una imagen nueva"
+          hint="Cuando una terminal visible escribe la ruta de una imagen que no estaba en su tira, abre el visor sin quitar el foco de la terminal."
+          checked={t.autoOpenImages}
+          onChange={(v) => update({ terminal: { autoOpenImages: v } })}
+        />
       </div>
       <p className="hint">Las sesiones viven en tmux y siguen vivas al cerrar el panel; terminar una es una acción explícita del menú de su terminal.</p>
     </section>

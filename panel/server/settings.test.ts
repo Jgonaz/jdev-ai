@@ -79,6 +79,25 @@ describe('ajustes', () => {
     expect(mergeSettings(DEFAULT_SETTINGS, { fonts: { title: 'inherit' } }).fonts.title).toBe('inherit');
   });
 
+  it('vista previa de imágenes activada y apertura automática desactivada por defecto, con validación', () => {
+    expect(DEFAULT_SETTINGS.terminal.hoverPreview).toBe(true);
+    expect(DEFAULT_SETTINGS.terminal.autoOpenImages).toBe(false);
+    expect(readSettings().terminal.autoOpenImages).toBe(false);
+    let s = updateSettings({ terminal: { hoverPreview: false, autoOpenImages: true } });
+    expect(s.terminal.hoverPreview).toBe(false);
+    expect(s.terminal.autoOpenImages).toBe(true);
+    // Un valor que no es booleano se ignora y conserva el anterior.
+    s = updateSettings({ terminal: { hoverPreview: 'no', autoOpenImages: 1 } });
+    expect(s.terminal.hoverPreview).toBe(false);
+    expect(s.terminal.autoOpenImages).toBe(true);
+    // Un archivo antiguo sin las claves nuevas toma los valores por defecto.
+    writeFileSync(settingsPath(configDir()), JSON.stringify({ terminal: { cursor: 'barra' } }));
+    const antiguo = readSettings();
+    expect(antiguo.terminal.cursor).toBe('barra');
+    expect(antiguo.terminal.hoverPreview).toBe(true);
+    expect(antiguo.terminal.autoOpenImages).toBe(false);
+  });
+
   it('un archivo con JSON roto devuelve los valores por defecto', () => {
     updateSettings({ theme: { name: 'papel' } });
     writeFileSync(settingsPath(configDir()), '{no es json');

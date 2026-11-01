@@ -1,6 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { useSessions } from '../state/SessionsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
+import { useImages } from '../state/ImagesContext.tsx';
 import { useSettings } from '../state/SettingsContext.tsx';
+import { ImageViewer } from '../components/terminales/ImageViewer.tsx';
 import { ContextPanel } from '../components/terminales/ContextPanel.tsx';
 import { EmptyState } from '../components/terminales/EmptyState.tsx';
 import { IconPlus } from '../components/Icons.tsx';
@@ -14,6 +17,17 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
   const { sessions, connected, loaded } = useSessions();
   const { workspace, visible, contextVisible, dialogOpen, openDialog } = useWorkspace();
   const { settings } = useSettings();
+  const { viewer, followTerminal } = useImages();
+
+  // El visor sigue a la terminal activa: al cambiar de pestaña muestra la última imagen de la nueva
+  // terminal o, si no tiene ninguna, se cierra y vuelve el panel de Contexto.
+  const activa = workspace.active;
+  const activaPrevia = useRef(activa);
+  useEffect(() => {
+    if (activaPrevia.current === activa) return;
+    activaPrevia.current = activa;
+    followTerminal(activa);
+  }, [activa, followTerminal]);
 
   const abiertas = visible.map((n) => sessions.find((s) => s.name === n)).filter((s) => s !== undefined);
   const huecos = workspace.layout - abiertas.length;
@@ -51,7 +65,8 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
           )}
           {settings.terminal.tmuxBar && <StatusBar />}
         </main>
-        {contextVisible && <ContextPanel />}
+        {/* El visor ocupa el lugar del panel de contexto mientras está abierto; al cerrarlo vuelve el estado previo. */}
+        {viewer ? <ImageViewer target={viewer} /> : contextVisible && <ContextPanel />}
       </div>
     </div>
   );

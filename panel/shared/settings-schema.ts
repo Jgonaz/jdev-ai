@@ -27,6 +27,10 @@ export type Settings = {
     scrollback: number;
     copyOnSelect: boolean;
     tmuxBar: boolean;
+    /** Miniatura flotante al pasar el ratón por una ruta de imagen. */
+    hoverPreview: boolean;
+    /** Abrir el visor cuando una terminal visible escribe una ruta de imagen nueva. */
+    autoOpenImages: boolean;
   };
   personality: { cursor: boolean; lights: boolean; ascii: boolean; greeting: boolean; grid: boolean };
   notifications: { system: boolean; counter: boolean; sound: boolean; onFinish: boolean };
@@ -49,6 +53,8 @@ export const DEFAULT_SETTINGS: Settings = {
     scrollback: 5000,
     copyOnSelect: false,
     tmuxBar: true,
+    hoverPreview: true,
+    autoOpenImages: false,
   },
   personality: { cursor: true, lights: true, ascii: true, greeting: true, grid: true },
   notifications: { system: false, counter: true, sound: false, onFinish: false },

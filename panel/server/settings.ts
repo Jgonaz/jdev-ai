@@ -56,6 +56,8 @@ const ESQUEMA: Record<string, Nodo> = {
       scrollback: entero(100, 100000),
       copyOnSelect: booleano,
       tmuxBar: booleano,
+      hoverPreview: booleano,
+      autoOpenImages: booleano,
     },
   },
   personality: {

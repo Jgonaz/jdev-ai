@@ -28,6 +28,11 @@ Con Claude, la sesión usa el modelo que tengas configurado y se registran los
 subagentes de adapters/claude/agents.json, cada uno con su modelo, y los hooks
 que guardan su estado para el panel gráfico (bin/session-state). Las
 evidencias del qa van a PLAYWRIGHT_MCP_OUTPUT_DIR (por defecto, ${TMPDIR:-/tmp}/jdev-qa/<proyecto>).
+
+JDEV_SURFACE indica dónde trabaja la persona: «panel» (panel gráfico, que
+muestra imágenes) o «terminal» (valor por defecto). El launcher la valida y la
+exporta; con Claude, un hook de inicio la comunica al agente en su contexto
+(rules/surface.md).
 EOF
 }
 
@@ -97,6 +102,15 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -n "$project" ] || fail "indica un proyecto de projects/ o «.»"
+
+# Superficie de trabajo: la define el panel gráfico al crear sus sesiones; en
+# cualquier otro caso es una terminal. Se valida antes de lanzar nada.
+JDEV_SURFACE=${JDEV_SURFACE:-terminal}
+case "$JDEV_SURFACE" in
+    panel|terminal) ;;
+    *) fail "JDEV_SURFACE debe ser panel o terminal: $JDEV_SURFACE" ;;
+esac
+export JDEV_SURFACE
 
 if [ "$agent_command" = "codex" ]; then
     codex_orchestrator_model=${JDEV_CODEX_ORCHESTRATOR_MODEL:-gpt-6-astra}
@@ -318,13 +332,17 @@ if [ "$agent_command" = "claude" ]; then
     # session-state registra el estado de la sesión para el panel gráfico: va en
     # un SessionStart propio, sin matcher, para cubrir también resume y compact,
     # y se añade a los hooks de UserPromptSubmit sin tocar los anteriores.
+    # El contexto de superficie va en otro SessionStart con su matcher (incluye
+    # resume y compact) para que el agente sepa dónde trabaja la persona; no
+    # toca el hook que muestra el resumen.
     # --add-dir acepta varios valores, así que va antes de otra opción para no
     # absorber el prompt que llegue en "$@".
     state_hook="{\"type\":\"command\",\"command\":\"'$session_state' --hook\"}"
+    context_hook="{\"matcher\":\"startup|resume|clear|compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_status' --context\"}]}"
     exec claude \
         ${worktree_git_dir:+--add-dir} ${worktree_git_dir:+"$worktree_git_dir"} \
         ${worktree_history_dir:+--add-dir} ${worktree_history_dir:+"$worktree_history_dir"} \
-        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]},{\"hooks\":[$state_hook]}],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_title' --hook\"},$state_hook]}],\"PostToolUse\":[{\"hooks\":[$state_hook]}],\"Notification\":[{\"hooks\":[$state_hook]}],\"Stop\":[{\"hooks\":[$state_hook]}],\"SessionEnd\":[{\"hooks\":[$state_hook]}]}}" \
+        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]},{\"hooks\":[$state_hook]},$context_hook],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_title' --hook\"},$state_hook]}],\"PostToolUse\":[{\"hooks\":[$state_hook]}],\"Notification\":[{\"hooks\":[$state_hook]}],\"Stop\":[{\"hooks\":[$state_hook]}],\"SessionEnd\":[{\"hooks\":[$state_hook]}]}}" \
         --agents "$claude_agents" \
         "$@"
 fi

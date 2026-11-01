@@ -23,3 +23,12 @@ export function claudeConfigDir(env: NodeJS.ProcessEnv = process.env): string {
   const dir = env.CLAUDE_CONFIG_DIR;
   return dir && isAbsolute(dir) ? dir : join(homedir(), '.claude');
 }
+
+// Carpeta de las imágenes que la persona adjunta desde el panel:
+// ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel/uploads. Es caché (se borra sola a
+// los 7 días), no estado.
+export function uploadsDir(env: NodeJS.ProcessEnv = process.env): string {
+  const xdg = env.XDG_CACHE_HOME;
+  const base = xdg && isAbsolute(xdg) ? xdg : join(homedir(), '.cache');
+  return join(base, 'jdev-ai', 'panel', 'uploads');
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { visualState } from '../../lib/sessions.ts';
 import type { Layout } from '../../lib/workspace.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
+import { useImages } from '../../state/ImagesContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import { fallbackProject } from '../../lib/sessions.ts';
 import { IconLayout1, IconLayout2, IconLayout4, IconSidePanel } from '../Icons.tsx';
@@ -17,6 +18,7 @@ const LAYOUTS: { layout: Layout; label: string; Icon: typeof IconLayout1 }[] = [
 export function TabsBar() {
   const { sessions, projects } = useSessions();
   const { workspace, visible, activate, move, setLayout, contextVisible, toggleContext, requestTerminalFocus } = useWorkspace();
+  const { viewer, closeViewer } = useImages();
   const lista = useRef<HTMLDivElement>(null);
 
   // La pestaña seleccionada siempre queda a la vista (atajo, clic o al abrir). Si el foco
@@ -93,9 +95,16 @@ export function TabsBar() {
           type="button"
           className="icon-btn icon-btn--box"
           aria-label="Mostrar u ocultar el panel de contexto"
-          aria-pressed={contextVisible}
+          aria-pressed={contextVisible && !viewer}
           title="Panel de contexto"
-          onClick={toggleContext}
+          onClick={() => {
+            // Con el visor abierto, el botón lo cierra y muestra el contexto.
+            if (!viewer) toggleContext();
+            else {
+              closeViewer();
+              if (!contextVisible) toggleContext();
+            }
+          }}
         >
           <IconSidePanel />
         </button>

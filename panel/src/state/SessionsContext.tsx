@@ -12,6 +12,8 @@ type SessionsValue = {
   projects: ProjectInfo[];
   /** Socket de tmux del servidor (null hasta cargar la lista). */
   tmuxSocket: string | null;
+  /** HOME del usuario del servidor (null hasta cargar la lista): expande las rutas «~/…». */
+  home: string | null;
   loaded: boolean;
   connected: boolean;
   error: string | null;
@@ -35,6 +37,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [rawProjects, setRawProjects] = useState<ProjectInfo[]>([]);
   const [tmuxSocket, setTmuxSocket] = useState<string | null>(null);
+  const [home, setHome] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,9 +70,10 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     reloadProjects();
     api
       .sessions()
-      .then(({ sessions: s, tmuxSocket: socket }) => {
+      .then(({ sessions: s, tmuxSocket: socket, home: casa }) => {
         if (cancelado) return;
         if (socket) setTmuxSocket(socket);
+        if (casa) setHome(casa);
         setSessions((previas) => (previas.length > 0 ? previas : s));
         setLoaded(true);
       })
@@ -160,8 +164,8 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const valor = useMemo<SessionsValue>(
-    () => ({ sessions, projects, tmuxSocket, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent }),
-    [sessions, projects, tmuxSocket, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent],
+    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent }),
+    [sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

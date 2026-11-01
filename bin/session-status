@@ -7,6 +7,12 @@
 # la sesión. El agente y sus modelos llegan del launcher por variables
 # JDEV_SESSION_*, para que el comando del hook sea idéntico en todos los
 # proyectos (Codex pide confiar de nuevo en cualquier hook que cambie).
+#
+# Con --context devuelve, en una sola línea JSON, el contexto adicional
+# (hookSpecificOutput.additionalContext) que el hook SessionStart de Claude
+# añade al modelo: en qué superficie (JDEV_SURFACE: panel o terminal) trabaja la
+# persona y qué regla seguir. Ante cualquier error, o con un valor no válido,
+# no imprime nada y sale con 0 para no estorbar al arrancar la sesión.
 
 set -eu
 
@@ -14,8 +20,9 @@ mode=text
 case "${1:-}" in
     "") ;;
     --hook) mode=hook ;;
+    --context) mode=context ;;
     *)
-        printf 'Uso: session-status [--hook]\n' >&2
+        printf 'Uso: session-status [--hook|--context]\n' >&2
         exit 2
         ;;
 esac
@@ -377,7 +384,28 @@ panel() {
     fi
 }
 
-if [ "$mode" = "hook" ]; then
+# Contexto de superficie para el modelo. Cualquier fallo termina en silencio.
+context() {
+    root=$(CDPATH= cd -- "$(dirname -- "$0")/.." 2>/dev/null && pwd -P) || return 0
+    case "${JDEV_SURFACE:-terminal}" in
+        panel)
+            text="Superficie: panel gráfico de jdev-ai (JDEV_SURFACE=panel). La persona ve imágenes y lee de pasada: para enseñar una, ponla justo debajo del párrafo al que se refiere, en su propia línea y con este formato: — 📸 <ruta absoluta>  <qué mirar en ella>. Detalles en $root/rules/surface.md."
+            ;;
+        terminal)
+            text="Superficie: terminal (JDEV_SURFACE=terminal). La persona no ve imágenes. Sigue $root/rules/surface.md."
+            ;;
+        *) return 0 ;;
+    esac
+    encoded=$(printf '%s' "$text" | json_string) || return 0
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' "$encoded"
+}
+
+if [ "$mode" = "context" ]; then
+    # El evento llega por stdin y no hace falta; se descarta sin esperar si se
+    # ejecuta a mano desde una terminal.
+    [ -t 0 ] || cat >/dev/null 2>&1 || true
+    context || true
+elif [ "$mode" = "hook" ]; then
     # El agente envía por stdin el evento en JSON; el resumen no lo necesita.
     # Si se ejecuta a mano desde una terminal, no espera a que se escriba nada.
     [ -t 0 ] || cat >/dev/null 2>&1 || true

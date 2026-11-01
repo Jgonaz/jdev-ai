@@ -59,6 +59,7 @@ Lee cada regla cuando se dé su caso:
   guías según `<harness>/rules/user-guides.md`.
 - Imágenes que el proyecto no tenga: propón generarlas sin esperar a que te lo
   pidan, según `<harness>/rules/images.md`, y genéralas solo tras confirmación.
+- Superficie de trabajo (panel gráfico o terminal): `<harness>/rules/surface.md`.
 - En Claude Code, título de la sesión y marca `[Closed]` según
   `<harness>/rules/session-title.md`.
 

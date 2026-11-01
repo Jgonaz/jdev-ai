@@ -106,3 +106,31 @@ export const IconChevron = (p: Props) => (
     <path d="M9 6l6 6-6 6" />
   </Svg>
 );
+export const IconImage = (p: Props) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="2" />
+    <path d="M21 17l-5-5-9 8" />
+  </Svg>
+);
+export const IconZoomOut = (p: Props) => (
+  <Svg {...p}>
+    <path d="M5 12h14" />
+  </Svg>
+);
+export const IconZoomIn = (p: Props) => (
+  <Svg {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Svg>
+);
+export const IconExternal = (p: Props) => (
+  <Svg {...p}>
+    <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+  </Svg>
+);
+export const IconAlert = (p: Props) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v6M12 16.5v.5" />
+  </Svg>
+);

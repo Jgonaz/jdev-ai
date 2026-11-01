@@ -1,8 +1,10 @@
 import { createReadStream, statSync } from 'node:fs';
+import { pipeline } from 'node:stream';
 import { createServer } from 'node:http';
+import { homedir } from 'node:os';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { extname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { spawn } from 'node-pty';
 import type { IPty } from 'node-pty';
 import { WebSocket, WebSocketServer } from 'ws';
@@ -15,7 +17,8 @@ import {
   sessionCookie,
   tokensMatch,
 } from './auth.ts';
-import { claudeConfigDir, configDir, sessionStateDir } from './paths.ts';
+import { ImageError, MAX_IMAGE_BYTES, SVG_CSP, defaultImageDirs, openImage } from './images.ts';
+import { claudeConfigDir, configDir, sessionStateDir, uploadsDir } from './paths.ts';
 import { listProjects } from './projects.ts';
 import { RecentIndex } from './recent.ts';
 import { SessionService } from './sessions.ts';
@@ -25,11 +28,13 @@ import {
   TmuxError,
   attachCommand,
   isPanelSessionName,
+  paneCurrentPath,
   planSession,
   sessionExists,
   tmuxConfig,
 } from './tmux.ts';
 import type { TmuxConfig } from './tmux.ts';
+import { MAX_UPLOAD_BYTES, UploadError, readUploadBody, saveUpload, startUploadCleanup, uploadType } from './uploads.ts';
 
 const MAX_BODY = 64 * 1024;
 
@@ -69,6 +74,13 @@ export type ServerOptions = {
   stateDir?: string;
   /** Directorio de configuración de Claude (con projects/ dentro); por defecto, CLAUDE_CONFIG_DIR o ~/.claude. */
   claudeConfigDir?: string;
+  /** Carpeta de las imágenes adjuntadas; por defecto, ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel/uploads. */
+  uploadsDir?: string;
+  /** Carpetas de las que /api/image entrega imágenes; por defecto, las de defaultImageDirs. Para pruebas. */
+  imageDirs?: string[];
+  /** Límites en bytes de /api/image y /api/uploads, para pruebas. */
+  imageMaxBytes?: number;
+  uploadMaxBytes?: number;
   /** Intervalos de relectura (ms), para pruebas. */
   pollMs?: number;
   stateFallbackMs?: number;
@@ -195,6 +207,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     stateFallbackMs: opts.stateFallbackMs,
   });
 
+  const subidas = opts.uploadsDir ?? uploadsDir();
+  const carpetasImagen = opts.imageDirs ?? defaultImageDirs(opts.harnessRoot, subidas);
+  const detenerLimpieza = startUploadCleanup(subidas);
+
   const recientes = new RecentIndex({ projectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects') });
 
   function broadcast(mensaje: unknown): void {
@@ -265,7 +281,8 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     if (pathname === '/api/sessions') {
       if (metodo === 'GET') {
         // El socket de tmux real permite que el cliente muestre un comando de adjuntar correcto.
-        sendJson(res, 200, { sessions: await sesiones.refresh(), tmuxSocket: tmux.socket });
+        // `home` permite al cliente expandir las rutas «~/…» que aparecen en las terminales.
+        sendJson(res, 200, { sessions: await sesiones.refresh(), tmuxSocket: tmux.socket, home: homedir() });
         return;
       }
       if (metodo === 'POST') {
@@ -335,6 +352,91 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     sendJson(res, 404, { error: 'no encontrado' });
   }
 
+  // GET/HEAD /api/image?session=<jdev-*>&path=<ruta>: entrega una imagen de las
+  // carpetas permitidas. Una ruta relativa se resuelve contra el directorio
+  // actual de la terminal de la sesión; una absoluta no necesita sesión.
+  async function imageApi(res: ServerResponse, url: URL, metodo: string): Promise<void> {
+    if (metodo !== 'GET' && metodo !== 'HEAD') {
+      res.setHeader('Allow', 'GET, HEAD');
+      sendJson(res, 405, { error: 'método no permitido' });
+      return;
+    }
+    const ruta = url.searchParams.get('path');
+    const sesion = url.searchParams.get('session');
+    if (ruta === null || ruta === '') {
+      sendJson(res, 400, { error: 'Indica la ruta de la imagen.' });
+      return;
+    }
+    let cwd: string | null = null;
+    if (sesion !== null && sesion !== '') {
+      if (!isPanelSessionName(sesion)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se admiten sesiones del panel (jdev-*)' });
+        return;
+      }
+      if (!isAbsolute(ruta)) {
+        cwd = await paneCurrentPath(tmux, sesion);
+        if (cwd === null) {
+          sendJson(res, 404, { error: 'La sesión no existe.' });
+          return;
+        }
+      }
+    }
+    let imagen;
+    try {
+      imagen = await openImage({ path: ruta, cwd, allowedDirs: carpetasImagen, maxBytes: opts.imageMaxBytes ?? MAX_IMAGE_BYTES });
+    } catch (e) {
+      if (e instanceof ImageError) {
+        sendJson(res, e.status, { error: e.message });
+        return;
+      }
+      throw e;
+    }
+    res.writeHead(200, {
+      'Content-Type': imagen.contentType,
+      'Content-Length': imagen.size,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'no-store',
+      'X-Image-Size': imagen.size,
+      // Ruta real (absoluta y sin enlaces) codificada con encodeURIComponent: las cabeceras no admiten
+      // cualquier carácter. Permite al visor deduplicar por archivo y mostrar la carpeta resuelta.
+      'X-Image-Path': encodeURIComponent(imagen.file),
+      ...(imagen.width !== undefined && imagen.height !== undefined
+        ? { 'X-Image-Width': imagen.width, 'X-Image-Height': imagen.height }
+        : {}),
+      ...(imagen.kind === 'svg' ? { 'Content-Security-Policy': SVG_CSP } : {}),
+    });
+    if (metodo === 'HEAD') {
+      await imagen.handle.close();
+      res.end();
+      return;
+    }
+    // end = size - 1: si el archivo crece mientras se lee, no se pasa del tamaño anunciado.
+    pipeline(imagen.handle.createReadStream({ start: 0, end: imagen.size - 1 }), res, () => {});
+  }
+
+  // POST /api/uploads: cuerpo binario con el Content-Type de la imagen.
+  async function uploadsApi(req: IncomingMessage, res: ServerResponse, metodo: string): Promise<void> {
+    if (metodo !== 'POST') {
+      res.setHeader('Allow', 'POST');
+      sendJson(res, 405, { error: 'método no permitido' });
+      return;
+    }
+    try {
+      uploadType(req.headers['content-type']);
+      const cuerpo = await readUploadBody(req, opts.uploadMaxBytes ?? MAX_UPLOAD_BYTES);
+      sendJson(res, 201, await saveUpload(cuerpo, req.headers['content-type'], subidas));
+    } catch (e) {
+      if (!(e instanceof UploadError)) throw e;
+      // Con el cuerpo sin leer, la conexión no se puede reutilizar: se cierra
+      // tras responder para que el resto de la subida no siga llegando.
+      if (!req.complete) {
+        res.setHeader('Connection', 'close');
+        res.once('finish', () => req.destroy());
+      }
+      sendJson(res, e.status, { error: e.message });
+    }
+  }
+
   async function api(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
     const metodo = req.method ?? 'GET';
     // Una cookie SameSite=Strict ya frena el CSRF; además, si el navegador
@@ -389,6 +491,14 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       // Se actualiza la lista de sesiones del panel para no ofrecer las que ya están en él.
       await sesiones.refresh();
       sendJson(res, 200, { recent: await recientes.list(await sesiones.projectList(), sesiones.panelSessionIds()) });
+      return;
+    }
+    if (pathname === '/api/image') {
+      await imageApi(res, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
+      return;
+    }
+    if (pathname === '/api/uploads') {
+      await uploadsApi(req, res, metodo);
       return;
     }
     if (pathname === '/api/sessions' || pathname.startsWith('/api/sessions/')) {
@@ -591,6 +701,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         close: () =>
           new Promise<void>((fin) => {
             sesiones.stop();
+            detenerLimpieza();
             for (const c of clientes) c.terminate();
             for (const c of terminales) c.terminate();
             wss.close();

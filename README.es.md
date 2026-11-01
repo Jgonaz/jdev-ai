@@ -300,6 +300,23 @@ bin/panel --open          # o bin/panel y abre la URL que imprime
   quede `Ctrl+W` o `Ctrl+T`, ábrelo en modo aplicación (por ejemplo,
   `msedge --app=<url>`).
 - **Seleccionar texto.** Con el ratón de tmux activo, usa Mayús + arrastrar.
+- **Imágenes.** Las rutas de imagen (png, jpg, gif, webp, svg) que aparecen en
+  una terminal se pueden pulsar: clic las abre en un visor lateral con zoom y
+  la tira de imágenes de esa terminal, y Ctrl+clic en una pestaña nueva. Solo
+  se muestran imágenes dentro del harness y sus proyectos, la carpeta de QA,
+  la de imágenes adjuntadas y la temporal del sistema.
+  Al pasar el ratón por una ruta aparece una miniatura con su nombre y
+  dimensiones (se desactiva en Ajustes > Terminal) y, si activas «Abrir el
+  visor al aparecer una imagen nueva» (desactivado por defecto), el visor se
+  abre solo con la imagen que una terminal visible escribe sin quitarle el
+  foco.
+- **Adjuntar imágenes.** Con `Ctrl+V` o arrastrando un archivo sobre la
+  terminal, la imagen se guarda en `~/.cache/jdev-ai/panel/uploads/` (se borra
+  a los 7 días) y su ruta se escribe en el prompt para que el agente la lea.
+- **Superficie.** Las sesiones del panel arrancan con `JDEV_SURFACE=panel` y
+  las de una terminal con `terminal`; en Claude Code, un hook se lo dice al
+  agente al iniciar o retomar, y [`rules/surface.md`](rules/surface.md) explica
+  cómo debe mostrar y pedir imágenes en cada caso.
 
 ## Validación del harness
 

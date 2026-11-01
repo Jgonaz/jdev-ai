@@ -8,6 +8,7 @@ import { useRoute } from './lib/route.ts';
 import { useShortcuts } from './lib/useShortcuts.ts';
 import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { TerminalesScreen } from './screens/TerminalesScreen.tsx';
+import { ImagesProvider } from './state/ImagesContext.tsx';
 import { SessionsProvider } from './state/SessionsContext.tsx';
 import { SettingsProvider, useSettings } from './state/SettingsContext.tsx';
 import { WorkspaceProvider, useWorkspace } from './state/WorkspaceContext.tsx';
@@ -74,7 +75,9 @@ export function App() {
     <SettingsProvider>
       <SessionsProvider>
         <WorkspaceProvider>
-          <Shell />
+          <ImagesProvider>
+            <Shell />
+          </ImagesProvider>
         </WorkspaceProvider>
       </SessionsProvider>
     </SettingsProvider>

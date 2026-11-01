@@ -27,6 +27,7 @@ export function StatusBar() {
           );
         })}
       </span>
+      <span className="statusbar__help">Ctrl+V o arrastra una imagen para adjuntarla</span>
       <span className="statusbar__keys">
         <kbd>Ctrl+Alt+←/→</kbd> cambia de terminal
         <span className="statusbar__extra">
@@ -37,7 +38,7 @@ export function StatusBar() {
       <span className="statusbar__sep" aria-hidden="true">
         │
       </span>
-      <span>
+      <span className="statusbar__count">
         {vivas} {vivas === 1 ? 'viva' : 'vivas'} · {visible.length} {visible.length === 1 ? 'visible' : 'visibles'}
       </span>
     </footer>
