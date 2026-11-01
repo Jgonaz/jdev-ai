@@ -20,6 +20,7 @@ import {
 import { BacklogError, BacklogStore, BacklogWatcher, ITEM_ID_RE, pendingChanges, toListItem } from './backlog.ts';
 import { commitBacklog, commitPreview, validateCommitRequest } from './backlog-commit.ts';
 import { GuideError, listGuides, readGuide } from './guides.ts';
+import { HistoryError, HistoryStore, historyDirs, historySignature, isHistoryState, toListEntry } from './history.ts';
 import { ImageError, MAX_IMAGE_BYTES, SVG_CSP, defaultImageDirs, openImage } from './images.ts';
 import { claudeConfigDir, configDir, sessionStateDir, uploadsDir } from './paths.ts';
 import { listProjects, worktreeDetails } from './projects.ts';
@@ -90,6 +91,8 @@ export type ServerOptions = {
   stateFallbackMs?: number;
   /** Relectura de respaldo del backlog (ms); por defecto 10 s. */
   backlogFallbackMs?: number;
+  /** Relectura de respaldo del historial (ms); por defecto 15 s. */
+  historyFallbackMs?: number;
 };
 
 export type RunningServer = {
@@ -222,6 +225,15 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     projects: async () => (await sesiones.projectList()).map((p) => ({ id: p.id, path: p.path })),
     onChange: (project) => broadcast({ type: 'backlog', project }),
     fallbackMs: opts.backlogFallbackMs,
+  });
+
+  const historial = new HistoryStore();
+  const vigilanteHistorial = new BacklogWatcher({
+    projects: async () => (await sesiones.projectList()).map((p) => ({ id: p.id, path: p.path })),
+    onChange: (project) => broadcast({ type: 'history', project }),
+    fallbackMs: opts.historyFallbackMs ?? 15000,
+    signature: historySignature,
+    dirs: historyDirs,
   });
 
   const recientes = new RecentIndex({ projectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects') });
@@ -585,6 +597,74 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     sendJson(res, 200, await worktreeDetails(actual, await sesiones.refresh()));
   }
 
+  // /api/history[/:project/:file[/pending]]: lista filtrada, detalle y marca de
+  // pendientes del historial del checkout principal de cada proyecto.
+  async function historyApi(req: IncomingMessage, res: ServerResponse, pathname: string, url: URL, metodo: string): Promise<void> {
+    const soloMetodo = (permitido: string): boolean => {
+      if (metodo === permitido) return true;
+      res.setHeader('Allow', permitido);
+      sendJson(res, 405, { error: 'método no permitido' });
+      return false;
+    };
+    if (pathname === '/api/history') {
+      if (!soloMetodo('GET')) return;
+      const proyecto = url.searchParams.get('project') || null;
+      const estado = url.searchParams.get('state') || null;
+      if (estado !== null && !isHistoryState(estado)) {
+        sendJson(res, 400, { error: 'Estado no válido: usa finalizada, en curso, bloqueada o desconocido.' });
+        return;
+      }
+      if (proyecto !== null && !(await findProject(proyecto))) {
+        sendJson(res, 404, { error: 'El proyecto no existe.' });
+        return;
+      }
+      const lista = await historial.list(
+        (await sesiones.projectList()).map((p) => ({ id: p.id, path: p.path })),
+        { project: proyecto, state: estado, pending: url.searchParams.get('pending') === '1' },
+      );
+      sendJson(res, 200, { entries: lista });
+      return;
+    }
+    const m = /^\/api\/history\/([^/]+)\/([^/]+)(\/pending)?$/.exec(pathname);
+    if (!m) {
+      sendJson(res, 404, { error: 'no encontrado' });
+      return;
+    }
+    let id: string;
+    let file: string;
+    try {
+      id = decodeURIComponent(m[1]!);
+      file = decodeURIComponent(m[2]!);
+    } catch {
+      sendJson(res, 400, { error: 'ruta no válida' });
+      return;
+    }
+    const proyecto = await findProject(id);
+    if (!proyecto) {
+      sendJson(res, 404, { error: 'El proyecto no existe.' });
+      return;
+    }
+    const destino = { id: proyecto.id, path: proyecto.path };
+    try {
+      if (!m[3]) {
+        if (!soloMetodo('GET')) return;
+        sendJson(res, 200, { entry: await historial.get(destino, file) });
+        return;
+      }
+      if (!soloMetodo('POST')) return;
+      const cuerpo = await parseJsonBody(req, res);
+      if (!cuerpo) return;
+      const entry = await historial.setPending(destino, file, cuerpo.index, cuerpo.done, cuerpo.etag);
+      await vigilanteHistorial.mark(proyecto.id);
+      broadcast({ type: 'history', project: proyecto.id });
+      sendJson(res, 200, { entry });
+    } catch (err) {
+      if (!(err instanceof HistoryError)) throw err;
+      if (err.status >= 500) console.error('Error marcando el pendiente del historial:', err.message);
+      sendJson(res, err.status, err.entry ? { error: err.message, entry: err.entry } : { error: err.message });
+    }
+  }
+
   async function api(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
     const metodo = req.method ?? 'GET';
     // Una cookie SameSite=Strict ya frena el CSRF; además, si el navegador
@@ -632,6 +712,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     }
     if (pathname.startsWith('/api/projects/')) {
       await projectApi(req, res, pathname, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
+      return;
+    }
+    if (pathname === '/api/history' || pathname.startsWith('/api/history/')) {
+      await historyApi(req, res, pathname, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
       return;
     }
     if (pathname === '/api/recent') {
@@ -840,6 +924,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
 
   void sesiones.start();
   void vigilanteBacklog.start();
+  void vigilanteHistorial.start();
 
   return new Promise((ok, ko) => {
     server.once('error', ko);
@@ -855,6 +940,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
           new Promise<void>((fin) => {
             sesiones.stop();
             vigilanteBacklog.stop();
+            vigilanteHistorial.stop();
             detenerLimpieza();
             for (const c of clientes) c.terminate();
             for (const c of terminales) c.terminate();

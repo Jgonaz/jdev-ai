@@ -541,7 +541,7 @@ async function existe(ruta: string): Promise<boolean> {
 }
 
 // Temporal en la misma carpeta y rename: nunca queda un archivo a medias.
-async function writeAtomic(ruta: string, contenido: string): Promise<void> {
+export async function writeAtomic(ruta: string, contenido: string): Promise<void> {
   const dir = join(ruta, '..');
   const tmp = join(dir, `.${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}.tmp`);
   try {
@@ -564,11 +564,18 @@ export type BacklogWatcherOptions = {
   /** Relectura de respaldo; por defecto 10 s. */
   fallbackMs?: number;
   debounceMs?: number;
+  /** Firma de lo vigilado en un proyecto; por defecto, la del backlog. */
+  signature?: (projectPath: string) => Promise<string>;
+  /** Carpetas a vigilar con fs.watch; por defecto, docs/backlog y sus estados. */
+  dirs?: (projectPath: string) => string[];
 };
+
+const backlogDirs = (ruta: string) => [join(ruta, BACKLOG_DIR), ...STATES.map((s) => join(ruta, BACKLOG_DIR, s))];
 
 /**
  * Vigila docs/backlog y sus carpetas de estado de cada proyecto con fs.watch y
- * una relectura de respaldo. Solo avisa si cambia la firma del backlog.
+ * una relectura de respaldo. Solo avisa si cambia la firma del backlog. Con
+ * `signature` y `dirs` vigila otra cosa (p. ej. el historial).
  */
 export class BacklogWatcher {
   private readonly opts: BacklogWatcherOptions;
@@ -621,7 +628,7 @@ export class BacklogWatcher {
     if (ruta === undefined || this.parado) return;
     let firma: string;
     try {
-      firma = await backlogSignature(ruta);
+      firma = await (this.opts.signature ?? backlogSignature)(ruta);
     } catch {
       return;
     }
@@ -634,7 +641,7 @@ export class BacklogWatcher {
   // Mantiene un fs.watch por carpeta existente (docs/backlog y cada estado).
   private rearm(projectId: string, ruta: string): void {
     if (this.parado) return;
-    for (const dir of [join(ruta, BACKLOG_DIR), ...STATES.map((s) => join(ruta, BACKLOG_DIR, s))]) {
+    for (const dir of (this.opts.dirs ?? backlogDirs)(ruta)) {
       const clave = `${projectId}\0${dir}`;
       const previo = this.vigilantes.get(clave);
       if (previo) {

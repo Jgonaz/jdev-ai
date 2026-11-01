@@ -130,3 +130,38 @@ export type WorktreeDetail = Worktree & {
   sessions: string[];
 };
 export type WorktreeList = { base: string | null; worktrees: WorktreeDetail[] };
+
+// ---------------------------------------------------------------- Historial
+
+export type HistoryState = 'finalizada' | 'en curso' | 'bloqueada' | 'desconocido';
+
+/** Entrada de GET /api/history (campos de la lista). */
+export type HistoryEntry = {
+  project: string;
+  file: string;
+  title: string;
+  /** `YYYY-MM-DD HH:MM` o, si solo se conoce el día, `YYYY-MM-DD`. */
+  date: string;
+  /** La fecha no viene de un `Fecha:` válido (nombre del archivo o mtime). */
+  approxDate: boolean;
+  state: HistoryState;
+  /** Primer pendiente sin marcar, o null. */
+  firstPending: string | null;
+  openPending: number;
+  totalPending: number;
+  etag: string;
+};
+
+export type PendingPoint = { index: number; text: string; done: boolean; doneDate: string | null };
+
+/** Entrada completa de GET /api/history/:project/:file. */
+export type HistoryDetail = HistoryEntry & {
+  /** `.agent/history/<archivo>`. */
+  path: string;
+  rawState: string | null;
+  /** Secciones `## ` sin «Pendiente de ti»; título '' para el texto previo a la primera. */
+  sections: { title: string; body: string }[];
+  hasPendingSection: boolean;
+  pending: PendingPoint[];
+  pendingNotes: string;
+};

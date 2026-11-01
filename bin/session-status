@@ -245,7 +245,7 @@ panel() {
         # Se compara por prefijo porque algunas entradas añaden detalles tras
         # el estado («bloqueada por …»).
         case "$history_status" in
-            finalizada*|terminada*|cerrad*) status_text="terminada" ;;
+            finalizada*|terminada*|cerrad*|completad*|completo*) status_text="terminada" ;;
             "en curso"*) status_text="quedó a medias" ;;
             bloqueada*) status_text="quedó bloqueada" ;;
             "") status_text="estado sin indicar" ;;
@@ -351,7 +351,9 @@ panel() {
     printf '│\n'
 
     pending_points=
-    [ -z "$history_file" ] || pending_points=$(section_points "$history_file" "Pendiente de ti")
+    # Los puntos marcados como resueltos («[x] … (hecho YYYY-MM-DD)») ya no
+    # esperan a la persona.
+    [ -z "$history_file" ] || pending_points=$(section_points "$history_file" "Pendiente de ti" | grep -v '^\[x\] ' || true)
     if [ -n "$pending_points" ]; then
         printf '│ PENDIENTE DE TI\n'
         printf '%s\n' "$pending_points" | while IFS= read -r point; do

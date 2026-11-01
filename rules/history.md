@@ -89,6 +89,12 @@ del resumen, «Pendiente de ti» y la continuación:
 - «Pendiente de ti» recoge solo lo que bloquea o espera a la persona, como una
   decisión de producto, una prueba manual o un despliegue.
 
+Cuando la persona confirma que ha resuelto un punto de «Pendiente de ti», se
+marca en la propia entrada como `- [x] <texto> (hecho YYYY-MM-DD)`, con el
+sufijo al final de la última línea del punto; lo hace el panel o el agente
+cuando la persona lo confirma. El resumen de inicio omite los puntos marcados.
+Al actualizar una entrada, conserva esas marcas.
+
 Omite secciones opcionales vacías. Resume resultados y motivos; no copies listas
 de archivos, diffs, requisitos, documentación ni contenido ya disponible en
 otras fuentes.

@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = 'terminales' | 'proyectos' | 'ajustes';
+export type Route = 'terminales' | 'proyectos' | 'historial' | 'ajustes';
 
 /** Secciones del diseño que aún no existen. */
 export const FUTURE_SECTIONS: Record<string, string> = {
   inicio: 'Inicio',
-  historial: 'Historial',
 };
 
 export type ResolvedRoute = {
   route: Route;
-  /** Proyecto y elemento del backlog de `#/proyectos/<id>/<itemId>`. */
+  /**
+   * Proyecto y elemento del backlog de `#/proyectos/<id>/<itemId>`, o proyecto
+   * y archivo de la entrada de `#/historial/<id>/<archivo>`.
+   */
   project: string | null;
   item: string | null;
   /** Nombre de la sección futura pedida (para el aviso «Próximamente»). */
@@ -37,6 +39,12 @@ export function resolveRoute(hash: string): ResolvedRoute {
   if (partes[0] === 'proyectos' && partes.length <= 3) {
     return { ...base, route: 'proyectos', project: decodificar(partes[1]), item: decodificar(partes[2]) };
   }
+  if (partes[0] === 'historial' && partes.length <= 3) {
+    const project = decodificar(partes[1]);
+    const item = decodificar(partes[2]);
+    // Una entrada necesita proyecto y archivo; si falta alguno se muestra la lista sola.
+    return project && item ? { ...base, route: 'historial', project, item } : { ...base, route: 'historial' };
+  }
   const futura = Object.hasOwn(FUTURE_SECTIONS, clave) ? FUTURE_SECTIONS[clave]! : null;
   return { ...base, route: 'terminales', soon: futura, normalize: true };
 }
@@ -56,6 +64,12 @@ export function projectHref(proyecto?: string | null, item?: string | null): str
   return item ? `${p}/${encodeURIComponent(item)}` : p;
 }
 
+/** `#/historial` o `#/historial/<proyecto>/<archivo>`. */
+export function historyHref(proyecto?: string | null, archivo?: string | null): string {
+  if (!proyecto || !archivo) return '#/historial';
+  return `#/historial/${encodeURIComponent(proyecto)}/${encodeURIComponent(archivo)}`;
+}
+
 /**
  * Hash canónico de Proyectos para lo que se muestra, o null si el pedido ya lo
  * es. Un proyecto inexistente u oculto se sustituye por el mostrado (sin
@@ -72,7 +86,7 @@ export function canonicalProjectHref(
 }
 
 /**
- * Enrutado mínimo por hash: no hace falta una librería para tres pantallas.
+ * Enrutado mínimo por hash: no hace falta una librería para cuatro pantallas.
  * Las rutas futuras y las desconocidas se normalizan a `#/terminales` (con
  * replaceState, para que Atrás no vuelva a la ruta rota) y las futuras
  * devuelven su nombre en `aviso` para decir «Próximamente».

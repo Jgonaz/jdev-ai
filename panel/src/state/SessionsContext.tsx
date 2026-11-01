@@ -25,6 +25,8 @@ type SessionsValue = {
   reloadRecent: () => void;
   /** Suscribe a los avisos `{type:'backlog', project}` de /ws/events; devuelve la baja. */
   onBacklogChange: (cb: (project: string) => void) => () => void;
+  /** Suscribe a los avisos `{type:'history', project}` de /ws/events; devuelve la baja. */
+  onHistoryChange: (cb: (project: string) => void) => () => void;
   /** Suscribe a las fases `{type:'backlog-commit', project, phase}` del commit del backlog; devuelve la baja. */
   onBacklogCommitPhase: (cb: (project: string, phase: CommitPhase) => void) => () => void;
 };
@@ -52,6 +54,14 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     backlogListeners.current.add(cb);
     return () => {
       backlogListeners.current.delete(cb);
+    };
+  }, []);
+
+  const historyListeners = useRef(new Set<(project: string) => void>());
+  const onHistoryChange = useCallback((cb: (project: string) => void) => {
+    historyListeners.current.add(cb);
+    return () => {
+      historyListeners.current.delete(cb);
     };
   }, []);
 
@@ -129,6 +139,9 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
           } else if (msg.type === 'backlog' && typeof msg.project === 'string') {
             const proyecto = msg.project;
             for (const cb of backlogListeners.current) cb(proyecto);
+          } else if (msg.type === 'history' && typeof msg.project === 'string') {
+            const proyecto = msg.project;
+            for (const cb of historyListeners.current) cb(proyecto);
           } else if (
             msg.type === 'backlog-commit' &&
             typeof msg.project === 'string' &&
@@ -194,8 +207,8 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const valor = useMemo<SessionsValue>(
-    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent, onBacklogChange, onBacklogCommitPhase }),
-    [sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent, onBacklogChange, onBacklogCommitPhase],
+    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent, onBacklogChange, onHistoryChange, onBacklogCommitPhase }),
+    [sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent, onBacklogChange, onHistoryChange, onBacklogCommitPhase],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

@@ -1,4 +1,4 @@
-import { projectHref, routeHref } from '../lib/route.ts';
+import { historyHref, projectHref, routeHref } from '../lib/route.ts';
 import type { Route } from '../lib/route.ts';
 import { waitingCount, waitingLabel } from '../lib/sessions.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
@@ -8,7 +8,7 @@ import { Logo } from './Logo.tsx';
 
 function Disabled({ label }: { label: string }) {
   return (
-    // Sin enlace real: estas pantallas llegan en versiones posteriores.
+    // Sin enlace real: esta pantalla llega en una versión posterior.
     <span className="nav__link nav__link--disabled" role="link" aria-disabled="true" tabIndex={-1} title="Próximamente" aria-label={`${label} (próximamente)`}>
       {label}
     </span>
@@ -33,7 +33,9 @@ export function Header({ route }: { route: Route }) {
         <a className="nav__link" href={projectHref()} aria-current={route === 'proyectos' ? 'page' : undefined}>
           Proyectos
         </a>
-        <Disabled label="Historial" />
+        <a className="nav__link" href={historyHref()} aria-current={route === 'historial' ? 'page' : undefined}>
+          Historial
+        </a>
         <a className="nav__link" href={routeHref('ajustes')} aria-current={route === 'ajustes' ? 'page' : undefined}>
           Ajustes
         </a>

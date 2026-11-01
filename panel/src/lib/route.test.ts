@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalProjectHref, parseRoute, projectHref, resolveRoute } from './route.ts';
+import { canonicalProjectHref, historyHref, parseRoute, projectHref, resolveRoute } from './route.ts';
 
 const base = { project: null, item: null, soon: null, normalize: false };
 
@@ -24,8 +24,28 @@ describe('resolveRoute', () => {
     expect(resolveRoute('#/proyectos/%E0%A4%A')).toEqual({ ...base, route: 'proyectos' });
   });
 
+  it('reconoce Historial con una entrada opcional', () => {
+    expect(resolveRoute('#/historial')).toEqual({ ...base, route: 'historial' });
+    expect(resolveRoute('#/historial/')).toEqual({ ...base, route: 'historial' });
+    expect(resolveRoute('#/historial/balanz.io/2026-10-31-0027-a%20b.md')).toEqual({
+      ...base,
+      route: 'historial',
+      project: 'balanz.io',
+      item: '2026-10-31-0027-a b.md',
+    });
+    // Sin archivo, o con codificación rota, se muestra la lista sola.
+    expect(resolveRoute('#/historial/balanz.io')).toEqual({ ...base, route: 'historial' });
+    expect(resolveRoute('#/historial/a/%E0%A4%A')).toEqual({ ...base, route: 'historial' });
+    expect(resolveRoute('#/historial/a/b/c')).toEqual({ ...base, route: 'terminales', normalize: true });
+  });
+
+  it('historyHref codifica proyecto y archivo', () => {
+    expect(historyHref()).toBe('#/historial');
+    expect(historyHref('jdev-ai')).toBe('#/historial');
+    expect(historyHref('a b', 'x y.md')).toBe('#/historial/a%20b/x%20y.md');
+  });
+
   it('normaliza las secciones futuras y avisa de cuál era', () => {
-    expect(resolveRoute('#/historial')).toEqual({ ...base, route: 'terminales', soon: 'Historial', normalize: true });
     expect(resolveRoute('#/inicio')).toEqual({ ...base, route: 'terminales', soon: 'Inicio', normalize: true });
   });
 

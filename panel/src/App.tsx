@@ -6,6 +6,7 @@ import { focusActiveTab } from './lib/focus.ts';
 import { useAlerts } from './lib/useAlerts.ts';
 import { useRoute } from './lib/route.ts';
 import { useShortcuts } from './lib/useShortcuts.ts';
+import { HistorialScreen } from './screens/HistorialScreen.tsx';
 import { ProyectosScreen } from './screens/ProyectosScreen.tsx';
 import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { TerminalesScreen } from './screens/TerminalesScreen.tsx';
@@ -60,6 +61,7 @@ function Shell() {
       )}
       <TerminalesScreen hidden={ruta !== 'terminales'} />
       {ruta === 'proyectos' && <ProyectosScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
+      {ruta === 'historial' && <HistorialScreen project={proyecto} file={elemento} onReplaceHash={reemplazar} />}
       {ruta === 'ajustes' && <SettingsScreen />}
       {aviso && (
         <div className="toast" role="status">

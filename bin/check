@@ -115,6 +115,31 @@ check "resumen: todas las líneas con borde izquierdo" '[ "$(grep -vc "^[┌│�
 check "resumen como systemMessage en una línea" 'echo "{}" | summary --hook && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"systemMessage\":\"┌ jdev-ai · demo\\\\n.*\\\\n│ «Prueba»\\\\n.*/clear.*\"}$" "$work/out"'
 check "resumen con el agente y los modelos del launcher" 'JDEV_SESSION_AGENT=codex JDEV_SESSION_ORCHESTRATOR="a [b]" JDEV_SESSION_IMPLEMENTER="c [d]" JDEV_SESSION_WARNING="aviso" summary && grep -q "^┌ jdev-ai · demo · codex$" "$work/out" && grep -q "^│ Orquestador a \[b\] · implementador c \[d\]$" "$work/out" && grep -q "^│ ⚠ aviso$" "$work/out"'
 
+# Pendientes resueltos («- [x] … (hecho YYYY-MM-DD)»): no se muestran y, si no
+# queda ninguno, desaparece el apartado.
+marked="$work/marcados"
+mkdir -p "$marked/.agent/history"
+git init -q "$marked"
+cat > "$marked/.agent/history/2026-01-02-1000-marcados.md" <<'EOF'
+# Marcados
+
+Fecha: 2026-01-02 10:00
+Estado: en curso
+
+## Pendiente de ti
+
+- [x] Probar en el móvil
+  con datos reales. (hecho 2026-01-03)
+- Decidir el color.
+
+## Continuación recomendada
+
+- Seguir.
+EOF
+psummary_marked() { (cd "$marked" && "$status") > "$work/out"; }
+check "resumen: omite los pendientes marcados como hechos" 'psummary_marked && grep -q "^│ PENDIENTE DE TI$" "$work/out" && grep -q "^│   ! Decidir el color\.$" "$work/out" && ! grep -q "Probar en el móvil" "$work/out" && ! grep -q "hecho 2026" "$work/out"'
+check "resumen: sin apartado si todos los pendientes están marcados" 'sed -i "s/^- Decidir el color\./- [x] Decidir el color. (hecho 2026-01-03)/" "$marked/.agent/history/2026-01-02-1000-marcados.md" && psummary_marked && ! grep -q "PENDIENTE DE TI" "$work/out" && ! grep -q "Decidir el color" "$work/out" && grep -q "^│   → Seguir\.$" "$work/out"'
+
 check "claude recibe el hook y no imprime el resumen" 'run demo && args claude | grep -q "^{\"hooks\":{\"SessionStart\":.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
 check "claude recibe los subagentes del adaptador" 'run demo && args claude | grep -qx -- "--agents" && args claude | grep -q "\"implementer\": {" && args claude | grep -q "\"Explore\": {"'
 check "claude recibe el qa con Playwright fijado y sin edición" 'run demo && args claude | grep -q "\"qa\": {" && args claude | grep -q "\"@playwright/mcp@[0-9][0-9.]*\"" && ! args claude | grep -q "@playwright/mcp@latest" && args claude | grep -q "\"disallowedTools\": \[\"Edit\", \"Write\", \"NotebookEdit\"\]"'

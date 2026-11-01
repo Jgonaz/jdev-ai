@@ -5,6 +5,8 @@ import type {
   CommitPreview,
   Guide,
   GuideContent,
+  HistoryDetail,
+  HistoryEntry,
   ProjectInfo,
   RecentSession,
   SessionInfo,
@@ -83,7 +85,44 @@ export const api = {
   guide: (proyecto: string, ruta: string, signal?: AbortSignal) =>
     request<GuideContent>(`${projectBase(proyecto)}/guides/content?${new URLSearchParams({ path: ruta }).toString()}`, { signal }),
   worktrees: (proyecto: string, signal?: AbortSignal) => request<WorktreeList>(`${projectBase(proyecto)}/worktrees`, { signal }),
+  history: (signal?: AbortSignal) => request<{ entries: HistoryEntry[] }>('/api/history', { signal }).then((r) => r.entries),
+  historyEntry: (proyecto: string, archivo: string, signal?: AbortSignal) =>
+    request<{ entry: HistoryDetail }>(historyBase(proyecto, archivo), { signal }).then((r) => r.entry),
 };
+
+const historyBase = (proyecto: string, archivo: string) => `/api/history/${encodeURIComponent(proyecto)}/${encodeURIComponent(archivo)}`;
+
+/** Resultado de marcar un pendiente: el 409 trae la versión actual de la entrada. */
+export type PendingResult =
+  | { ok: true; entry: HistoryDetail }
+  | { ok: false; status: number; error: string; entry?: HistoryDetail };
+
+/** POST /api/history/:project/:file/pending. No lanza: los rechazos y los fallos de red vuelven como resultado. */
+export async function setHistoryPending(proyecto: string, archivo: string, index: number, done: boolean, etag: string): Promise<PendingResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${historyBase(proyecto, archivo)}/pending`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index, done, etag }),
+    });
+  } catch {
+    return { ok: false, status: 0, error: 'No se pudo contactar con el panel.' };
+  }
+  if (res.status === 401) return { ok: false, status: 401, error: await errorMessage(res) };
+  try {
+    const cuerpo = (await res.json()) as { error?: unknown; entry?: HistoryDetail };
+    if (res.ok && cuerpo.entry) return { ok: true, entry: cuerpo.entry };
+    return {
+      ok: false,
+      status: res.status,
+      error: typeof cuerpo.error === 'string' ? cuerpo.error : `Error ${res.status}`,
+      ...(cuerpo.entry ? { entry: cuerpo.entry } : {}),
+    };
+  } catch {
+    return { ok: false, status: res.status, error: res.ok ? 'Respuesta del panel ilegible.' : `Error ${res.status}` };
+  }
+}
 
 const projectBase = (proyecto: string) => `/api/projects/${encodeURIComponent(proyecto)}`;
 

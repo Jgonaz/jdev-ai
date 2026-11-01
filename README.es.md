@@ -263,8 +263,8 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 agente de todos los proyectos: barra lateral con las sesiones agrupadas por
 proyecto, su título y su estado (te espera, trabajando, en reposo o cerrada),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
-con `bin/agent`, la pantalla Proyectos y ajustes de tema, fuentes, terminal y
-avisos. Inicio e Historial llegarán en versiones posteriores.
+con `bin/agent`, las pantallas Proyectos e Historial y ajustes de tema,
+fuentes, terminal y avisos. Inicio llegará en una versión posterior.
 
 Requisitos: Node 24, pnpm, tmux y un compilador para `node-pty` (en Ubuntu,
 `sudo apt install build-essential`). La primera vez:
@@ -315,6 +315,14 @@ bin/panel --open          # o bin/panel y abre la URL que imprime
   «Trabajar en esto» abre Nueva sesión con un prompt para abordar el elemento,
   sin moverlo. Las pestañas Worktrees y Guías muestran las ramas abiertas (con
   sus sesiones y cambios) y las guías de `docs/user-guides/`.
+- **Historial.** Reúne las entradas de `.agent/history/` del checkout
+  principal de cada proyecto y del harness (sin subcarpetas como `archive/`),
+  agrupadas por día, con filtros por proyecto y estado y «Solo con «Pendiente
+  de ti»». El lector destaca «Pendiente de ti» y muestra el resto de
+  secciones; cada pendiente se puede marcar como hecho (o desmarcar), y el
+  panel lo marca en la propia entrada como `- [x] … (hecho YYYY-MM-DD)`, que
+  el resumen de inicio ya no muestra. «Retomar desde aquí» abre Nueva sesión
+  con un prompt para ponerse al día desde esa entrada.
 - **Imágenes.** Las rutas de imagen (png, jpg, gif, webp, svg) que aparecen en
   una terminal se pueden pulsar: clic las abre en un visor lateral con zoom y
   la tira de imágenes de esa terminal, y Ctrl+clic en una pestaña nueva. Solo
