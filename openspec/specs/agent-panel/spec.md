@@ -305,7 +305,7 @@ Cuando un proyecto tenga cambios sin commit en `docs/backlog/`, el panel SHALL o
 
 ### Requirement: Pantalla Historial con las entradas de todos los proyectos
 
-El panel SHALL ofrecer una pantalla Historial que liste las entradas `.agent/history/*.md` del checkout principal de cada proyecto y del harness, ignorando subcarpetas y archivos que no sean Markdown, ordenadas de más reciente a más antigua y agrupadas por día o, si la persona lo elige, por proyecto. Cada entrada SHALL mostrar hora, proyecto, estado (`finalizada`, `en curso` o `bloqueada`), título y su primer pendiente abierto si lo tiene. La persona SHALL poder filtrar por proyecto, por estado y por «Solo con Pendiente de ti», que deja las entradas con algún pendiente sin marcar. Las entradas con `Fecha:` o `Estado:` fuera del formato SHALL mostrarse con la fecha del nombre o del archivo y un estado desconocido, sin romper la vista. La lista SHALL actualizarse sola cuando cambien los archivos.
+El panel SHALL ofrecer una pantalla Historial que liste las entradas `.agent/history/*.md` del checkout principal de cada proyecto y del harness, ignorando subcarpetas y archivos que no sean Markdown, ordenadas de más reciente a más antigua y agrupadas por día o, si la persona lo elige, por proyecto. Cada entrada SHALL mostrar hora, proyecto, estado (`finalizada`, `en curso` o `bloqueada`), título y su primer pendiente abierto si lo tiene. La persona SHALL poder filtrar por proyecto, por estado y por «Solo con Pendiente de ti», que por defecto deja solo las entradas con pendientes vigentes: las que son la última entrada de su proyecto, con el mismo criterio que `bin/session-status` (fecha y hora de `Fecha:` o del nombre, no la fecha de modificación), y tienen algún pendiente sin marcar. Debajo, la opción «Incluir pendientes antiguos» SHALL ampliar el filtro a las entradas anteriores con pendientes sin marcar. Ambas opciones SHALL recordarse junto con el resto de filtros; en unos filtros guardados que no incluyan la segunda, el panel SHALL darla por desactivada. Las entradas con `Fecha:` o `Estado:` fuera del formato SHALL mostrarse con la fecha del nombre o del archivo y un estado desconocido, sin romper la vista. La lista SHALL actualizarse sola cuando cambien los archivos.
 
 #### Scenario: Agrupar por proyecto
 
@@ -315,7 +315,12 @@ El panel SHALL ofrecer una pantalla Historial que liste las entradas `.agent/his
 #### Scenario: Ver qué espera de mí
 
 - **WHEN** la persona activa «Solo con Pendiente de ti»
-- **THEN** ve solo las entradas con algún pendiente sin marcar, de todos los proyectos
+- **THEN** ve solo la última entrada de cada proyecto que tenga algún pendiente sin marcar, de todos los proyectos, aunque entradas anteriores conserven pendientes sin marcar
+
+#### Scenario: Incluir pendientes antiguos
+
+- **WHEN** la persona activa además «Incluir pendientes antiguos»
+- **THEN** ve también las entradas anteriores con pendientes sin marcar, y la elección se recuerda al volver a Historial
 
 #### Scenario: Entrada nueva
 
@@ -324,12 +329,17 @@ El panel SHALL ofrecer una pantalla Historial que liste las entradas `.agent/his
 
 ### Requirement: Lector de una entrada
 
-Al elegir una entrada, el panel SHALL mostrar su proyecto, ruta, título, estado y fecha, el bloque «Pendiente de ti» destacado con cada punto y su estado, y el resto de secciones (resumen, decisiones, referencias, continuación recomendada y cualquier otra) pintadas con el visor de Markdown seguro.
+Al elegir una entrada, el panel SHALL mostrar su proyecto, ruta, título, estado y fecha, el bloque «Pendiente de ti» destacado con cada punto y su estado, y el resto de secciones (resumen, decisiones, referencias, continuación recomendada y cualquier otra) pintadas con el visor de Markdown seguro. Si la entrada no es la última de su proyecto y tiene pendientes sin marcar, el bloque SHALL incluir una nota discreta «Entrada anterior: estos pendientes no cuentan como vigentes.».
 
 #### Scenario: Leer una entrada
 
 - **WHEN** la persona abre una entrada con «Pendiente de ti» y «Continuación recomendada»
 - **THEN** ve los pendientes destacados arriba y la continuación al final
+
+#### Scenario: Pendientes de una entrada anterior
+
+- **WHEN** la persona abre una entrada con pendientes sin marcar que no es la última de su proyecto
+- **THEN** el bloque «Pendiente de ti» indica que esos pendientes no cuentan como vigentes, y sigue permitiendo marcarlos uno a uno
 
 ### Requirement: Marcar pendientes como hechos
 
@@ -344,6 +354,20 @@ Cada punto de «Pendiente de ti» SHALL poder marcarse como hecho y desmarcarse 
 
 - **WHEN** un agente actualiza la entrada después de que la persona la abriera y la persona marca un pendiente
 - **THEN** el panel no lo marca, avisa y muestra la versión actual
+
+### Requirement: Limpiar los pendientes antiguos
+
+Historial SHALL ofrecer «Marcar como hechos los pendientes antiguos» cuando haya entradas que no son la última de su proyecto con pendientes sin marcar. La acción SHALL abarcar el proyecto elegido en el filtro o, sin proyecto elegido, todos los proyectos, y SHALL pedir antes una confirmación accesible que diga cuántos pendientes y entradas se marcarán y que no se puede deshacer en bloque, solo desmarcando uno a uno. El panel SHALL marcar cada punto con la misma edición mínima y las mismas salvaguardas que al marcar un pendiente suelto (UTF-8 estricto, sin seguir enlaces y escribiendo de forma atómica), SHALL NOT tocar la última entrada de ningún proyecto, y SHALL omitir las entradas que no pueda editar sin alterarlas, como las que no están en UTF-8, informando de ellas en el aviso del resultado.
+
+#### Scenario: Limpiar un proyecto
+
+- **WHEN** la persona tiene elegido el proyecto balanz.io, pulsa «Marcar como hechos los pendientes antiguos» y confirma
+- **THEN** los pendientes sin marcar de las entradas anteriores de balanz.io quedan como `- [x] … (hecho <fecha de hoy>)`, su última entrada y los demás proyectos no cambian, y un aviso dice cuántos pendientes y entradas se han marcado
+
+#### Scenario: Entrada que no se puede editar
+
+- **WHEN** una de las entradas anteriores no está en UTF-8
+- **THEN** el panel la deja intacta, marca el resto y el aviso nombra la entrada omitida y el motivo
 
 ### Requirement: Retomar desde una entrada
 
@@ -383,7 +407,7 @@ La sección SHALL listar, en este orden:
 
 1. Las sesiones que esperan a la persona, con su título, proyecto, tiempo desde el aviso y, si se conoce, el texto de lo que piden, y la acción «Responder», que abre esa terminal en Terminales.
 2. Las sesiones con la marca `[Closed]` que siguen abiertas en el panel, con la acción «Revisar», que abre su terminal.
-3. Un resumen de los pendientes abiertos del historial («N pendientes de ti en M entradas»), que lleva a Historial con «Solo con Pendiente de ti» activado.
+3. Un resumen de los pendientes vigentes del historial, los sin marcar de la última entrada de cada proyecto visible («N pendientes de ti», con el subtítulo «En la última entrada del historial de cada proyecto»), que lleva a Historial con «Solo con Pendiente de ti» activado y «Incluir pendientes antiguos» desactivado. Los pendientes de entradas anteriores SHALL NOT contar.
 
 Las sesiones que esperan SHALL aparecer y contar aunque su proyecto esté oculto en Ajustes, con una nota «proyecto oculto», con el mismo criterio en la cabecera, el título de la pestaña y el recuento «te espera» de Inicio. Las cerradas que siguen abiertas SHALL ser solo las de proyectos visibles.
 
@@ -398,6 +422,11 @@ Si no hay nada, SHALL mostrar un estado tranquilo.
 
 - **WHEN** una sesión de un proyecto oculto en Ajustes pasa a esperar a la persona
 - **THEN** aparece en «Necesita tu atención» con la nota «proyecto oculto» y cuenta en el aviso de la cabecera y en el recuento «te espera» de Inicio, mientras el proyecto sigue sin tarjeta
+
+#### Scenario: Pendientes resueltos en una entrada posterior
+
+- **WHEN** una entrada antigua conserva pendientes sin marcar y la última entrada del proyecto no tiene ninguno
+- **THEN** Inicio no los cuenta
 
 #### Scenario: Nada pendiente
 

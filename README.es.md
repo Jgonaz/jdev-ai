@@ -319,8 +319,10 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   proyectos, sesiones y worktrees, con los recuentos de sesiones que te
   esperan, trabajando y en reposo. «Necesita tu atención» lista las sesiones
   que te esperan, con el texto del aviso y «Responder», las marcadas como
-  cerradas que siguen abiertas, con «Revisar», y los pendientes abiertos del
-  historial, que llevan a Historial con «Solo con «Pendiente de ti»». Debajo,
+  cerradas que siguen abiertas, con «Revisar», y los pendientes vigentes del
+  historial (los sin marcar de la última entrada de cada proyecto, como en el
+  resumen de `bin/session-status`), que llevan a Historial con «Solo con
+  «Pendiente de ti»». Debajo,
   una tarjeta por proyecto ordenada por actividad (sesiones, historial y
   backlog) con su rama, sus sesiones, los recuentos de backlog, por hacer, en
   curso y worktrees, el último registro y los accesos a sus terminales, su
@@ -342,11 +344,17 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
 - **Historial.** Reúne las entradas de `.agent/history/` del checkout
   principal de cada proyecto y del harness (sin subcarpetas como `archive/`),
   agrupadas por día, con filtros por proyecto y estado y «Solo con «Pendiente
-  de ti»». El lector destaca «Pendiente de ti» y muestra el resto de
+  de ti»», que deja la última entrada de cada proyecto con pendientes sin
+  marcar; «Incluir pendientes antiguos» añade las entradas anteriores. El
+  lector destaca «Pendiente de ti» (con una nota si la entrada es anterior y
+  sus pendientes ya no cuentan como vigentes) y muestra el resto de
   secciones; cada pendiente se puede marcar como hecho (o desmarcar), y el
   panel lo marca en la propia entrada como `- [x] … (hecho YYYY-MM-DD)`, que
-  el resumen de inicio ya no muestra. «Retomar desde aquí» abre Nueva sesión
-  con un prompt para ponerse al día desde esa entrada.
+  el resumen de inicio ya no muestra. «Marcar como hechos los pendientes
+  antiguos» marca, tras confirmar, todos los de las entradas anteriores del
+  proyecto elegido o de todos (no se deshace en bloque; se desmarcan uno a
+  uno). «Retomar desde aquí» abre Nueva sesión con un prompt para ponerse al
+  día desde esa entrada.
 - **Imágenes.** Las rutas de imagen (png, jpg, gif, webp, svg) que aparecen en
   una terminal se pueden pulsar: clic las abre en un visor lateral con zoom y
   la tira de imágenes de esa terminal, y Ctrl+clic en una pestaña nueva. Solo

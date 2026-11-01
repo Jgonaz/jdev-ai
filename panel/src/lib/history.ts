@@ -10,11 +10,16 @@ export type HistoryFilters = {
   project: string;
   /** Estado, o '' para todos. */
   state: HistoryState | '';
-  /** Solo entradas con algún pendiente sin marcar. */
+  /**
+   * Solo entradas con algún pendiente sin marcar: por defecto, solo las
+   * últimas de cada proyecto (los pendientes vigentes).
+   */
   pending: boolean;
+  /** Con `pending`, incluye también las entradas anteriores con pendientes abiertos. */
+  includeOld: boolean;
 };
 
-export const NO_HISTORY_FILTERS: HistoryFilters = { project: '', state: '', pending: false };
+export const NO_HISTORY_FILTERS: HistoryFilters = { project: '', state: '', pending: false, includeOld: false };
 
 const FILTERS_KEY = 'jdev-panel:historial:filtros';
 
@@ -32,6 +37,8 @@ export function loadHistoryFilters(storage: Pick<Storage, 'getItem'> | null = sa
       project: typeof v.project === 'string' ? v.project : '',
       state: esEstado(v.state) ? v.state : '',
       pending: v.pending === true,
+      // Los filtros guardados antes de existir la opción no la tienen: desactivada.
+      includeOld: v.includeOld === true,
     };
   } catch {
     return NO_HISTORY_FILTERS;
@@ -67,8 +74,51 @@ export function filterEntries(entries: readonly HistoryEntry[], f: HistoryFilter
       (!projects || projects.has(e.project)) &&
       (f.project === '' || e.project === f.project) &&
       (f.state === '' || e.state === f.state) &&
-      (!f.pending || e.openPending > 0),
+      (!f.pending || (e.openPending > 0 && (e.latest || f.includeOld))),
   );
+}
+
+/** Entrada anterior a la última de su proyecto con pendientes abiertos: no son vigentes. */
+export const hasOldPending = (e: Pick<HistoryEntry, 'latest' | 'openPending'>): boolean => !e.latest && e.openPending > 0;
+
+export type OldPendingSummary = {
+  pending: number;
+  entries: number;
+  /** De ellas, entradas de proyectos fuera de `visibles` (ocultos en Ajustes). */
+  hiddenEntries: number;
+};
+
+/**
+ * Lo que marcaría la limpieza (POST /api/history/pending/mark-old): los
+ * pendientes abiertos de las entradas que no son la última de su proyecto, de
+ * `project` o, con '', de todos los proyectos (también los ocultos, como el servidor).
+ */
+export function oldPendingSummary(entries: readonly HistoryEntry[], project: string, visibles?: ReadonlySet<string>): OldPendingSummary {
+  const r: OldPendingSummary = { pending: 0, entries: 0, hiddenEntries: 0 };
+  for (const e of entries) {
+    if ((project !== '' && e.project !== project) || !hasOldPending(e)) continue;
+    r.pending += e.openPending;
+    r.entries++;
+    if (visibles && !visibles.has(e.project)) r.hiddenEntries++;
+  }
+  return r;
+}
+
+const cuenta = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+
+/** «3 pendientes en 2 entradas». */
+export const oldPendingCount = (s: { pending: number; entries: number }): string =>
+  `${cuenta(s.pending, 'pendiente', 'pendientes')} en ${cuenta(s.entries, 'entrada', 'entradas')}`;
+
+/** Aviso tras la limpieza: lo marcado y, si las hay, las entradas omitidas. */
+export function markOldNotice(r: { marked: number; entries: number; skipped: readonly { file: string; reason: string }[] }): { kind: 'ok' | 'warn'; text: string } {
+  const hecho =
+    r.marked === 0
+      ? 'No había pendientes antiguos que marcar.'
+      : `${r.marked === 1 ? 'Marcado como hecho' : 'Marcados como hechos'} ${oldPendingCount({ pending: r.marked, entries: r.entries })}.`;
+  if (r.skipped.length === 0) return { kind: 'ok', text: hecho };
+  const omitidas = r.skipped.map((s) => `${s.file} (${s.reason.replace(/\.$/, '')})`).join('; ');
+  return { kind: 'warn', text: `${hecho} ${r.skipped.length === 1 ? 'Se ha omitido' : `Se han omitido ${r.skipped.length} entradas`}: ${omitidas}.` };
 }
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];

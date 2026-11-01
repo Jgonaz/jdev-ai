@@ -187,8 +187,9 @@ describe('buildOverview y GET /api/overview', () => {
       lastEntry: { title: 'Beta', state: 'bloqueada' },
     });
     expect(h).toMatchObject({ lastActivity: 0, lastEntry: null, worktrees: 0 });
-    // Los ocultos no cuentan: 1 de «Vieja» + 2 de «Nueva».
-    expect(r.history).toEqual({ openPending: 3, entriesWithPending: 2 });
+    // Solo los vigentes (última entrada de cada proyecto) y sin ocultos: los 2
+    // de «Nueva»; el abierto de «Vieja» es de una entrada anterior.
+    expect(r.history).toEqual({ openPending: 2, entriesWithPending: 1 });
     expect(r.recent).toHaveLength(8);
     expect(r.recent.map((e) => e.title).slice(0, 3)).toEqual(['Beta', 'Nueva', 'Vieja']);
     expect(r.recent.some((e) => e.project === 'oculto')).toBe(false);
@@ -215,7 +216,7 @@ describe('buildOverview y GET /api/overview', () => {
     const cuerpo = (await r.json()) as { projects: { id: string }[]; history: unknown; recent: unknown[]; gitName: string | null };
     expect(cuerpo.gitName).toBe('Ana');
     expect(cuerpo.projects.map((p) => p.id)).toEqual(['beta', 'alfa', basename(harness)]);
-    expect(cuerpo.history).toEqual({ openPending: 3, entriesWithPending: 2 });
+    expect(cuerpo.history).toEqual({ openPending: 2, entriesWithPending: 1 });
     expect(cuerpo.recent).toHaveLength(8);
 
     // Al mostrar el proyecto oculto en Ajustes, el resumen lo incluye sin esperar.
@@ -226,6 +227,6 @@ describe('buildOverview y GET /api/overview', () => {
     });
     const otra = (await (await fetch(`${base}/api/overview`, { headers: auth })).json()) as { projects: { id: string }[]; history: unknown };
     expect(otra.projects[0]!.id).toBe('oculto');
-    expect(otra.history).toEqual({ openPending: 4, entriesWithPending: 3 });
+    expect(otra.history).toEqual({ openPending: 3, entriesWithPending: 2 });
   });
 });

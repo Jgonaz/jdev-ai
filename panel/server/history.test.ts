@@ -12,6 +12,8 @@ import {
   entryState,
   historyDirs,
   historySignature,
+  latestKey,
+  markAllPending,
   parseEntry,
 } from './history.ts';
 
@@ -161,6 +163,36 @@ describe('marcar y desmarcar pendientes', () => {
   });
 });
 
+describe('última entrada y marca en bloque', () => {
+  const mt = new Date(2026, 9, 1, 8, 5).getTime();
+  it('clave de orden como latest_history de bin/session-status', () => {
+    expect(latestKey('# T\n\nFecha: 2026-10-31 00:27\n', 'x.md', mt)).toBe('2026-10-31\t0027');
+    // Sin hora en Fecha: la del nombre; sin nombre con hora: la del mtime.
+    expect(latestKey('Fecha: 2026-10-31\n', '2026-10-30-1200-a.md', mt)).toBe('2026-10-31\t1200');
+    expect(latestKey('Fecha: 2026-10-31\n', 'notas.md', mt)).toBe('2026-10-31\t0805');
+    // Sin Fecha: día y hora del nombre; nombre sin hora: día del nombre y hora del mtime.
+    expect(latestKey('# T\n', '2026-10-30-1200-a.md', mt)).toBe('2026-10-30\t1200');
+    expect(latestKey('# T\n', '2026-09-18-commit.md', mt)).toBe('2026-09-18\t0805');
+    expect(latestKey('# T\n', 'notas.md', mt)).toBe('2026-10-01\t0805');
+    // El primer `Fecha:` de todo el archivo, sin validar dígitos, como `sed`.
+    expect(latestKey('# T\n\n## Resumen\n\nFecha:   2026-99-99 12:34 extra\r\nFecha: 2020-01-01 00:00\n', 'x.md', mt)).toBe('2026-99-99\t1234');
+    expect(latestKey('# T\nFecha: mañana\n', '2026-10-30-1200-a.md', mt)).toBe('2026-10-30\t1200');
+  });
+
+  it('marca todos los abiertos con la edición mínima', () => {
+    const r = markAllPending(ENTRADA, '2026-11-01');
+    expect(r.marked).toBe(2);
+    expect(r.text).toBe(
+      ENTRADA.replace('- Reinstalar la app en el iPhone\n  y comprobar el teclado.\n', '- [x] Reinstalar la app en el iPhone\n  y comprobar el teclado. (hecho 2026-11-01)\n').replace(
+        '- Decidir el `nombre`.\n',
+        '- [x] Decidir el `nombre`. (hecho 2026-11-01)\n',
+      ),
+    );
+    expect(markAllPending(r.text, '2026-11-02')).toEqual({ text: r.text, marked: 0 });
+    expect(markAllPending('# Sin\n', '2026-11-01')).toEqual({ text: '# Sin\n', marked: 0 });
+  });
+});
+
 describe('almacén del historial', () => {
   let tmp: string;
   let a: string;
@@ -197,8 +229,9 @@ describe('almacén del historial', () => {
     const l = await s.list(proyectos());
     expect(l.map((e) => `${e.project}/${e.file}`)).toEqual(['b/2026-10-31-0900-bloqueo.md', 'a/2026-10-31-0027-panel.md', 'a/2026-10-30-1000-hecha.md']);
     expect(Object.keys(l[0]!).sort()).toEqual(
-      ['approxDate', 'date', 'etag', 'file', 'firstPending', 'openPending', 'project', 'state', 'title', 'totalPending'].sort(),
+      ['approxDate', 'date', 'etag', 'file', 'firstPending', 'latest', 'openPending', 'project', 'state', 'title', 'totalPending'].sort(),
     );
+    expect(l.map((e) => e.latest)).toEqual([true, true, false]);
     // La segunda lista sale de la caché.
     const lecturas = s.reads;
     await s.list(proyectos());
@@ -379,5 +412,85 @@ describe('almacén del historial', () => {
     writeFileSync(ruta, '# Hecha y revisada\n');
     utimesSync(ruta, new Date(), new Date(Date.now() + 5000));
     expect((await s.get(p, '2026-10-30-1000-hecha.md')).title).toBe('Hecha y revisada');
+  });
+
+  it('latest: la última de cada proyecto por fecha y hora, no por mtime', async () => {
+    const p = join(tmp, 'orden');
+    mkdirSync(hist(p), { recursive: true });
+    try {
+      // La de nombre mayor es más antigua por Fecha y tiene el mtime más reciente.
+      escribir(p, '2026-10-31-0900-z.md', '# Z\n\nFecha: 2026-10-30 08:00\n\n## Pendiente de ti\n\n- Viejo.\n');
+      escribir(p, '2026-10-30-2300-a.md', '# A\n\nFecha: 2026-10-30 23:00\n\n## Pendiente de ti\n\n- Vigente.\n');
+      const futuro = new Date(2026, 11, 1);
+      utimesSync(join(hist(p), '2026-10-31-0900-z.md'), futuro, futuro);
+      const s = new HistoryStore();
+      const l = await s.list([{ id: 'orden', path: p }]);
+      expect(l.map((e) => [e.title, e.latest])).toEqual([
+        ['A', true],
+        ['Z', false],
+      ]);
+      // El filtro no cambia cuál es la última, y el detalle también lo dice.
+      expect((await s.list([{ id: 'orden', path: p }], { state: 'bloqueada' })).length).toBe(0);
+      expect((await s.get({ id: 'orden', path: p }, '2026-10-31-0900-z.md')).latest).toBe(false);
+      expect((await s.get({ id: 'orden', path: p }, '2026-10-30-2300-a.md')).latest).toBe(true);
+      // A igual clave, gana el nombre mayor.
+      escribir(p, '2026-10-30-2300-b.md', '# B\n\nFecha: 2026-10-30 23:00\n');
+      expect((await s.list([{ id: 'orden', path: p }])).filter((e) => e.latest).map((e) => e.title)).toEqual(['B']);
+    } finally {
+      rmSync(p, { recursive: true, force: true });
+    }
+  });
+
+  it('markOld marca solo las anteriores, conserva el resto byte a byte y omite lo no UTF-8', async () => {
+    const p = join(tmp, 'limpieza');
+    const q = join(tmp, 'otro');
+    mkdirSync(hist(p), { recursive: true });
+    mkdirSync(hist(q), { recursive: true });
+    try {
+      const ultima = '# Última\n\nFecha: 2026-11-01 10:00\n\n## Pendiente de ti\n\n- Vigente.\n';
+      const crlf = '# Vieja CRLF\r\n\r\nFecha: 2026-10-20 10:00\r\n\r\n## Pendiente de ti\r\n\r\n- Uno\r\n  sigue.\r\n- [x] Hecho. (hecho 2026-10-21)\r\n\r\n## Otra\r\n\r\n- No es pendiente.\r\n';
+      const latin1 = Buffer.from('# Año\n\nFecha: 2026-10-10 10:00\n\n## Pendiente de ti\n\n- Configuración.\n', 'latin1');
+      escribir(p, '2026-11-01-1000-ultima.md', ultima);
+      escribir(p, '2026-10-31-1000-vieja.md', ENTRADA.replace('2026-10-31 00:27', '2026-10-31 10:00'));
+      escribir(p, '2026-10-20-1000-crlf.md', crlf);
+      writeFileSync(join(hist(p), '2026-10-10-1000-latin1.md'), latin1);
+      escribir(p, '2026-10-05-1000-hecha.md', '# Hecha\n\nFecha: 2026-10-05 10:00\n\n## Pendiente de ti\n\n- [x] Nada. (hecho 2026-10-06)\n');
+      chmodSync(join(hist(p), '2026-10-20-1000-crlf.md'), 0o640);
+      const vOtro = '# Vieja de otro\n\nFecha: 2026-10-01 10:00\n\n## Pendiente de ti\n\n- Ajeno.\n';
+      escribir(q, '2026-10-01-1000-vieja.md', vOtro);
+      escribir(q, '2026-10-02-1000-ultima.md', '# Última de otro\n\nFecha: 2026-10-02 10:00\n');
+
+      const s = new HistoryStore();
+      const proyectosL = [{ id: 'limpieza', path: p }];
+      // Calienta la caché para comprobar que se invalida tras escribir.
+      await s.list(proyectosL);
+      const r = await s.markOld(proyectosL, '2026-11-01');
+      expect(r).toEqual({
+        marked: 3,
+        entries: 2,
+        skipped: [{ project: 'limpieza', file: '2026-10-10-1000-latin1.md', reason: 'La entrada no está en UTF-8; no se puede marcar sin alterarla.' }],
+        projects: ['limpieza'],
+      });
+      expect(readFileSync(join(hist(p), '2026-11-01-1000-ultima.md'), 'utf8')).toBe(ultima);
+      expect(readFileSync(join(hist(p), '2026-10-20-1000-crlf.md'), 'utf8')).toBe(
+        crlf.replace('- Uno\r\n  sigue.\r\n', '- [x] Uno\r\n  sigue. (hecho 2026-11-01)\r\n'),
+      );
+      expect(statSync(join(hist(p), '2026-10-20-1000-crlf.md')).mode & 0o777).toBe(0o640);
+      expect(readFileSync(join(hist(p), '2026-10-31-1000-vieja.md'), 'utf8')).toBe(
+        markAllPending(ENTRADA.replace('2026-10-31 00:27', '2026-10-31 10:00'), '2026-11-01').text,
+      );
+      expect(readFileSync(join(hist(p), '2026-10-10-1000-latin1.md')).equals(latin1)).toBe(true);
+      // Otro proyecto sin pedir no se toca.
+      expect(readFileSync(join(hist(q), '2026-10-01-1000-vieja.md'), 'utf8')).toBe(vOtro);
+      const tras = await s.list(proyectosL);
+      expect(tras.filter((e) => e.openPending > 0).map((e) => e.file)).toEqual(['2026-11-01-1000-ultima.md', '2026-10-10-1000-latin1.md']);
+      // Repetir no marca nada más y vuelve a omitir la no UTF-8.
+      expect(await s.markOld(proyectosL, '2026-11-02')).toMatchObject({ marked: 0, entries: 0, projects: [] });
+      // Sin proyecto concreto, todos los indicados.
+      expect(await s.markOld([...proyectosL, { id: 'otro', path: q }], '2026-11-01')).toMatchObject({ marked: 1, entries: 1, projects: ['otro'] });
+    } finally {
+      rmSync(p, { recursive: true, force: true });
+      rmSync(q, { recursive: true, force: true });
+    }
   });
 });

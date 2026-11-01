@@ -152,6 +152,8 @@ export type HistoryEntry = {
   openPending: number;
   totalPending: number;
   etag: string;
+  /** Es la última entrada de su proyecto (criterio de bin/session-status): sus pendientes son los vigentes. */
+  latest: boolean;
 };
 
 export type PendingPoint = { index: number; text: string; done: boolean; doneDate: string | null };
@@ -166,6 +168,13 @@ export type HistoryDetail = HistoryEntry & {
   hasPendingSection: boolean;
   pending: PendingPoint[];
   pendingNotes: string;
+};
+
+/** POST /api/history/pending/mark-old. */
+export type MarkOldResult = {
+  marked: number;
+  entries: number;
+  skipped: { project: string; file: string; reason: string }[];
 };
 
 // ------------------------------------------------------------------- Inicio
@@ -184,6 +193,7 @@ export type OverviewProject = {
 /** GET /api/overview: resumen de los proyectos visibles para Inicio. */
 export type Overview = {
   projects: OverviewProject[];
+  /** Pendientes vigentes: solo los de la última entrada de cada proyecto visible. */
   history: { openPending: number; entriesWithPending: number };
   recent: HistoryEntry[];
   gitName: string | null;

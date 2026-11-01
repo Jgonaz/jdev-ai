@@ -123,6 +123,7 @@ describe('API del historial', () => {
       ['GET', '/api/history'],
       ['GET', '/api/history/demo/2026-10-31-0027-teclado.md'],
       ['POST', '/api/history/demo/2026-10-31-0027-teclado.md/pending'],
+      ['POST', '/api/history/pending/mark-old'],
     ] as const) {
       expect((await fetch(`${base}${ruta}`, { method: metodo })).status, ruta).toBe(401);
     }
@@ -136,6 +137,7 @@ describe('API del historial', () => {
       'demo/2026-10-30-1200-hecha.md',
     ]);
     expect(c.entries[1]).toMatchObject({ title: 'Teclado en iOS', state: 'en curso', openPending: 1, firstPending: 'Reinstalar la app en el iPhone y comprobar el teclado.' });
+    expect(c.entries.map((e: Json) => e.latest)).toEqual([true, true, false]);
     const solo = async (q: string) => (await json(await api('GET', `/api/history?${q}`))).entries.map((e: Json) => e.file);
     expect(await solo('project=demo')).toEqual(['2026-10-31-0027-teclado.md', '2026-10-30-1200-hecha.md']);
     expect(await solo('state=bloqueada')).toEqual(['2026-11-01-1010-panel.md']);
@@ -192,6 +194,60 @@ describe('API del historial', () => {
       const vuelta = await api('POST', ruta, { index: 0, done: false, etag: marcado.etag });
       expect(vuelta.status).toBe(200);
       expect(readFileSync(archivo, 'utf8')).toBe(ENTRADA);
+    } finally {
+      ws.close();
+    }
+  });
+
+  it('limpia los pendientes de entradas anteriores con Origin, validación y aviso', async () => {
+    // El vigilante avisará de los archivos nuevos: se espera a esos avisos para
+    // que no se confundan con el de la limpieza.
+    const previos = new WebSocket(`ws://127.0.0.1:${srv.port}/ws/events`, { headers: { ...auth, Origin: `http://localhost:${srv.port}` } });
+    const vistos = new Set<string>();
+    const asentado = new Promise<void>((ok) => {
+      previos.on('message', (d) => {
+        const m = JSON.parse(String(d)) as Json;
+        if (m.type === 'history') vistos.add(m.project);
+        if (vistos.has('demo') && vistos.has(harnessId)) ok();
+      });
+    });
+    await new Promise((ok) => previos.once('open', ok));
+    const dir = join(proy, '.agent', 'history');
+    const vieja = '# Vieja\n\nFecha: 2026-10-01 10:00\n\n## Pendiente de ti\n\n- Antiguo.\n- [x] Hecho. (hecho 2026-10-02)\n';
+    const noUtf8 = Buffer.from('# Año\n\nFecha: 2026-09-01 10:00\n\n## Pendiente de ti\n\n- Configuración.\n', 'latin1');
+    writeFileSync(join(dir, '2026-10-01-1000-vieja.md'), vieja);
+    writeFileSync(join(dir, '2026-09-01-1000-latin1.md'), noUtf8);
+    const viejaHarness = '# Vieja del harness\n\nFecha: 2026-10-01 09:00\n\n## Pendiente de ti\n\n- Del harness.\n';
+    writeFileSync(join(harness, '.agent', 'history', '2026-10-01-0900-vieja.md'), viejaHarness);
+    await asentado;
+    previos.close();
+    const ruta = '/api/history/pending/mark-old';
+    const { ws, llega, abierto } = evento('history');
+    await abierto;
+    try {
+      expect((await api('POST', ruta, {}, { Origin: 'http://evil.example' })).status).toBe(403);
+      expect((await api('GET', ruta)).status).toBe(405);
+      expect((await api('POST', ruta, 'no-json')).status).toBe(400);
+      expect((await api('POST', ruta, { project: 3 })).status).toBe(400);
+      expect((await api('POST', ruta, { project: 'nada' })).status).toBe(404);
+      const antes = readFileSync(join(proy, '.agent', 'history', '2026-10-31-0027-teclado.md'), 'utf8');
+
+      const r = await api('POST', ruta, { project: 'demo' }, { Origin: `http://localhost:${srv.port}` });
+      expect(r.status).toBe(200);
+      const cuerpo = await json(r);
+      expect(cuerpo).toMatchObject({ marked: 1, entries: 1, skipped: [{ project: 'demo', file: '2026-09-01-1000-latin1.md' }] });
+      expect(cuerpo.skipped[0].reason).toMatch(/UTF-8/);
+      expect(await llega).toEqual({ type: 'history', project: 'demo' });
+      expect(readFileSync(join(dir, '2026-10-01-1000-vieja.md'), 'utf8')).toMatch(/^# Vieja\n\nFecha: 2026-10-01 10:00\n\n## Pendiente de ti\n\n- \[x\] Antiguo\. \(hecho \d{4}-\d{2}-\d{2}\)\n- \[x\] Hecho\. \(hecho 2026-10-02\)\n$/);
+      // La última entrada del proyecto y el otro proyecto siguen igual.
+      expect(readFileSync(join(proy, '.agent', 'history', '2026-10-31-0027-teclado.md'), 'utf8')).toBe(antes);
+      expect(readFileSync(join(harness, '.agent', 'history', '2026-10-01-0900-vieja.md'), 'utf8')).toBe(viejaHarness);
+      expect(readFileSync(join(dir, '2026-09-01-1000-latin1.md')).equals(noUtf8)).toBe(true);
+
+      // Sin proyecto: todos.
+      const todos = await json(await api('POST', ruta, {}));
+      expect(todos).toMatchObject({ marked: 1, entries: 1 });
+      expect(readFileSync(join(harness, '.agent', 'history', '2026-10-01-0900-vieja.md'), 'utf8')).toContain('- [x] Del harness. (hecho ');
     } finally {
       ws.close();
     }

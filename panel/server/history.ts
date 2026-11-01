@@ -5,7 +5,8 @@ import { localDate, writeAtomic } from './backlog.ts';
 // Lectura del historial de iteraciones (rules/history.md) del checkout
 // principal de cada proyecto: `.agent/history/*.md`, sin subcarpetas (p. ej.
 // archive/) ni enlaces simbólicos. La única escritura es la marca de un punto
-// de «Pendiente de ti» como hecho (`- [x] … (hecho YYYY-MM-DD)`) o su retirada.
+// de «Pendiente de ti» como hecho (`- [x] … (hecho YYYY-MM-DD)`) o su retirada,
+// también en bloque para los de las entradas anteriores a la última.
 
 export const HISTORY_DIR = join('.agent', 'history');
 export const STATES = ['finalizada', 'en curso', 'bloqueada'] as const;
@@ -30,7 +31,7 @@ export type PendingPoint = {
 
 export type HistorySection = { title: string; body: string };
 
-export type HistoryEntry = {
+export type HistoryEntryBase = {
   project: string;
   file: string;
   title: string;
@@ -46,7 +47,15 @@ export type HistoryEntry = {
   etag: string;
 };
 
-export type HistoryDetail = HistoryEntry & {
+export type HistoryEntry = HistoryEntryBase & {
+  /**
+   * Es la última entrada de su proyecto con el criterio de bin/session-status
+   * (`latestKey`): sus pendientes abiertos son los vigentes.
+   */
+  latest: boolean;
+};
+
+export type HistoryDetailBase = HistoryEntryBase & {
   /** Ruta relativa a la raíz del proyecto, con barras `/`. */
   path: string;
   /** Valor literal de `Estado:`, o null si no hay. */
@@ -58,6 +67,8 @@ export type HistoryDetail = HistoryEntry & {
   /** Texto de «Pendiente de ti» que no forma parte de ningún punto. */
   pendingNotes: string;
 };
+
+export type HistoryDetail = HistoryDetailBase & { latest: boolean };
 
 export class HistoryError extends Error {
   readonly status: number;
@@ -258,7 +269,7 @@ function pendingPoint(p: RawPoint, index: number): PendingPoint {
 
 export type EntryContext = { project: string; file: string; etag: string; mtimeMs: number };
 
-export function parseEntry(source: string, ctx: EntryContext): HistoryDetail {
+export function parseEntry(source: string, ctx: EntryContext): HistoryDetailBase {
   const p = parse(source, ctx.file);
   const pending = p.points.map(pendingPoint);
   const abiertos = pending.filter((x) => !x.done);
@@ -284,6 +295,50 @@ export function parseEntry(source: string, ctx: EntryContext): HistoryDetail {
 export function toListEntry(d: HistoryDetail): HistoryEntry {
   const { path: _p, rawState: _r, sections: _s, hasPendingSection: _h, pending: _pe, pendingNotes: _n, ...entry } = d;
   return entry;
+}
+
+/**
+ * Clave de orden de bin/session-status (`latest_history`), «día<TAB>HHMM»: el
+ * día sale del primer `Fecha:` del archivo si empieza por `YYYY-MM-DD`, si no
+ * del nombre y, en último caso, del mtime local; la hora, de `Fecha:` si sigue
+ * con ` HH:MM`, si no del nombre `YYYY-MM-DD-HHMM-…` o del mtime. Como allí,
+ * no se validan los dígitos: la última entrada es la de clave mayor y, a
+ * igualdad, la de nombre mayor en orden de bytes.
+ */
+export function latestKey(source: string, file: string, mtimeMs: number): string {
+  const linea = /^Fecha:(.*)$/m.exec(source);
+  const stamp = linea ? linea[1]!.replace(/^ +/, '') : '';
+  const mt = fechaLocal(mtimeMs);
+  const day = /^\d{4}-\d{2}-\d{2}/.test(stamp) ? stamp.slice(0, 10) : /^\d{4}-\d{2}-\d{2}/.test(file) ? file.slice(0, 10) : mt.slice(0, 10);
+  const clock = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(stamp)
+    ? stamp.slice(11, 16).replace(':', '')
+    : /^\d{4}-\d{2}-\d{2}-\d{4}-/.test(file)
+      ? file.slice(11, 15)
+      : mt.slice(11, 16).replace(':', '');
+  return `${day}\t${clock}`;
+}
+
+/** Orden de `latest_history`: clave y, a igualdad, nombre en orden de bytes (LC_ALL=C). */
+export function compareLatest(a: { key: string; file: string }, b: { key: string; file: string }): number {
+  if (a.key !== b.key) return a.key < b.key ? -1 : 1;
+  return Buffer.compare(Buffer.from(a.file), Buffer.from(b.file));
+}
+
+/**
+ * Marca como hechos todos los puntos abiertos de «Pendiente de ti» con la
+ * misma edición mínima que `editPending`. Devuelve el texto y cuántos marcó.
+ */
+export function markAllPending(source: string, today: string): { text: string; marked: number } {
+  const p = parse(source, 'x.md');
+  let text = source;
+  let marked = 0;
+  // Marcar un punto no cambia dónde empiezan ni acaban los demás.
+  p.points.forEach((punto, i) => {
+    if (punto.text.startsWith('[x] ')) return;
+    text = editPending(text, i, true, today);
+    marked++;
+  });
+  return { text, marked };
 }
 
 /**
@@ -388,6 +443,14 @@ export async function historySignature(projectPath: string): Promise<string> {
 export const historyDirs = (projectPath: string): string[] => [join(projectPath, HISTORY_DIR)];
 
 export type HistoryProject = { id: string; path: string };
+export type MarkOldSkip = { project: string; file: string; reason: string };
+export type MarkOldResult = {
+  marked: number;
+  entries: number;
+  skipped: MarkOldSkip[];
+  /** Proyectos con alguna entrada modificada. */
+  projects: string[];
+};
 export type HistoryFilters = { project?: string | null; state?: HistoryState | null; pending?: boolean };
 
 /** Más reciente primero; a igual fecha, por nombre de archivo descendente. */
@@ -399,15 +462,15 @@ export function compareEntries(a: HistoryEntry, b: HistoryEntry): number {
 
 /** Lector del historial con caché por archivo (mtime y tamaño) y cola en serie por archivo para las marcas. */
 export class HistoryStore {
-  private readonly cache = new Map<string, { etag: string; entry: HistoryDetail }>();
+  private readonly cache = new Map<string, { etag: string; entry: HistoryDetailBase; key: string }>();
   private readonly locks = new Map<string, Promise<unknown>>();
   /** Para pruebas: número de archivos leídos del disco. */
   reads = 0;
 
-  private async load(project: string, a: Archivo): Promise<HistoryDetail | null> {
+  private async load(project: string, a: Archivo): Promise<{ entry: HistoryDetailBase; key: string } | null> {
     const etag = etagDe(a);
     const enCache = this.cache.get(a.abs);
-    if (enCache && enCache.etag === etag && enCache.entry.project === project) return enCache.entry;
+    if (enCache && enCache.etag === etag && enCache.entry.project === project) return enCache;
     let source: string;
     try {
       source = await readFile(a.abs, 'utf8');
@@ -416,8 +479,22 @@ export class HistoryStore {
     }
     this.reads++;
     const entry = parseEntry(source, { project, file: a.file, etag, mtimeMs: a.mtimeMs });
-    this.cache.set(a.abs, { etag, entry });
-    return entry;
+    const cargada = { etag, entry, key: latestKey(source, a.file, a.mtimeMs) };
+    this.cache.set(a.abs, cargada);
+    return cargada;
+  }
+
+  /** Todas las entradas legibles de un proyecto, cada una con `latest`. */
+  private async entriesOf(p: HistoryProject, vistos?: Set<string>): Promise<HistoryDetail[]> {
+    const cargadas: { entry: HistoryDetailBase; key: string; file: string }[] = [];
+    for (const a of await scan(p.path)) {
+      vistos?.add(a.abs);
+      const c = await this.load(p.id, a);
+      if (c) cargadas.push({ entry: c.entry, key: c.key, file: a.file });
+    }
+    let ultima: (typeof cargadas)[number] | null = null;
+    for (const c of cargadas) if (!ultima || compareLatest(c, ultima) > 0) ultima = c;
+    return cargadas.map((c) => ({ ...c.entry, latest: c === ultima }));
   }
 
   async list(projects: readonly HistoryProject[], filters: HistoryFilters = {}): Promise<HistoryEntry[]> {
@@ -425,10 +502,7 @@ export class HistoryStore {
     const vistos = new Set<string>();
     for (const p of projects) {
       if (filters.project && p.id !== filters.project) continue;
-      for (const a of await scan(p.path)) {
-        vistos.add(a.abs);
-        const e = await this.load(p.id, a);
-        if (!e) continue;
+      for (const e of await this.entriesOf(p, vistos)) {
         if (filters.state && e.state !== filters.state) continue;
         if (filters.pending && e.openPending === 0) continue;
         entradas.push(toListEntry(e));
@@ -471,9 +545,11 @@ export class HistoryStore {
 
   /** Entrada completa, o HistoryError 400 (nombre no válido), 403 (fuera del proyecto o de la carpeta), 404 o 413. */
   async get(project: HistoryProject, file: string): Promise<HistoryDetail> {
-    const entry = await this.load(project.id, await this.localizar(project, file));
-    if (!entry) throw new HistoryError(404, 'La entrada no existe.');
-    return entry;
+    const c = await this.load(project.id, await this.localizar(project, file));
+    if (!c) throw new HistoryError(404, 'La entrada no existe.');
+    // `latest` depende del resto de entradas del proyecto (todas en caché).
+    const latest = (await this.entriesOf(project)).some((e) => e.latest && e.file === file);
+    return { ...c.entry, latest };
   }
 
   private serial<T>(clave: string, tarea: () => Promise<T>): Promise<T> {
@@ -519,5 +595,54 @@ export class HistoryStore {
       this.cache.delete(abs);
       return this.get(project, file);
     });
+  }
+
+  /**
+   * Marca como hechos los pendientes abiertos de las entradas que no son la
+   * última de su proyecto, con las mismas salvaguardas que `setPending`
+   * (localización sin enlaces, UTF-8 estricto, cola por archivo y escritura
+   * atómica). Lo que no se puede marcar se omite y se informa en `skipped`.
+   */
+  async markOld(projects: readonly HistoryProject[], today = localDate()): Promise<MarkOldResult> {
+    const r: MarkOldResult = { marked: 0, entries: 0, skipped: [], projects: [] };
+    for (const p of projects) {
+      const viejas = (await this.entriesOf(p)).filter((e) => !e.latest && e.openPending > 0);
+      let cambiado = false;
+      for (const v of viejas) {
+        const omitir = (reason: string) => r.skipped.push({ project: p.id, file: v.file, reason });
+        await this.serial(join(p.path, HISTORY_DIR, v.file), async () => {
+          let abs: string;
+          let source: string;
+          try {
+            abs = (await this.localizar(p, v.file)).abs;
+            source = decodeStrict(await readFile(abs));
+          } catch (e) {
+            omitir(e instanceof HistoryError ? e.message : 'No se pudo leer la entrada.');
+            return;
+          }
+          let nuevo: { text: string; marked: number };
+          try {
+            nuevo = markAllPending(source, today);
+          } catch (e) {
+            omitir(e instanceof HistoryError ? e.message : 'No se pudo editar «Pendiente de ti».');
+            return;
+          }
+          // Ya marcados por otra vía entre la lista y la escritura.
+          if (nuevo.marked === 0) return;
+          try {
+            await writeAtomic(abs, nuevo.text);
+          } catch (e) {
+            omitir(`No se pudo guardar la entrada${e instanceof Error ? `: ${e.message}` : ''}.`);
+            return;
+          }
+          this.cache.delete(abs);
+          r.marked += nuevo.marked;
+          r.entries++;
+          cambiado = true;
+        });
+      }
+      if (cambiado) r.projects.push(p.id);
+    }
+    return r;
   }
 }

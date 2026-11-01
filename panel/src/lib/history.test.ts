@@ -10,8 +10,12 @@ import {
   groupByDay,
   groupByProject,
   hasFilters,
+  hasOldPending,
   listReload,
   loadHistoryFilters,
+  markOldNotice,
+  oldPendingCount,
+  oldPendingSummary,
   loadHistoryView,
   longDate,
   plainText,
@@ -35,6 +39,7 @@ const entrada = (parcial: Partial<HistoryEntry> & { file: string }): HistoryEntr
   openPending: 0,
   totalPending: 0,
   etag: '1-1',
+  latest: true,
   ...parcial,
 });
 
@@ -105,6 +110,48 @@ describe('filtros', () => {
     expect(hasFilters({ ...NO_HISTORY_FILTERS, pending: true })).toBe(true);
   });
 
+  it('pendientes vigentes por defecto y antiguos con «Incluir pendientes antiguos»', () => {
+    const l = [
+      entrada({ file: 'ultima.md', project: 'a', openPending: 1 }),
+      entrada({ file: 'vieja.md', project: 'a', openPending: 2, latest: false }),
+      entrada({ file: 'vieja-hecha.md', project: 'a', totalPending: 1, latest: false }),
+      entrada({ file: 'otra-vieja.md', project: 'b', openPending: 4, latest: false }),
+      entrada({ file: 'otra-ultima.md', project: 'b' }),
+    ];
+    expect(archivos(filterEntries(l, { ...NO_HISTORY_FILTERS, pending: true }))).toEqual(['ultima.md']);
+    expect(archivos(filterEntries(l, { ...NO_HISTORY_FILTERS, pending: true, includeOld: true }))).toEqual(['ultima.md', 'vieja.md', 'otra-vieja.md']);
+    // Sin «Solo con Pendiente de ti», la opción no filtra nada.
+    expect(filterEntries(l, { ...NO_HISTORY_FILTERS, includeOld: true })).toHaveLength(5);
+    expect(hasFilters({ ...NO_HISTORY_FILTERS, includeOld: true })).toBe(false);
+    expect(l.map(hasOldPending)).toEqual([false, true, false, true, false]);
+
+    // Lo que marcaría la limpieza: por proyecto o de todos, con los ocultos aparte.
+    expect(oldPendingSummary(l, '')).toEqual({ pending: 6, entries: 2, hiddenEntries: 0 });
+    expect(oldPendingSummary(l, 'a')).toEqual({ pending: 2, entries: 1, hiddenEntries: 0 });
+    expect(oldPendingSummary(l, '', new Set(['a']))).toEqual({ pending: 6, entries: 2, hiddenEntries: 1 });
+    expect(oldPendingSummary(l, 'nada')).toEqual({ pending: 0, entries: 0, hiddenEntries: 0 });
+    expect(oldPendingCount({ pending: 1, entries: 1 })).toBe('1 pendiente en 1 entrada');
+    expect(oldPendingCount({ pending: 6, entries: 2 })).toBe('6 pendientes en 2 entradas');
+  });
+
+  it('aviso del resultado de la limpieza', () => {
+    expect(markOldNotice({ marked: 6, entries: 2, skipped: [] })).toEqual({ kind: 'ok', text: 'Marcados como hechos 6 pendientes en 2 entradas.' });
+    expect(markOldNotice({ marked: 1, entries: 1, skipped: [] })).toEqual({ kind: 'ok', text: 'Marcado como hecho 1 pendiente en 1 entrada.' });
+    expect(markOldNotice({ marked: 0, entries: 0, skipped: [] })).toEqual({ kind: 'ok', text: 'No había pendientes antiguos que marcar.' });
+    expect(markOldNotice({ marked: 2, entries: 1, skipped: [{ file: 'x.md', reason: 'No está en UTF-8.' }] })).toEqual({
+      kind: 'warn',
+      text: 'Marcados como hechos 2 pendientes en 1 entrada. Se ha omitido: x.md (No está en UTF-8).',
+    });
+    expect(markOldNotice({ marked: 0, entries: 0, skipped: [{ file: 'x.md', reason: 'a' }, { file: 'y.md', reason: 'b' }] }).text).toBe(
+      'No había pendientes antiguos que marcar. Se han omitido 2 entradas: x.md (a); y.md (b).',
+    );
+  });
+
+  it('filtros guardados antes de «Incluir pendientes antiguos» la dejan desactivada', () => {
+    const almacen = { getItem: () => '{"project":"a","state":"","pending":true}' };
+    expect(loadHistoryFilters(almacen)).toEqual({ project: 'a', state: '', pending: true, includeOld: false });
+  });
+
   it('opciones de proyecto: el harness primero y el resto por nombre sin distinguir mayúsculas', () => {
     const mas = [...lista, entrada({ file: 'e.md', project: 'Zeta' }), entrada({ file: 'f.md', project: 'alfa' }), entrada({ file: 'g.md', project: 'Beta' })];
     expect(projectOptions(mas, 'jdev-ai')).toEqual(['jdev-ai', 'alfa', 'balanz.io', 'Beta', 'oculto', 'Zeta']);
@@ -115,7 +162,7 @@ describe('filtros', () => {
   it('recuerda los filtros y tolera almacenamiento roto o valores raros', () => {
     const datos = new Map<string, string>();
     const almacen = { getItem: (k: string) => datos.get(k) ?? null, setItem: (k: string, v: string) => void datos.set(k, v) };
-    const f = { project: 'balanz.io', state: 'en curso' as const, pending: true };
+    const f = { project: 'balanz.io', state: 'en curso' as const, pending: true, includeOld: true };
     saveHistoryFilters(f, almacen);
     expect(loadHistoryFilters(almacen)).toEqual(f);
     datos.set('jdev-panel:historial:filtros', '{"project":3,"state":"rara","pending":"sí"}');
@@ -138,7 +185,7 @@ describe('filtros', () => {
   it('al abrir Historial desde otra pantalla quita los filtros y conserva la vista', () => {
     const datos = new Map<string, string>();
     const almacen = { getItem: (k: string) => datos.get(k) ?? null, setItem: (k: string, v: string) => void datos.set(k, v) };
-    saveHistoryFilters({ project: 'balanz.io', state: 'bloqueada', pending: true }, almacen);
+    saveHistoryFilters({ project: 'balanz.io', state: 'bloqueada', pending: true, includeOld: true }, almacen);
     saveHistoryView('project', almacen);
     rememberHistoryFilters({}, almacen);
     expect(loadHistoryFilters(almacen)).toEqual(NO_HISTORY_FILTERS);

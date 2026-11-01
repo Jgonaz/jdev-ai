@@ -6,6 +6,7 @@ import {
   displayName,
   inicioTitle,
   lastEntryText,
+  pendingSource,
   pendingText,
   preferredSession,
   projectCards,
@@ -99,8 +100,10 @@ describe('textos del resumen', () => {
     expect(waitingChip(1)).toBe('1 te espera');
     expect(waitingChip(2)).toBe('2 te esperan');
     expect(restingChip(3)).toBe('3 en reposo');
-    expect(pendingText(1, 1)).toBe('1 pendiente de ti en 1 entrada');
-    expect(pendingText(3, 2)).toBe('3 pendientes de ti en 2 entradas');
+    expect(pendingText(1)).toBe('1 pendiente de ti');
+    expect(pendingText(3)).toBe('3 pendientes de ti');
+    expect(pendingSource(1)).toBe('En la última entrada del historial de un proyecto.');
+    expect(pendingSource(2)).toBe('En la última entrada del historial de cada proyecto (2 proyectos).');
   });
 
   it('tiempo relativo', () => {

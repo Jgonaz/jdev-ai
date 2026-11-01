@@ -64,6 +64,24 @@
   height: 16px;
   accent-color: var(--waiting);
 }
+/* «Incluir pendientes antiguos», subordinada a «Solo con «Pendiente de ti»». */
+.hlist__check--sub {
+  margin-top: -6px;
+  padding-left: 24px;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+/* Limpieza de los pendientes de entradas anteriores. */
+.hlist__cleanup {
+  align-self: flex-start;
+}
+.hlist__live:empty {
+  display: none;
+}
+.hlist__live .ddet__notice {
+  margin: 0;
+}
+
 .hlist__view {
   align-self: flex-start;
   display: flex;
@@ -348,6 +366,12 @@
 }
 .hpending__notes {
   font-size: var(--text-md);
+}
+/* Entrada anterior a la última de su proyecto: nota discreta. */
+.hpending__old {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
 }
 
 /* Secciones */

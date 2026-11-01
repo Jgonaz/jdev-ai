@@ -7,6 +7,7 @@ import type {
   GuideContent,
   HistoryDetail,
   HistoryEntry,
+  MarkOldResult,
   Overview,
   ProjectInfo,
   RecentSession,
@@ -125,6 +126,16 @@ export async function setHistoryPending(proyecto: string, archivo: string, index
     return { ok: false, status: res.status, error: res.ok ? 'Respuesta del panel ilegible.' : `Error ${res.status}` };
   }
 }
+
+/**
+ * POST /api/history/pending/mark-old: marca como hechos los pendientes de las
+ * entradas anteriores a la última de cada proyecto (o solo de `proyecto`).
+ */
+export const markOldPending = (proyecto: string | null) =>
+  request<MarkOldResult>('/api/history/pending/mark-old', {
+    method: 'POST',
+    body: JSON.stringify(proyecto ? { project: proyecto } : {}),
+  });
 
 const projectBase = (proyecto: string) => `/api/projects/${encodeURIComponent(proyecto)}`;
 

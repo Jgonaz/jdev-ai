@@ -101,6 +101,8 @@ export function HistoryReader(props: {
 
   const secciones = detalle.sections.filter((s) => s.body.trim() !== '');
   const conPendiente = detalle.pending.length > 0 || detalle.pendingNotes !== '';
+  // Solo cuentan como vigentes los de la última entrada del proyecto.
+  const antigua = !detalle.latest && detalle.pending.some((p) => !p.done);
 
   return (
     <article className="hreader" aria-labelledby={idTitulo}>
@@ -140,6 +142,7 @@ export function HistoryReader(props: {
               <span className="hpending__dot" aria-hidden="true" />
               Pendiente de ti
             </h2>
+            {antigua && <p className="hpending__old">Entrada anterior: estos pendientes no cuentan como vigentes.</p>}
             {detalle.pending.length > 0 && (
               <ul className="hpending__list">
                 {detalle.pending.map((p) => (

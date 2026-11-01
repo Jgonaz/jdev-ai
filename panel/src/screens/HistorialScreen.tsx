@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { api } from '../api.ts';
+import { api, markOldPending } from '../api.ts';
+import { IconAlert } from '../components/Icons.tsx';
+import { Modal } from '../components/Modal.tsx';
 import { Monogram } from '../components/Monogram.tsx';
 import { HistoryReader } from '../components/historial/Reader.tsx';
 import {
@@ -15,6 +17,9 @@ import {
   loadHistoryFilters,
   loadHistoryView,
   dayLabel,
+  markOldNotice,
+  oldPendingCount,
+  oldPendingSummary,
   plainText,
   projectOptions,
   saveHistoryFilters,
@@ -23,7 +28,7 @@ import {
   stateText,
   visibleInGroup,
 } from '../lib/history.ts';
-import type { HistoryFilters, HistoryView } from '../lib/history.ts';
+import type { HistoryFilters, HistoryView, OldPendingSummary } from '../lib/history.ts';
 import { historyHref } from '../lib/route.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import type { HistoryEntry, HistoryState, ProjectInfo } from '../types.ts';
@@ -73,6 +78,44 @@ function ProjectGroupView({ project, info, entries, selected }: { project: strin
   );
 }
 
+/** Confirmación de la limpieza de pendientes antiguos. */
+function MarkOldDialog(props: { project: string; summary: OldPendingSummary; busy: boolean; onCancel: () => void; onConfirm: () => void }) {
+  const { project, summary, busy } = props;
+  const donde =
+    project !== ''
+      ? `del proyecto ${project}`
+      : summary.hiddenEntries > 0
+        ? 'de todos los proyectos, también los ocultos en Ajustes'
+        : 'de todos los proyectos';
+  return (
+    <Modal
+      title="Marcar los pendientes antiguos"
+      role="alertdialog"
+      width={520}
+      initialFocus="[data-cancel]"
+      onClose={() => !busy && props.onCancel()}
+      footer={
+        <>
+          <button type="button" data-cancel className="btn btn--ghost btn--lg footer-push" onClick={props.onCancel} disabled={busy}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn--accent btn--lg" onClick={props.onConfirm} disabled={busy} aria-busy={busy || undefined}>
+            {busy ? 'Marcando…' : 'Marcar como hechos'}
+          </button>
+        </>
+      }
+    >
+      <div className="form">
+        <p className="confirm-text">
+          Se marcarán como hechos <strong>{oldPendingCount(summary)}</strong> anteriores a la última {donde}. Los pendientes de la última
+          entrada de cada proyecto no se tocan.
+        </p>
+        <p className="confirm-text">No se puede deshacer en bloque: después solo podrás desmarcarlos uno a uno desde cada entrada.</p>
+      </div>
+    </Modal>
+  );
+}
+
 /** Pantalla Historial (Registro.dc.html): lista de entradas de todos los proyectos y lector. */
 export function HistorialScreen(props: {
   project: string | null;
@@ -89,6 +132,10 @@ export function HistorialScreen(props: {
   const idProyecto = useId();
   const idEstado = useId();
   const idSolo = useId();
+  const idAntiguos = useId();
+  const [limpiar, setLimpiar] = useState(false);
+  const [limpiando, setLimpiando] = useState(false);
+  const [avisoLimpieza, setAvisoLimpieza] = useState<{ kind: 'ok' | 'warn' | 'error'; text: string } | null>(null);
 
   const cargar = useCallback(() => {
     const n = ++seq.current;
@@ -154,6 +201,22 @@ export function HistorialScreen(props: {
 
   const cambiar = (parche: Partial<HistoryFilters>) => setFiltros((f) => ({ ...f, ...parche }));
 
+  // La limpieza respeta el filtro de proyecto; sin él, abarca todos (como el servidor).
+  const antiguos = useMemo(() => oldPendingSummary(entries ?? [], efectivos.project, visibles), [entries, efectivos.project, visibles]);
+  const confirmarLimpieza = async () => {
+    setLimpiando(true);
+    try {
+      const r = await markOldPending(efectivos.project || null);
+      setAvisoLimpieza(markOldNotice(r));
+    } catch (e) {
+      setAvisoLimpieza({ kind: 'error', text: `No se pudieron marcar: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setLimpiando(false);
+      setLimpiar(false);
+      cargar();
+    }
+  };
+
   return (
     <div className="screen screen--historial">
       <section className="hlist" aria-label="Lista de entradas del historial">
@@ -200,6 +263,25 @@ export function HistorialScreen(props: {
             <input id={idSolo} type="checkbox" checked={efectivos.pending} onChange={(e) => cambiar({ pending: e.target.checked })} />
             Solo con «Pendiente de ti»
           </label>
+          {efectivos.pending && (
+            <label className="hlist__check hlist__check--sub" htmlFor={idAntiguos}>
+              <input id={idAntiguos} type="checkbox" checked={efectivos.includeOld} onChange={(e) => cambiar({ includeOld: e.target.checked })} />
+              Incluir pendientes antiguos
+            </label>
+          )}
+          {antiguos.entries > 0 && (
+            <button type="button" className="btn btn--ghost btn--sm hlist__cleanup" onClick={() => setLimpiar(true)} aria-haspopup="dialog">
+              Marcar como hechos los pendientes antiguos
+            </button>
+          )}
+          <div className="hlist__live" aria-live="polite">
+            {avisoLimpieza && (
+              <p className={`ddet__notice ddet__notice--${avisoLimpieza.kind}`} role={avisoLimpieza.kind === 'error' ? 'alert' : undefined}>
+                <IconAlert size={14} />
+                {avisoLimpieza.text}
+              </p>
+            )}
+          </div>
           <span className="sr-only" aria-live="polite">
             {entries ? `${filtradas.length} ${filtradas.length === 1 ? 'entrada' : 'entradas'}` : ''}
           </span>
@@ -250,6 +332,10 @@ export function HistorialScreen(props: {
           )}
         </div>
       </section>
+
+      {limpiar && (
+        <MarkOldDialog project={efectivos.project} summary={antiguos} busy={limpiando} onCancel={() => setLimpiar(false)} onConfirm={() => void confirmarLimpieza()} />
+      )}
 
       {props.project && props.file ? (
         <HistoryReader key={seleccion} project={props.project} file={props.file} listEntry={enLista} gone={desaparecida} onChanged={cargar} />

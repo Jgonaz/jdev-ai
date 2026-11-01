@@ -27,6 +27,11 @@ export type OverviewProject = {
 export type Overview = {
   /** Proyectos visibles, de más a menos reciente por `lastActivity`. */
   projects: OverviewProject[];
+  /**
+   * Pendientes vigentes: los abiertos de la última entrada de cada proyecto
+   * visible (como bin/session-status); `entriesWithPending` es cuántas de esas
+   * últimas entradas tienen alguno.
+   */
   history: { openPending: number; entriesWithPending: number };
   recent: HistoryEntry[];
   /** Primer nombre de `git config user.name`, o null. */
@@ -90,8 +95,8 @@ export async function buildOverview(input: OverviewInput): Promise<Overview> {
         else if (it.status === 'todo') backlog.todo++;
         else if (it.status === 'in-progress') backlog.inProgress++;
       }
-      // Las entradas ya vienen de más reciente a más antigua.
-      const ultima = entradas.find((e) => e.project === p.id) ?? null;
+      // La misma «última» que bin/session-status y que cuenta los pendientes vigentes.
+      const ultima = entradas.find((e) => e.project === p.id && e.latest) ?? null;
       let lastActivity = Math.max(mtimeBacklog, ultima ? entryTime(ultima.date) : 0);
       for (const s of input.sessions) if (s.project === p.id) lastActivity = Math.max(lastActivity, s.updatedAt);
       return {
@@ -109,6 +114,7 @@ export async function buildOverview(input: OverviewInput): Promise<Overview> {
   let openPending = 0;
   let entriesWithPending = 0;
   for (const e of entradas) {
+    if (!e.latest) continue;
     openPending += e.openPending;
     if (e.openPending > 0) entriesWithPending++;
   }

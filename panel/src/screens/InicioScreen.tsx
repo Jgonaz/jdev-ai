@@ -10,6 +10,7 @@ import {
   displayName,
   inicioTitle,
   lastEntryText,
+  pendingSource,
   pendingText,
   preferredSession,
   projectCards,
@@ -124,19 +125,20 @@ type Acciones = {
 function AttentionRow({ item, proyecto, ahora, acciones }: { item: AttentionItem; proyecto: (id: string) => ProjectInfo; ahora: number; acciones: Acciones }) {
   if (item.kind === 'pending') {
     const irAlHistorial = () => {
-      // El filtro recordado de Historial es el que se aplica al abrirlo.
-      rememberHistoryFilters({ pending: true });
+      // El filtro recordado de Historial es el que se aplica al abrirlo: solo
+      // los pendientes vigentes, como los que cuenta Inicio.
+      rememberHistoryFilters({ pending: true, includeOld: false });
       window.location.hash = historyHref();
     };
     return (
       <li className="att att--pending">
         <span className="att__mark" aria-hidden="true" />
         <span className="att__body">
-          <span className="att__title">{pendingText(item.openPending, item.entries)}</span>
-          <span className="att__text">Puntos de «Pendiente de ti» sin marcar en el historial.</span>
+          <span className="att__title">{pendingText(item.openPending)}</span>
+          <span className="att__text">{pendingSource(item.entries)}</span>
         </span>
         <span className="att__meta">historial</span>
-        <button type="button" className="att__btn att__btn--ghost" onClick={irAlHistorial} aria-label={`Ver en Historial: ${pendingText(item.openPending, item.entries)}`}>
+        <button type="button" className="att__btn att__btn--ghost" onClick={irAlHistorial} aria-label={`Ver en Historial: ${pendingText(item.openPending)}`}>
           Ver pendientes
         </button>
       </li>

@@ -644,7 +644,8 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   }
 
   // /api/history[/:project/:file[/pending]]: lista filtrada, detalle y marca de
-  // pendientes del historial del checkout principal de cada proyecto.
+  // pendientes del historial del checkout principal de cada proyecto, y
+  // /api/history/pending/mark-old: limpieza de los de entradas anteriores.
   async function historyApi(req: IncomingMessage, res: ServerResponse, pathname: string, url: URL, metodo: string): Promise<void> {
     const soloMetodo = (permitido: string): boolean => {
       if (metodo === permitido) return true;
@@ -669,6 +670,30 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         { project: proyecto, state: estado, pending: url.searchParams.get('pending') === '1' },
       );
       sendJson(res, 200, { entries: lista });
+      return;
+    }
+    // Antes que el detalle: «mark-old» no es un nombre de entrada válido (sin `.md`).
+    if (pathname === '/api/history/pending/mark-old') {
+      if (!soloMetodo('POST')) return;
+      const cuerpo = await parseJsonBody(req, res);
+      if (!cuerpo) return;
+      const pedido = cuerpo.project;
+      if (pedido !== undefined && pedido !== null && (typeof pedido !== 'string' || pedido === '')) {
+        sendJson(res, 400, { error: '«project» debe ser el identificador de un proyecto.' });
+        return;
+      }
+      const todos = (await sesiones.projectList()).map((p) => ({ id: p.id, path: p.path }));
+      const elegidos = typeof pedido === 'string' ? todos.filter((p) => p.id === pedido) : todos;
+      if (typeof pedido === 'string' && elegidos.length === 0) {
+        sendJson(res, 404, { error: 'El proyecto no existe.' });
+        return;
+      }
+      const r = await historial.markOld(elegidos);
+      for (const id of r.projects) {
+        await vigilanteHistorial.mark(id);
+        broadcast({ type: 'history', project: id });
+      }
+      sendJson(res, 200, { marked: r.marked, entries: r.entries, skipped: r.skipped });
       return;
     }
     const m = /^\/api\/history\/([^/]+)\/([^/]+)(\/pending)?$/.exec(pathname);

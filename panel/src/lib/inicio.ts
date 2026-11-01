@@ -108,9 +108,16 @@ export function attentionItems(
   return items;
 }
 
-/** «3 pendientes de ti en 2 entradas». */
-export function pendingText(abiertos: number, entradas: number): string {
-  return `${plural(abiertos, 'pendiente', 'pendientes')} de ti en ${plural(entradas, 'entrada', 'entradas')}`;
+/** «3 pendientes de ti»: solo los vigentes, los de la última entrada de cada proyecto. */
+export function pendingText(abiertos: number): string {
+  return `${plural(abiertos, 'pendiente', 'pendientes')} de ti`;
+}
+
+/** Subtítulo de los pendientes vigentes: de dónde salen y de cuántos proyectos. */
+export function pendingSource(entradas: number): string {
+  return entradas === 1
+    ? 'En la última entrada del historial de un proyecto.'
+    : `En la última entrada del historial de cada proyecto (${entradas} proyectos).`;
 }
 
 export type ProjectCard = {
