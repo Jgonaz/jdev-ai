@@ -37,6 +37,15 @@ export function summaryLine(proyectos: number, sesiones: number, worktrees: numb
   ].join(' · ');
 }
 
+/**
+ * Sesiones que cuentan en Inicio (recuentos, chips y tarjetas de proyecto): las
+ * archivadas no, salvo las que esperan a la persona, que siguen contando como en
+ * la cabecera y el título de la pestaña.
+ */
+export function countedSessions(sesiones: readonly SessionInfo[]): SessionInfo[] {
+  return sesiones.filter((s) => !s.archived || visualState(s) === 'waiting');
+}
+
 export type StateCounts = { waiting: number; working: number; resting: number };
 
 /**
@@ -73,16 +82,16 @@ export function relativeText(desde: number, ahora: number): string {
 }
 
 export type AttentionItem =
-  /** `hidden`: la sesión es de un proyecto oculto en Ajustes. */
-  | { kind: 'waiting'; session: SessionInfo; hidden: boolean }
+  /** `hidden`: la sesión es de un proyecto oculto en Ajustes; `archived`: la persona la archivó. */
+  | { kind: 'waiting'; session: SessionInfo; hidden: boolean; archived: boolean }
   | { kind: 'closed'; session: SessionInfo }
   | { kind: 'pending'; openPending: number; entries: number };
 
 /**
  * «Necesita tu atención», en orden: las sesiones que te esperan (la que lleva
  * más tiempo esperando, primero), las marcadas como cerradas que siguen
- * abiertas y el resumen de pendientes del historial. Las que esperan salen
- * todas, marcadas si su proyecto está en `ocultos`; las cerradas, solo las de
+ * abiertas (no las archivadas, que la persona ya apartó) y el resumen de pendientes del historial. Las que esperan salen
+ * todas, marcadas si su proyecto está en `ocultos` o si están archivadas; las cerradas, solo las de
  * proyectos `visibles`.
  */
 export function attentionItems(
@@ -96,9 +105,9 @@ export function attentionItems(
     ...sesiones
       .filter((s) => visualState(s) === 'waiting')
       .sort(porAntiguedad)
-      .map((session) => ({ kind: 'waiting' as const, session, hidden: ocultos.has(session.project) })),
+      .map((session) => ({ kind: 'waiting' as const, session, hidden: ocultos.has(session.project), archived: session.archived })),
     ...sesiones
-      .filter((s) => visibles.has(s.project) && visualState(s) === 'closed' && s.alive)
+      .filter((s) => visibles.has(s.project) && !s.archived && visualState(s) === 'closed' && s.alive)
       .sort(porAntiguedad)
       .map((session) => ({ kind: 'closed' as const, session })),
   ];

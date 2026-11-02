@@ -23,7 +23,7 @@ const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, ali
  * Sesiones vivas que no están abiertas en pestañas, ordenadas por estado y
  * después por actividad reciente. Los proyectos ocultos no cuentan, salvo las
  * sesiones que esperan (siempre cuentan, como en los avisos); `hideClosed` omite
- * las marcadas [Closed]. Una sesión de un proyecto desconocido se muestra con uno genérico.
+ * las marcadas [Closed]. Las archivadas no están aquí: tienen su propia sección. Una sesión de un proyecto desconocido se muestra con uno genérico.
  */
 export function liveUnopened(
   sessions: readonly SessionInfo[],
@@ -35,7 +35,7 @@ export function liveUnopened(
   const porId = new Map(projects.map((p) => [p.id, p]));
   const items: LiveItem[] = [];
   for (const session of sessions) {
-    if (!isLive(session) || abiertas.has(session.name)) continue;
+    if (!isLive(session) || session.archived || abiertas.has(session.name)) continue;
     const state = visualState(session);
     if (opciones.hideClosed && state === 'closed') continue;
     const project = porId.get(session.project) ?? fallbackProject(session.project);

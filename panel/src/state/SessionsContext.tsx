@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api, wsUrl } from '../api.ts';
+import { applyArchive } from '../lib/archive.ts';
 import { sessionNamesKey } from '../lib/recent.ts';
 import { effectiveProject } from '../lib/sessions.ts';
-import type { CommitPhase, ProjectInfo, RecentSession, SessionInfo } from '../types.ts';
+import { parseAccount } from '../lib/statusline.ts';
+import type { AccountLimits, CommitPhase, ProjectInfo, RecentSession, SessionInfo } from '../types.ts';
 import { useSettings } from './SettingsContext.tsx';
 
 type SessionsValue = {
@@ -17,12 +19,16 @@ type SessionsValue = {
   loaded: boolean;
   connected: boolean;
   error: string | null;
+  /** Límites de 5 h y 7 días de la cuenta (de la sesión de Claude del panel con datos más recientes); null si no se conocen. */
+  account: AccountLimits | null;
   /** Añade o sustituye una sesión recién creada sin esperar al evento. */
   upsert: (s: SessionInfo) => void;
   reloadProjects: () => void;
   /** Sesiones recientes de Claude que se pueden retomar (sin las que ya están en el panel). */
   recent: RecentSession[];
   reloadRecent: () => void;
+  /** Archiva o desarchiva una sesión del panel (por su nombre) o una conversación de «Anteriores» (por su id); lanza si el servidor la rechaza. */
+  setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) => Promise<void>;
   /** Suscribe a los avisos `{type:'backlog', project}` de /ws/events; devuelve la baja. */
   onBacklogChange: (cb: (project: string) => void) => () => void;
   /** Suscribe a los avisos `{type:'history', project}` de /ws/events; devuelve la baja. */
@@ -48,6 +54,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentSession[]>([]);
+  const [account, setAccount] = useState<AccountLimits | null>(null);
   const recentSeq = useRef(0);
   const backlogListeners = useRef(new Set<(project: string) => void>());
   const onBacklogChange = useCallback((cb: (project: string) => void) => {
@@ -132,10 +139,15 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       };
       ws.onmessage = (ev) => {
         try {
-          const msg = JSON.parse(String(ev.data)) as { type?: string; sessions?: SessionInfo[]; project?: unknown; phase?: unknown };
+          const msg = JSON.parse(String(ev.data)) as { type?: string; sessions?: SessionInfo[]; account?: unknown; project?: unknown; phase?: unknown };
           if (msg.type === 'sessions' && Array.isArray(msg.sessions)) {
             setSessions(msg.sessions);
             setLoaded(true);
+          } else if (msg.type === 'archive') {
+            // Otra ventana archivó o desarchivó algo: las sesiones llegan solas, las conversaciones se recargan.
+            reloadRecent();
+          } else if (msg.type === 'account') {
+            setAccount(parseAccount(msg.account));
           } else if (msg.type === 'backlog' && typeof msg.project === 'string') {
             const proyecto = msg.project;
             for (const cb of backlogListeners.current) cb(proyecto);
@@ -169,11 +181,25 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       if (reintento !== null) window.clearTimeout(reintento);
       ws?.close();
     };
-  }, []);
+  }, [reloadRecent]);
 
-  // Al recuperar la conexión se refrescan también los proyectos (pueden haber cambiado).
+  // Al recuperar la conexión se refrescan también los proyectos (pueden haber cambiado)
+  // y los límites de la cuenta, que no se envían al conectar.
   useEffect(() => {
-    if (connected) reloadProjects();
+    if (!connected) return;
+    reloadProjects();
+    let cancelado = false;
+    api
+      .account()
+      .then((a) => {
+        if (!cancelado) setAccount(parseAccount(a));
+      })
+      .catch(() => {
+        // Es una ayuda secundaria: sin límites, el botón se oculta.
+      });
+    return () => {
+      cancelado = true;
+    };
   }, [connected, reloadProjects]);
 
   // Recientes: al cargar, al cambiar qué sesiones hay en el panel (con debounce),
@@ -206,9 +232,16 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     setSessions((previas) => (previas.some((p) => p.name === s.name) ? previas.map((p) => (p.name === s.name ? s : p)) : [...previas, s]));
   }, []);
 
+  // La respuesta trae la lista completa: se aplica al momento, sin esperar al evento ni a la recarga.
+  const setArchived = useCallback(async (kind: 'session' | 'conversation', id: string, archived: boolean) => {
+    const lista = await api.setArchived(kind, id, archived);
+    setSessions((s) => applyArchive(s, lista));
+    setRecent((r) => applyArchive(r, lista));
+  }, []);
+
   const valor = useMemo<SessionsValue>(
-    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent, onBacklogChange, onHistoryChange, onBacklogCommitPhase }),
-    [sessions, projects, tmuxSocket, home, loaded, connected, error, upsert, reloadProjects, recent, reloadRecent, onBacklogChange, onHistoryChange, onBacklogCommitPhase],
+    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, onBacklogChange, onHistoryChange, onBacklogCommitPhase }),
+    [sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, onBacklogChange, onHistoryChange, onBacklogCommitPhase],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

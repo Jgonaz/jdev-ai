@@ -66,7 +66,7 @@ export function useSessionMenu(opciones: { withOpen?: boolean; onTabClosed?: () 
 
   const alTerminar = useCallback((id: number) => setTarget((t) => (t?.id === id ? null : t)), []);
   const menu: ReactNode = target ? <SessionMenuHost key={target.id} target={target} withOpen={withOpen} onTabClosed={alCerrarPestana} onDone={alTerminar} /> : null;
-  return { menu, onContextMenu, onKeyDown };
+  return { menu, open: target !== null, onContextMenu, onKeyDown };
 }
 
 const ERROR_MS = 4000;

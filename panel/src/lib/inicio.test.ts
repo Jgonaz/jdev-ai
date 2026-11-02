@@ -3,6 +3,7 @@ import type { OverviewProject, ProjectInfo, SessionInfo } from '../types.ts';
 import {
   activityWhen,
   attentionItems,
+  countedSessions,
   displayName,
   inicioTitle,
   lastEntryText,
@@ -34,6 +35,9 @@ function sesion(name: string, parche: Partial<SessionInfo> = {}): SessionInfo {
     updatedAt: 0,
     created: 0,
     notice: '',
+    usage: null,
+    activity: null,
+    archived: false,
     ...parche,
   };
 }
@@ -165,6 +169,28 @@ describe('recuentos de estado', () => {
   });
 });
 
+describe('sesiones archivadas en Inicio', () => {
+  it('solo cuentan las archivadas que esperan a la persona', () => {
+    const lista = [
+      sesion('normal', { state: 'working' }),
+      sesion('arch-trabaja', { state: 'working', archived: true }),
+      sesion('arch-reposo', { archived: true }),
+      sesion('arch-espera', { state: 'waiting', archived: true }),
+    ];
+    expect(countedSessions(lista).map((s) => s.name)).toEqual(['normal', 'arch-espera']);
+    expect(stateCounts(countedSessions(lista), new Set(['a']))).toEqual({ waiting: 1, working: 1, resting: 0 });
+    // El aviso de la cabecera cuenta todas las que esperan, archivadas o no.
+    expect(waitingCount(lista)).toBe(1);
+  });
+
+  it('las tarjetas de proyecto no ven las archivadas que no esperan', () => {
+    const lista = [sesion('n', { updatedAt: 5 }), sesion('arch', { archived: true, updatedAt: 99 })];
+    const tarjetas = projectCards([proyecto('a')], [{ id: 'a', branch: 'main', backlog: { backlog: 0, todo: 0, inProgress: 0 }, worktrees: 0, lastActivity: 1, lastEntry: null }], countedSessions(lista));
+    expect(tarjetas[0]!.sessions.map((s) => s.name)).toEqual(['n']);
+    expect(tarjetas[0]!.lastActivity).toBe(5);
+  });
+});
+
 describe('necesita tu atención', () => {
   const visibles = new Set(['a', 'b']);
 
@@ -202,6 +228,30 @@ describe('necesita tu atención', () => {
       new Set(['x']),
     );
     expect(items.map((i) => (i.kind === 'waiting' ? `${i.session.name}:${i.hidden}` : i.kind))).toEqual(['w-oculta:true', 'w:false']);
+  });
+
+  it('una sesión archivada que espera sigue en la lista y va marcada; sus cerradas ya no', () => {
+    const items = attentionItems(
+      [
+        sesion('w-arch', { state: 'waiting', archived: true, updatedAt: 1 }),
+        sesion('w', { state: 'waiting', updatedAt: 2 }),
+        sesion('c-arch', { state: 'idle', closed: true, archived: true }),
+        sesion('c', { state: 'idle', closed: true }),
+      ],
+      visibles,
+      null,
+    );
+    expect(items.map((i) => (i.kind === 'waiting' ? `${i.session.name}:${i.archived}` : i.kind === 'closed' ? `closed:${i.session.name}` : i.kind))).toEqual([
+      'w-arch:true',
+      'w:false',
+      'closed:c',
+    ]);
+  });
+
+  it('las archivadas que esperan cuentan en el aviso, igual que las de proyectos ocultos', () => {
+    const lista = [sesion('w-arch', { state: 'waiting', archived: true }), sesion('w', { state: 'waiting' })];
+    expect(waitingCount(lista)).toBe(2);
+    expect(stateCounts(lista, new Set(['a'])).waiting).toBe(2);
   });
 
   it('sin nada que atender devuelve una lista vacía', () => {

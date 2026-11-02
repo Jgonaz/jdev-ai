@@ -249,7 +249,10 @@
   font-weight: 600;
 }
 .pill {
+  position: relative;
   display: flex;
+  flex: none;
+  white-space: nowrap;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
@@ -258,6 +261,23 @@
   background: var(--waiting-bg);
   color: var(--waiting-text);
   font-size: var(--text-md);
+}
+.pill__short {
+  display: none;
+}
+/* En la cabecera estrecha la píldora dice «1 te espera» (el texto accesible sigue siendo el largo). */
+@media (max-width: 1279.98px) {
+  .pill__long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .pill__short {
+    display: inline;
+  }
 }
 .pill__dot {
   width: 8px;

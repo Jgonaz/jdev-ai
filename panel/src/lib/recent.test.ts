@@ -40,6 +40,7 @@ const reciente = (id: string, project: string, extra: Partial<RecentSession> = {
   lastActivity: AHORA - 60 * MIN,
   possiblyOpen: false,
   sizeBytes: 100,
+  archived: false,
   ...extra,
 });
 

@@ -15,6 +15,8 @@ const HORA = 60 * 60 * 1000;
 export const RECENT_MAX_AGE_MS = 30 * 24 * HORA;
 /** Máximo de sesiones recientes por proyecto (checkout principal y worktrees juntos). */
 export const RECENT_MAX_PER_PROJECT = 15;
+/** Máximo de conversaciones archivadas por proyecto: su cuota es aparte, no gasta la de las demás. */
+export const RECENT_MAX_ARCHIVED_PER_PROJECT = 15;
 /** Una sesión modificada hace menos de esto puede seguir abierta en otra ventana. */
 export const POSSIBLY_OPEN_MS = 3 * 60 * 1000;
 /**
@@ -133,8 +135,16 @@ export class RecentIndex {
    * Sesiones recientes de los proyectos dados, de la más reciente a la más
    * antigua, sin las de `exclude` (ids que ya están en el panel), sin las
    * vacías y con los límites de RECENT_MAX_AGE_MS y RECENT_MAX_PER_PROJECT.
+   * Los ids de `archived` no cuentan en ese máximo (archivar deja ver las
+   * siguientes): se listan aparte, con su propio máximo, y solo dentro de los
+   * últimos RECENT_MAX_AGE_MS; las más antiguas no se muestran aunque sigan archivadas.
    */
-  async list(projects: readonly Project[], exclude: ReadonlySet<string> = new Set()): Promise<RecentSession[]> {
+  async list(
+    projects: readonly Project[],
+    exclude: ReadonlySet<string> = new Set(),
+    archived: Iterable<string> = [],
+  ): Promise<RecentSession[]> {
+    const archivadas = new Set(archived);
     const ahora = this.now();
     const porProyecto = new Map<string, Candidate[]>();
     for (const lista of await Promise.all(this.locations(projects).map((l) => this.candidates(l)))) {
@@ -150,8 +160,10 @@ export class RecentIndex {
     for (const lista of porProyecto.values()) {
       lista.sort((a, b) => b.mtimeMs - a.mtimeMs || a.id.localeCompare(b.id));
       let n = 0;
+      let nArchivadas = 0;
       for (const c of lista) {
-        if (n >= RECENT_MAX_PER_PROJECT) break;
+        const archivada = archivadas.has(c.id);
+        if (archivada ? nArchivadas >= RECENT_MAX_ARCHIVED_PER_PROJECT : n >= RECENT_MAX_PER_PROJECT) continue;
         if (!(await this.hasMessages(c))) continue;
         const bruto = bestTitle(await this.titles.readTitles(c.path));
         const parsed = bruto === null ? null : parseTitle(bruto);
@@ -165,7 +177,8 @@ export class RecentIndex {
           possiblyOpen: ahora - c.mtimeMs < POSSIBLY_OPEN_MS,
           sizeBytes: c.size,
         });
-        n++;
+        if (archivada) nArchivadas++;
+        else n++;
       }
     }
     salida.sort((a, b) => b.lastActivity - a.lastActivity || a.id.localeCompare(b.id));

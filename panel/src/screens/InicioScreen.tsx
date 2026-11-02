@@ -7,6 +7,7 @@ import { rememberHistoryFilters, stateClass, stateText } from '../lib/history.ts
 import {
   activityWhen,
   attentionItems,
+  countedSessions,
   displayName,
   inicioTitle,
   lastEntryText,
@@ -148,6 +149,7 @@ function AttentionRow({ item, proyecto, ahora, acciones }: { item: AttentionItem
   const p = proyecto(s.project);
   const espera = item.kind === 'waiting';
   const oculto = item.kind === 'waiting' && item.hidden;
+  const archivada = item.kind === 'waiting' && item.archived;
   return (
     <li className={`att ${espera ? 'att--waiting' : 'att--closed'}`}>
       <StatusLight state={visualState(s)} />
@@ -175,6 +177,12 @@ function AttentionRow({ item, proyecto, ahora, acciones }: { item: AttentionItem
             {' '}
             · proyecto oculto
           </span>
+        )}
+        {archivada && (
+          <span className="att__hidden" title="Archivada en la barra lateral: sus avisos llegan igual">
+            {' '}
+            · archivada
+          </span>
         )}{' '}
         · {relativeText(s.updatedAt, ahora)}
       </span>
@@ -182,7 +190,7 @@ function AttentionRow({ item, proyecto, ahora, acciones }: { item: AttentionItem
         type="button"
         className={`att__btn ${espera ? 'att__btn--accent' : 'att__btn--ghost'}`}
         onClick={() => acciones.abrirSesion(s)}
-        aria-label={`${espera ? 'Responder' : 'Revisar'}: ${s.title} (${p.name}${oculto ? ', proyecto oculto' : ''})`}
+        aria-label={`${espera ? 'Responder' : 'Revisar'}: ${s.title} (${p.name}${oculto ? ', proyecto oculto' : ''}${archivada ? ', archivada' : ''})`}
       >
         {espera ? 'Responder' : 'Revisar'}
       </button>
@@ -266,13 +274,15 @@ function ProjectCardView({ card, ahora, acciones }: { card: ProjectCard; ahora: 
 
 /** Pantalla Inicio: qué te necesita y dónde está el trabajo de todos los proyectos. Solo lee. */
 export function InicioScreen({ onGoToTerminal }: { onGoToTerminal: () => void }) {
-  const { sessions, projects, loaded } = useSessions();
+  const { sessions: todas, projects, loaded } = useSessions();
   const { settings } = useSettings();
   const { openSession, activate, openDialog } = useWorkspace();
   const { overview, error } = useOverview();
   const ahora = useNow();
   const fecha = new Date(ahora);
 
+  // Las archivadas no cuentan en los recuentos ni en las tarjetas, salvo las que esperan.
+  const sessions = useMemo(() => countedSessions(todas), [todas]);
   const visibles = useMemo(() => projects.filter((p) => p.visible), [projects]);
   const idsVisibles = useMemo(() => new Set(visibles.map((p) => p.id)), [visibles]);
   const idsOcultos = useMemo(() => new Set(projects.filter((p) => !p.visible).map((p) => p.id)), [projects]);

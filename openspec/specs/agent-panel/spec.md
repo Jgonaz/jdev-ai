@@ -490,3 +490,170 @@ Ajustes SHALL incluir «Tu nombre», que se usa en el saludo y que, si está vac
 - **WHEN** la persona elige «Pantalla al abrir: Terminales» y abre la URL del panel sin ruta
 - **THEN** el panel muestra Terminales
 
+### Requirement: Estado de la sesión en la cabecera de la terminal
+
+La cabecera de cada terminal del panel SHALL mostrar:
+
+1. El título de la sesión, con su estado y el menú de acciones a la derecha.
+2. En una sola línea:
+   - el proyecto;
+   - la rama o, en un worktree, su nombre y rama;
+   - el agente o, en sesiones de Claude con datos, el modelo y el esfuerzo;
+   - el tiempo desde que se creó la sesión;
+   - a continuación de lo anterior, la barra de contexto con el porcentaje y los tokens usados y disponibles, si hay datos.
+3. Solo cuando haya trabajo en curso: chips con el número de subagentes activos, de shells en segundo plano y de artifacts publicados en la sesión. Cada chip SHALL desplegar el detalle: tipo de subagente y desde cuándo, comando de la shell, y enlace y título del artifact.
+
+La barra de contexto SHALL ser neutra por debajo del 50 %, ámbar desde el 50 % y roja desde el 80 %, con el porcentaje en texto y, en rojo, un icono. El color y el icono SHALL decidirse con el porcentaje mostrado (redondeado): 49,6 % se muestra «50 %» y es ámbar; 79,6 %, «80 %» y rojo.
+
+Si los datos llevan más de 15 minutos sin cambiar y la sesión no está trabajando, SHALL mostrarse atenuados y con su antigüedad, sin que el texto pierda contraste (4,5:1).
+
+En columnas estrechas, SHALL ocultar el proyecto, el tiempo y los tokens, y mostrar el trabajo en curso como contadores junto al título.
+
+Los datos de modelo, esfuerzo, contexto y trabajo en curso SHALL obtenerse solo de las sesiones de Claude lanzadas desde el panel. Las demás SHALL mostrar el proyecto, la rama, el agente y el tiempo.
+
+#### Scenario: Sesión de Claude trabajando con subagentes
+
+- **WHEN** una sesión de Claude del panel usa el 19 % del contexto y tiene tres subagentes activos
+- **THEN** su cabecera muestra la barra de contexto al 19 % al final de la línea de datos y, debajo, el chip «3 subagentes», que al pulsarlo lista sus tipos y desde cuándo funcionan
+
+#### Scenario: Contexto casi lleno
+
+- **WHEN** el contexto de una sesión pasa del 80 %
+- **THEN** la barra y el porcentaje se muestran en rojo con un icono de aviso
+
+#### Scenario: Sesión de Codex
+
+- **WHEN** la persona abre una sesión de Codex en el panel
+- **THEN** la cabecera muestra el proyecto, la rama, «codex» y el tiempo, sin barra de contexto ni chips
+
+#### Scenario: Sin trabajo en curso
+
+- **WHEN** una sesión no tiene subagentes, shells en segundo plano ni artifacts
+- **THEN** la cabecera ocupa dos filas, sin la fila de chips
+
+### Requirement: Límites de la cuenta y agente por defecto en la cabecera global
+
+La cabecera global del panel SHALL mostrar, en todas las pantallas salvo Ajustes:
+
+- El agente por defecto de las sesiones nuevas, con un menú para cambiarlo, que guarda el mismo ajuste que el diálogo «Nueva sesión» (por debajo de 1024 px, solo con su icono, igual que «Nueva sesión»).
+- Los límites de uso de 5 horas y de 7 días de la cuenta, como dos barras con su porcentaje y los mismos umbrales que el contexto (por debajo de 1280 px, solo con el porcentaje, sin barras). Al pulsarlos, SHALL mostrar a qué hora se reinicia cada uno y la antigüedad del dato.
+
+Los límites SHALL tomarse de la sesión de Claude del panel con datos más recientes y SHALL ocultarse si no hay ninguna.
+
+#### Scenario: Consultar cuándo se reinicia el límite
+
+- **WHEN** la persona pulsa los límites con la ventana de 5 horas al 91 %
+- **THEN** ve la barra de 5 h en rojo y que se reinicia hoy a las 21:20
+
+#### Scenario: Cambiar el agente por defecto
+
+- **WHEN** la persona elige Codex en el menú del agente por defecto
+- **THEN** la cabecera muestra Codex y el diálogo «Nueva sesión» lo propone como agente
+
+### Requirement: Statusline de Claude en las sesiones del panel
+
+Cuando `bin/agent` lance Claude con `JDEV_SURFACE=panel`, SHALL configurar como statusline un script del harness que guarde los datos que recibe en el directorio de estado del panel y no imprima nada. Así la terminal del panel no repite lo que muestra la cabecera.
+
+Con `JDEV_SURFACE=terminal`, `bin/agent` SHALL NOT cambiar la statusline de la persona.
+
+Los datos de subagentes, tareas en segundo plano y artifacts SHALL llegar por hooks de Claude que solo escriben en el directorio de estado y nunca interrumpen al agente.
+
+#### Scenario: Sesión del panel
+
+- **WHEN** la persona abre una sesión de Claude desde el panel
+- **THEN** la terminal no muestra la statusline y la cabecera del panel muestra sus datos
+
+#### Scenario: Terminal normal
+
+- **WHEN** la persona lanza `bin/agent` desde una terminal normal
+- **THEN** Claude muestra la statusline configurada por la persona, sin cambios
+
+### Requirement: Tooltip de las conversaciones de la barra lateral
+
+Al pasar el ratón por una sesión o una conversación de «Anteriores» de la barra lateral, o al darle el foco con el teclado, el panel SHALL mostrar un tooltip con su título completo, su proyecto, su rama o worktree y su agente.
+
+Si la sesión está viva y tiene datos de la statusline, el tooltip SHALL añadir:
+
+- el modelo y el esfuerzo;
+- la barra de contexto con los mismos umbrales que la cabecera de la terminal;
+- el tiempo de sesión;
+- los subagentes, shells y artifacts en curso.
+
+El tooltip SHALL cerrarse al salir de la fila, al perder el foco o con Esc.
+
+#### Scenario: Título recortado
+
+- **WHEN** la persona pasa el ratón por una sesión cuyo título no cabe en la barra
+- **THEN** el tooltip muestra el título completo con su proyecto, rama y agente
+
+#### Scenario: Sesión viva de Claude
+
+- **WHEN** la persona pasa el ratón por una sesión de Claude viva con el contexto al 62 % y dos subagentes
+- **THEN** el tooltip muestra también el modelo, el esfuerzo, la barra de contexto en ámbar, el tiempo y «2 subagentes»
+
+### Requirement: Archivar conversaciones de la barra lateral
+
+El menú contextual de las sesiones del panel y de las conversaciones de «Anteriores» SHALL ofrecer «Archivar». Lo archivado SHALL dejar de mostrarse en su proyecto, en «Anteriores» y en «En segundo plano», y SHALL aparecer en una sección «Archivadas (N)» plegable, debajo de «En segundo plano». Esa sección SHALL ocultarse si está vacía.
+
+Desde «Archivadas», la persona SHALL poder abrir una sesión, retomar una conversación y desarchivarlas.
+
+Archivar SHALL NOT terminar la sesión ni cerrar su pestaña. Una sesión archivada que espera a la persona SHALL seguir contando en los avisos de la cabecera, el título de la pestaña e Inicio. En Inicio, las demás sesiones archivadas SHALL NOT contar en los recuentos «trabajando» y «en reposo» ni en las tarjetas de proyecto.
+
+Las conversaciones archivadas SHALL NOT contar en el límite de «Anteriores»: archivar una SHALL dejar aparecer la siguiente. Retomar una conversación archivada SHALL desarchivarla.
+
+La lista de archivadas SHALL guardarse en la configuración del panel y conservarse al reiniciarlo. Las sesiones archivadas que dejan de existir SHALL salir de la lista.
+
+#### Scenario: Archivar una sesión viva
+
+- **WHEN** la persona archiva una sesión de Claude que sigue trabajando
+- **THEN** desaparece de su proyecto, aparece en «Archivadas» con su luz de estado y sigue trabajando
+
+#### Scenario: Desarchivar
+
+- **WHEN** la persona elige «Desarchivar» en una conversación de «Archivadas»
+- **THEN** vuelve a «Anteriores» de su proyecto
+
+#### Scenario: Archivar deja aparecer la siguiente
+
+- **WHEN** un proyecto tiene más conversaciones que el límite de «Anteriores» y la persona archiva una de ellas
+- **THEN** «Anteriores» sigue mostrando el mismo número de conversaciones, con la siguiente en antigüedad
+
+#### Scenario: Retomar una archivada
+
+- **WHEN** la persona retoma una conversación de «Archivadas»
+- **THEN** se crea la sesión en el panel y la conversación deja de estar archivada
+
+#### Scenario: Sesión archivada que trabaja
+
+- **WHEN** una sesión archivada está trabajando
+- **THEN** Inicio no la cuenta en «trabajando» ni la muestra en la tarjeta de su proyecto
+
+#### Scenario: Sesión archivada que espera
+
+- **WHEN** una sesión archivada pide permiso
+- **THEN** la cabecera y la pestaña cuentan «1 sesión te espera» e Inicio la muestra en «Necesita tu atención»
+
+### Requirement: Proyecto por defecto de Worktrees
+
+Al abrir Worktrees sin proyecto en la ruta, el panel SHALL mostrar el primer proyecto visible con worktrees abiertos o, si ninguno tiene, el primer proyecto visible. Backlog y Guías SHALL seguir mostrando el último proyecto usado.
+
+#### Scenario: Un proyecto con worktrees
+
+- **WHEN** la persona abre Proyectos › Worktrees y solo balanz.io tiene worktrees abiertos
+- **THEN** se muestran los worktrees de balanz.io
+
+#### Scenario: Ninguno con worktrees
+
+- **WHEN** ningún proyecto tiene worktrees abiertos
+- **THEN** se muestran los worktrees del primer proyecto visible
+
+#### Scenario: Lo escogido por defecto no se recuerda
+
+- **WHEN** la persona abre Backlog de ccc, luego Proyectos › Worktrees (que abre bbb) y después Proyectos › Backlog
+- **THEN** Backlog muestra ccc
+
+#### Scenario: Backlog no cambia
+
+- **WHEN** la persona abre Proyectos › Backlog sin proyecto en la ruta
+- **THEN** se muestra el backlog del último proyecto usado
+

@@ -1,0 +1,102 @@
+#!/bin/sh
+
+# Statusline de Claude Code para el panel gráfico (bin/panel). Claude Code la
+# ejecuta (statusLine de tipo «command») cada vez que cambia la sesión y le pasa
+# su estado en JSON por stdin: modelo, esfuerzo, ventana de contexto, límites de
+# la cuenta, rama o worktree, etc. Este script lo guarda tal cual, sin
+# interpretarlo, en
+#
+#   ${XDG_STATE_HOME:-$HOME/.local/state}/jdev-ai/statusline/<session_id>.json
+#
+# y NO imprime nada, de modo que la terminal del panel no dibuja statusline: sus
+# datos los muestra la cabecera de la terminal del panel, que lee este archivo.
+# Solo lo instala bin/agent con JDEV_SURFACE=panel.
+#
+# Se descartan las entradas de más de 64 KiB, porque no son una statusline.
+#
+# Nunca interrumpe al agente: ante cualquier problema termina con código 0 y
+# sin salida alguna.
+
+set -u
+
+exec >/dev/null 2>&1
+tmp=
+trap '[ -z "$tmp" ] || rm -f "$tmp"; exit 0' EXIT HUP INT TERM
+
+MAX_BYTES=65536
+
+# Una entrada interactiva no es una statusline: no espera a que se escriba nada.
+[ -t 0 ] && exit 0
+
+state_root=${XDG_STATE_HOME:-${HOME:-}/.local/state}
+[ -n "$state_root" ] && [ "$state_root" != "/.local/state" ] || exit 0
+dir="$state_root/jdev-ai/statusline"
+mkdir -p -- "$dir" || exit 0
+
+# Se lee un byte más que el máximo para distinguir «justo el máximo» de «se pasa»
+# sin leer una entrada sin fin. El temporal vive en el mismo directorio para que
+# mv sea una renombración atómica; el punto inicial evita que se lea como una
+# sesión.
+tmp=$(mktemp "$dir/.tmp.XXXXXX") || exit 0
+head -c $((MAX_BYTES + 1)) > "$tmp" || exit 0
+size=$(wc -c < "$tmp") || exit 0
+[ "$size" -gt 0 ] && [ "$size" -le "$MAX_BYTES" ] || exit 0
+
+# Valor de «session_id» (cadena del objeto de primer nivel), tal como viene
+# escapado. Recorre el texto para no confundir la clave con el contenido de otro
+# valor; si no es JSON bien formado hasta el campo, no imprime nada.
+session_id=$(awk '
+    { buf = buf (NR > 1 ? " " : "") $0 }
+    END {
+        gsub(/[\001-\037]/, " ", buf)
+        n = length(buf); depth = 0; expect = ""; curkey = ""
+        for (i = 1; i <= n; i++) {
+            c = substr(buf, i, 1)
+            if (c == "{" || c == "[") {
+                depth++
+                if (depth == 1) expect = "key"
+            } else if (c == "}" || c == "]") {
+                depth--
+            } else if (depth == 1 && c == ":") {
+                expect = "value"
+            } else if (depth == 1 && c == ",") {
+                expect = "key"
+            } else if (c == "\"") {
+                j = i + 1
+                while (j <= n) {
+                    ch = substr(buf, j, 1)
+                    if (ch == "\\") {
+                        nx = substr(buf, j + 1, 1)
+                        if (nx == "u") {
+                            if (substr(buf, j + 2, 4) !~ /^[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/) exit
+                            j += 6
+                        } else if (nx != "" && index("\"\\/bfnrt", nx) > 0) {
+                            j += 2
+                        } else exit
+                    } else if (ch == "\"") {
+                        break
+                    } else {
+                        j++
+                    }
+                }
+                if (j > n) exit
+                if (depth == 1) {
+                    s = substr(buf, i + 1, j - i - 1)
+                    if (expect == "key") {
+                        curkey = s
+                    } else if (expect == "value") {
+                        if (curkey == "session_id") { print s; exit }
+                        expect = ""
+                    }
+                }
+                i = j
+            }
+        }
+    }
+' "$tmp") || exit 0
+case "$session_id" in
+    ""|*[!A-Za-z0-9-]*) exit 0 ;;
+esac
+
+mv -f -- "$tmp" "$dir/$session_id.json" && tmp=
+exit 0

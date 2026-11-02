@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { STATE_LABELS, sessionMeta } from '../../lib/sessions.ts';
+import { sessionTip } from '../../lib/sidebarTip.ts';
 import { formatRelative } from '../../lib/time.ts';
 import { loadLiveCollapsed, saveLiveCollapsed } from '../../lib/liveUnopened.ts';
 import type { LiveItem } from '../../lib/liveUnopened.ts';
@@ -8,6 +9,7 @@ import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import { IconChevron } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
+import { RowTooltip, useRowTip } from './RowTooltip.tsx';
 import type { useSessionMenu } from './SessionMenu.tsx';
 
 export type LiveMenuHandlers = Pick<ReturnType<typeof useSessionMenu>, 'onContextMenu' | 'onKeyDown'>;
@@ -81,9 +83,32 @@ export function LiveList({ items, menu }: { items: LiveItem[]; menu: LiveMenuHan
   );
 }
 
+/** Fila compacta de «En segundo plano»: el título completo y el lugar salen en el tooltip. */
+function LiveSlRow({ item: i, menu }: { item: LiveItem; menu: LiveMenuHandlers }) {
+  const { openSession } = useWorkspace();
+  const tip = useRowTip();
+  return (
+    <li>
+      <button
+        type="button"
+        className={`slrow slrow--${i.state}`}
+        aria-label={liveLabel(i)}
+        {...tip.props}
+        onClick={() => openSession(i.session.name)}
+        onContextMenu={(e) => menu.onContextMenu(e, i.session)}
+        onKeyDown={(e) => menu.onKeyDown(e, i.session)}
+      >
+        <StatusLight state={i.state} />
+        <span className="slrow__title">{i.session.title}</span>
+        <Monogram project={i.project} size="sm" />
+      </button>
+      {tip.anchor && <RowTooltip anchor={tip.anchor} id={tip.id} build={(ahora) => sessionTip(i.session, i.project, ahora)} />}
+    </li>
+  );
+}
+
 /** Apartado compacto de la barra lateral «En segundo plano (N)»: plegable y recordado. Oculto sin sesiones. */
 export function LiveSidebarSection({ items, menu }: { items: LiveItem[]; menu: LiveMenuHandlers }) {
-  const { openSession } = useWorkspace();
   const [plegado, setPlegado] = useState(() => loadLiveCollapsed());
   if (items.length === 0) return null;
   const alternar = () => {
@@ -100,21 +125,7 @@ export function LiveSidebarSection({ items, menu }: { items: LiveItem[]; menu: L
       </h3>
       <ul className="slive__list" id="slive-list" hidden={plegado}>
         {items.map((i) => (
-          <li key={i.session.name}>
-            <button
-              type="button"
-              className={`slrow slrow--${i.state}`}
-              aria-label={liveLabel(i)}
-              title={`${i.session.title} · ${i.project.name}${i.hiddenProject ? ' (proyecto oculto)' : ''}`}
-              onClick={() => openSession(i.session.name)}
-              onContextMenu={(e) => menu.onContextMenu(e, i.session)}
-              onKeyDown={(e) => menu.onKeyDown(e, i.session)}
-            >
-              <StatusLight state={i.state} />
-              <span className="slrow__title">{i.session.title}</span>
-              <Monogram project={i.project} size="sm" />
-            </button>
-          </li>
+          <LiveSlRow key={i.session.name} item={i} menu={menu} />
         ))}
       </ul>
     </section>

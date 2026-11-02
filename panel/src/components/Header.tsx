@@ -1,8 +1,11 @@
 import { historyHref, isProjectScreen, routeHref } from '../lib/route.ts';
 import type { Route } from '../lib/route.ts';
+import { waitingChip } from '../lib/inicio.ts';
 import { waitingCount, waitingLabel } from '../lib/sessions.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
+import { HeaderAgent } from './HeaderAgent.tsx';
+import { HeaderLimits } from './HeaderLimits.tsx';
 import { IconPlus } from './Icons.tsx';
 import { Logo } from './Logo.tsx';
 import { ProjectsMenu } from './ProjectsMenu.tsx';
@@ -38,15 +41,20 @@ export function Header({ route }: { route: Route | null }) {
         </span>
       ) : (
         <div className="header__right">
+          <HeaderAgent />
+          <HeaderLimits />
           {esperan > 0 && (
             <div className="pill" role="status">
               <span className="pill__dot" aria-hidden="true" />
-              {waitingLabel(esperan)}
+              <span className="pill__long">{waitingLabel(esperan)}</span>
+              <span className="pill__short" aria-hidden="true">
+                {waitingChip(esperan)}
+              </span>
             </div>
           )}
-          <button type="button" className="btn btn--accent" onClick={() => openDialog()}>
+          <button type="button" className="btn btn--accent" aria-label="Nueva sesión" title="Nueva sesión" onClick={() => openDialog()}>
             <IconPlus size={14} />
-            Nueva sesión
+            <span className="btn__label">Nueva sesión</span>
           </button>
         </div>
       )}

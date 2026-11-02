@@ -1,4 +1,6 @@
 import type {
+  AccountLimits,
+  ArchiveList,
   BacklogDetail,
   BacklogList,
   BacklogState,
@@ -77,6 +79,10 @@ export const api = {
       body: JSON.stringify(entrada),
     }),
   recent: () => request<{ recent: RecentSession[] }>('/api/recent').then((r) => r.recent),
+  /** Archiva o desarchiva una sesión del panel (por su nombre de tmux) o una conversación de «Anteriores» (por su id). */
+  setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) =>
+    request<ArchiveList>('/api/archive', { method: 'PUT', body: JSON.stringify({ kind, id, archived }) }),
+  account: () => request<{ account: AccountLimits | null }>('/api/account').then((r) => r.account),
   killSession: (nombre: string) =>
     request<{ deleted: boolean }>(`/api/sessions/${encodeURIComponent(nombre)}`, {
       method: 'DELETE',

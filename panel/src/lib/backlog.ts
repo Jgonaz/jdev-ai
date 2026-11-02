@@ -252,6 +252,36 @@ export function pickProject(ids: readonly string[], pedido: string | null, ultim
 }
 
 /**
+ * ¿Hay que recordar `mostrado` como último proyecto usado? Solo si la persona lo
+ * eligió (ruta con proyecto o clic). El proyecto que Worktrees escoge solo por
+ * defecto no se recuerda, ni cuando la pantalla lo pone después en la URL:
+ * `automatico` es el que la pantalla escogió así y se devuelve actualizado.
+ */
+export function rememberDecision(
+  pantalla: string,
+  pedido: string | null,
+  mostrado: string,
+  automatico: string | null,
+): { remember: boolean; automatico: string | null } {
+  if (pantalla !== 'worktrees') return { remember: true, automatico: null };
+  // Sin proyecto en la ruta (o con uno que no existe): lo escoge la pantalla.
+  if (pedido !== mostrado) return { remember: false, automatico: mostrado };
+  // La ruta lleva el proyecto que la propia pantalla acaba de poner.
+  if (automatico === mostrado) return { remember: false, automatico };
+  return { remember: true, automatico: null };
+}
+
+/**
+ * Proyecto de Worktrees: el pedido si existe; si no, el primero con worktrees
+ * abiertos o, si ninguno tiene, el primero. No usa el último proyecto usado
+ * (Backlog y Guías sí, con `pickProject`): se abre en el que tiene trabajo en curso.
+ */
+export function pickWorktreesProject(ids: readonly string[], pedido: string | null, conWorktrees: ReadonlySet<string>): string | null {
+  if (pedido && ids.includes(pedido)) return pedido;
+  return ids.find((id) => conWorktrees.has(id)) ?? ids[0] ?? null;
+}
+
+/**
  * Ruta absoluta de una imagen del Markdown: absoluta tal cual o relativa a la
  * carpeta del documento (`dir`, absoluta), resolviendo `.` y `..`. Con `~` o
  * sin carpeta base devuelve null. El servidor decide luego si la entrega.

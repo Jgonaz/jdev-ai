@@ -277,12 +277,22 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
     const alEnfocar = () => alFoco.current();
     contenedor.addEventListener('focusin', alEnfocar);
 
-    // Las fuentes web llegan después del primer ajuste: se remide al cargarlas.
-    void document.fonts?.ready.then(() => {
+    // Las fuentes web llegan después del primer ajuste y xterm no se entera: mide
+    // la celda con la fuente de reserva y calcula de más las filas (la parte de abajo
+    // queda cortada hasta reabrir la terminal). `fonts.ready` no basta, porque la
+    // fuente de la terminal aún no se ha pedido cuando se resuelve; se pide
+    // explícitamente y se vuelve a medir al cargarla y en cada carga de fuentes.
+    // Asignar el mismo valor no hace nada en xterm, así que se cambia y se restaura.
+    const remedir = () => {
       if (detenido) return;
-      t.options.fontFamily = ajustes.current.fonts.terminal;
+      const familia = ajustes.current.fonts.terminal;
+      t.options.fontFamily = `${familia}, monospace`;
+      t.options.fontFamily = familia;
       ajustar();
-    });
+    };
+    const fuentes = document.fonts;
+    fuentes?.load(`${ajustes.current.sizes.terminal}px ${ajustes.current.fonts.terminal}`).then(remedir, () => undefined);
+    fuentes?.addEventListener?.('loadingdone', remedir);
 
     return () => {
       detenido = true;
@@ -290,6 +300,7 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
       window.cancelAnimationFrame(cuadro);
       if (temporizadorAviso !== null) window.clearTimeout(temporizadorAviso);
       observador.disconnect();
+      fuentes?.removeEventListener?.('loadingdone', remedir);
       contenedor.removeEventListener('mouseup', alSoltar);
       contenedor.removeEventListener('wheel', alRodar, { capture: true });
       if (temporizadorHover !== null) window.clearTimeout(temporizadorHover);

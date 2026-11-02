@@ -32,7 +32,10 @@ evidencias del qa van a PLAYWRIGHT_MCP_OUTPUT_DIR (por defecto, ${TMPDIR:-/tmp}/
 JDEV_SURFACE indica dónde trabaja la persona: «panel» (panel gráfico, que
 muestra imágenes) o «terminal» (valor por defecto). El launcher la valida y la
 exporta; con Claude, un hook de inicio la comunica al agente en su contexto
-(rules/surface.md).
+(rules/surface.md). Con Claude en el panel, además, su statusline no se dibuja:
+bin/session-statusline guarda sus datos y bin/session-activity registra los
+subagentes, las tareas en segundo plano y los artifacts, para la cabecera de la
+terminal del panel. En una terminal normal no se toca la statusline.
 EOF
 }
 
@@ -322,6 +325,8 @@ hook_command="'$session_status' --hook"
 subagent_notice="$harness_root/bin/subagent-notice"
 session_title="$harness_root/bin/session-title"
 session_state="$harness_root/bin/session-state"
+session_statusline="$harness_root/bin/session-statusline"
+session_activity="$harness_root/bin/session-activity"
 
 if [ "$agent_command" = "claude" ]; then
     [ -x "$subagent_notice" ] || fail "no se encuentra el aviso de subagentes: $subagent_notice"
@@ -338,11 +343,29 @@ if [ "$agent_command" = "claude" ]; then
     # --add-dir acepta varios valores, así que va antes de otra opción para no
     # absorber el prompt que llegue en "$@".
     state_hook="{\"type\":\"command\",\"command\":\"'$session_state' --hook\"}"
+    # En el panel, Claude no dibuja statusline: un script del harness guarda sus
+    # datos y la cabecera de la terminal los muestra. Hooks de actividad
+    # (subagentes, tareas en segundo plano y artifacts) los acompañan, y van
+    # después de los de estado en Stop y PostToolUse. En terminal no se añade
+    # nada y sigue la statusline de la persona.
+    panel_statusline=
+    subagent_activity=
+    stop_activity=
+    post_activity=
+    if [ "$JDEV_SURFACE" = "panel" ]; then
+        [ -x "$session_statusline" ] || fail "no se encuentra la statusline del panel: $session_statusline"
+        [ -x "$session_activity" ] || fail "no se encuentra el registro de actividad del panel: $session_activity"
+        activity_hook="{\"type\":\"command\",\"command\":\"'$session_activity' --hook\"}"
+        panel_statusline="\"statusLine\":{\"type\":\"command\",\"command\":\"'$session_statusline'\"},"
+        subagent_activity="\"SubagentStart\":[{\"hooks\":[$activity_hook]}],\"SubagentStop\":[{\"hooks\":[$activity_hook]}],"
+        stop_activity=",$activity_hook"
+        post_activity=",{\"matcher\":\"Artifact\",\"hooks\":[$activity_hook]}"
+    fi
     context_hook="{\"matcher\":\"startup|resume|clear|compact\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_status' --context\"}]}"
     exec claude \
         ${worktree_git_dir:+--add-dir} ${worktree_git_dir:+"$worktree_git_dir"} \
         ${worktree_history_dir:+--add-dir} ${worktree_history_dir:+"$worktree_history_dir"} \
-        --settings "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]},{\"hooks\":[$state_hook]},$context_hook],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_title' --hook\"},$state_hook]}],\"PostToolUse\":[{\"hooks\":[$state_hook]}],\"Notification\":[{\"hooks\":[$state_hook]}],\"Stop\":[{\"hooks\":[$state_hook]}],\"SessionEnd\":[{\"hooks\":[$state_hook]}]}}" \
+        --settings "{${panel_statusline}\"hooks\":{${subagent_activity}\"SessionStart\":[{\"matcher\":\"startup|clear\",\"hooks\":[{\"type\":\"command\",\"command\":\"$hook_command\"}]},{\"hooks\":[$state_hook]},$context_hook],\"PreToolUse\":[{\"matcher\":\"Agent\",\"hooks\":[{\"type\":\"command\",\"command\":\"'$subagent_notice'\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"'$session_title' --hook\"},$state_hook]}],\"PostToolUse\":[{\"hooks\":[$state_hook]}${post_activity}],\"Notification\":[{\"hooks\":[$state_hook]}],\"Stop\":[{\"hooks\":[$state_hook${stop_activity}]}],\"SessionEnd\":[{\"hooks\":[$state_hook]}]}}" \
         --agents "$claude_agents" \
         "$@"
 fi

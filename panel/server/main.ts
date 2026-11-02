@@ -17,6 +17,7 @@ import {
   sessionCookie,
   tokensMatch,
 } from './auth.ts';
+import { ArchiveStore } from './archive.ts';
 import { BacklogError, BacklogStore, BacklogWatcher, ITEM_ID_RE, pendingChanges, toListItem } from './backlog.ts';
 import { commitBacklog, commitPreview, validateCommitRequest } from './backlog-commit.ts';
 import { GuideError, listGuides, readGuide } from './guides.ts';
@@ -27,7 +28,7 @@ import { buildOverview, readGitName } from './overview.ts';
 import type { Overview } from './overview.ts';
 import { listProjects, worktreeDetails } from './projects.ts';
 import type { Project } from './projects.ts';
-import { RecentIndex } from './recent.ts';
+import { RecentIndex, SESSION_ID } from './recent.ts';
 import { SessionService } from './sessions.ts';
 import { DEFAULT_PORT, readSettings, updateSettings } from './settings.ts';
 import { checkSessionTitle } from '../shared/session-title.ts';
@@ -90,6 +91,9 @@ export type ServerOptions = {
   tmux?: TmuxConfig;
   /** Directorio de estado de sesiones; por defecto, el de XDG_STATE_HOME. */
   stateDir?: string;
+  /** Statusline y actividad de las sesiones de Claude; por defecto, `statusline/` y `activity/` junto a stateDir. */
+  statuslineDir?: string;
+  activityDir?: string;
   /** Directorio de configuración de Claude (con projects/ dentro); por defecto, CLAUDE_CONFIG_DIR o ~/.claude. */
   claudeConfigDir?: string;
   /** Carpeta de las imágenes adjuntadas; por defecto, ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel/uploads. */
@@ -220,12 +224,18 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const clientes = new Set<WebSocket>();
   const terminales = new Set<WebSocket>();
 
+  const archivo = new ArchiveStore(opts.configDir);
+
   const sesiones = new SessionService({
     tmux,
+    archive: archivo,
     stateDir: opts.stateDir ?? sessionStateDir(),
+    statuslineDir: opts.statuslineDir,
+    activityDir: opts.activityDir,
     claudeProjectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects'),
     listProjects: async () => listProjects(opts.harnessRoot, readSettings(opts.configDir).projects),
     onChange: (lista) => broadcast({ type: 'sessions', sessions: lista }),
+    onAccount: (account) => broadcast({ type: 'account', account }),
     pollMs: opts.pollMs,
     stateFallbackMs: opts.stateFallbackMs,
   });
@@ -273,7 +283,8 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       return buildOverview({
         projects: visibles,
         allProjects: todos,
-        sessions: sesiones.list(),
+        // Las archivadas no cuentan en la actividad de Inicio, salvo las que esperan a la persona.
+        sessions: sesiones.list().filter((x) => !x.archived || x.state === 'waiting'),
         backlog,
         history: historial,
         gitName: await nombreGit,
@@ -373,6 +384,15 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         }
         try {
           const sesion = await sesiones.create(plan, { historyLimit: readSettings(opts.configDir).terminal.scrollback });
+          // Retomar una conversación archivada la desarchiva: ya está en marcha en el panel.
+          if (plan.resume && archivo.hasConversation(plan.resume)) {
+            try {
+              archivo.setConversation(plan.resume, false);
+              broadcast({ type: 'archive' });
+            } catch (e) {
+              console.error('Error desarchivando la conversación retomada:', e);
+            }
+          }
           sendJson(res, 201, { session: sesion, command: plan.command });
         } catch (e) {
           console.error('Error creando la sesión:', e);
@@ -821,6 +841,52 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     }
   }
 
+  // PUT /api/archive {kind: 'session' | 'conversation', id, archived}: archiva o
+  // desarchiva una sesión del panel (su nombre de tmux) o una conversación de
+  // «Anteriores» (su id de Claude) y responde con la lista actual. No toca la
+  // sesión ni el transcript: solo la lista de archived.json.
+  async function archiveApi(req: IncomingMessage, res: ServerResponse, metodo: string): Promise<void> {
+    if (metodo !== 'PUT') {
+      res.setHeader('Allow', 'PUT');
+      sendJson(res, 405, { error: 'método no permitido' });
+      return;
+    }
+    const cuerpo = await parseJsonBody(req, res);
+    if (!cuerpo) return;
+    const { kind, id, archived } = cuerpo;
+    if (kind !== 'session' && kind !== 'conversation') {
+      sendJson(res, 400, { error: 'kind debe ser «session» o «conversation»' });
+      return;
+    }
+    if (typeof archived !== 'boolean') {
+      sendJson(res, 400, { error: 'archived debe ser true o false' });
+      return;
+    }
+    if (typeof id !== 'string' || !(kind === 'session' ? isPanelSessionName(id) : SESSION_ID.test(id))) {
+      sendJson(res, 400, {
+        error: kind === 'session' ? 'id no válido: se esperaba el nombre de una sesión del panel (jdev-*)' : 'id no válido: se esperaba el id de una conversación',
+      });
+      return;
+    }
+    try {
+      if (kind === 'session') {
+        if (!(await sesiones.setArchived(id, archived))) {
+          sendJson(res, 404, { error: 'la sesión no existe' });
+          return;
+        }
+      } else {
+        archivo.setConversation(id, archived);
+      }
+    } catch (e) {
+      console.error('Error guardando las archivadas:', e);
+      sendJson(res, 500, { error: 'No se pudo guardar la lista de archivadas.' });
+      return;
+    }
+    // Las sesiones ya viajan por su propio evento; esto avisa a otras ventanas de que recarguen las conversaciones.
+    broadcast({ type: 'archive' });
+    sendJson(res, 200, archivo.snapshot());
+  }
+
   async function api(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
     const metodo = req.method ?? 'GET';
     // Una cookie SameSite=Strict ya frena el CSRF; además, si el navegador
@@ -875,6 +941,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       await historyApi(req, res, pathname, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
       return;
     }
+    if (pathname === '/api/archive') {
+      await archiveApi(req, res, metodo);
+      return;
+    }
     if (pathname === '/api/recent') {
       if (metodo !== 'GET') {
         res.setHeader('Allow', 'GET');
@@ -883,7 +953,19 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       }
       // Se actualiza la lista de sesiones del panel para no ofrecer las que ya están en él.
       await sesiones.refresh();
-      sendJson(res, 200, { recent: await recientes.list(await sesiones.projectList(), sesiones.panelSessionIds()) });
+      const lista = await recientes.list(await sesiones.projectList(), sesiones.panelSessionIds(), archivo.snapshot().conversations);
+      sendJson(res, 200, { recent: lista.map((r) => ({ ...r, archived: archivo.hasConversation(r.id) })) });
+      return;
+    }
+    if (pathname === '/api/account') {
+      if (metodo !== 'GET') {
+        res.setHeader('Allow', 'GET');
+        sendJson(res, 405, { error: 'método no permitido' });
+        return;
+      }
+      // Límites de 5 h y 7 días de la statusline más reciente de una sesión de Claude del panel.
+      await sesiones.refresh();
+      sendJson(res, 200, { account: sesiones.accountLimits() });
       return;
     }
     if (pathname === '/api/overview') {

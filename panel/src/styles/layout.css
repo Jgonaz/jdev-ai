@@ -8,9 +8,10 @@
 
 /* ---------- Cabecera ---------- */
 .header {
-  flex: 0 0 var(--header-h);
-  height: var(--header-h);
+  flex: 0 0 auto;
+  min-height: var(--header-h);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 24px;
   padding: 0 16px;
@@ -30,6 +31,183 @@
   align-items: center;
   gap: 12px;
 }
+.header__right > * {
+  flex: none;
+}
+/* Agente por defecto y límites de la cuenta (HeaderAgent, HeaderLimits). */
+.hdrmenu {
+  position: relative;
+  display: inline-flex;
+}
+.hdrbtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-md);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hdrbtn:hover,
+.hdrbtn[aria-expanded='true'] {
+  border-color: var(--line-strong);
+}
+.hdrbtn__name {
+  font-weight: 600;
+}
+.hdrbtn__caret {
+  color: var(--fg-muted);
+  transform: rotate(90deg);
+}
+.menu__list.hdrmenu__list {
+  min-width: 190px;
+}
+.hdrmenu__check {
+  color: var(--accent-text);
+}
+.hdrlim {
+  gap: 14px;
+  padding: 0 12px;
+}
+.hdrlim--critical {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--bg-panel));
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-panel));
+}
+.lim {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 92px;
+}
+.lim__top {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+}
+.lim__name {
+  color: var(--fg-muted);
+}
+.lim__pct {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.lim__pct--warn {
+  color: var(--waiting-text);
+}
+.lim__pct--critical {
+  color: var(--danger-text);
+  font-weight: 700;
+}
+.lim__track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.lim__track--critical {
+  background: color-mix(in srgb, var(--danger) 16%, var(--bg-panel));
+}
+.lim__fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--fg-muted);
+}
+.lim__fill--warn {
+  background: var(--waiting);
+}
+.lim__fill--critical {
+  background: var(--danger);
+}
+/* Cabecera estrecha: por debajo de 1280 px los límites van compactos, «5 h 3 %  7 d 22 %», sin minibarras. */
+@media (max-width: 1279.98px) {
+  .hdrlim {
+    gap: 10px;
+    padding: 0 10px;
+  }
+  .lim {
+    width: auto;
+  }
+  .lim__top {
+    gap: 5px;
+  }
+  .lim__track {
+    display: none;
+  }
+}
+/* Un poco más prieta: así la cabecera cabe en una fila hasta ~1180 px. */
+@media (max-width: 1279.98px) {
+  .header {
+    gap: 16px;
+  }
+  .nav {
+    gap: 0;
+  }
+  .nav__link {
+    padding: 8px 9px;
+  }
+  .header__right {
+    gap: 8px;
+  }
+}
+/* Por debajo de 1024 px el botón del agente y «Nueva sesión» pasan a ser solo su icono. */
+@media (max-width: 1023.98px) {
+  .hdrbtn__name,
+  .hdrbtn__caret,
+  .btn__label {
+    display: none;
+  }
+  .header__right .hdrbtn:not(.hdrlim) {
+    padding: 0 10px;
+  }
+  .header__right .btn--accent {
+    padding: 0 10px;
+  }
+}
+/* Con menos de ~1180 px ya no caben en una fila el logo, las secciones y los controles: el menú de
+   secciones baja a una segunda fila, sin desplazamiento horizontal del documento. */
+@media (max-width: 1179.98px) {
+  .header {
+    row-gap: 0;
+    padding-block: 4px;
+  }
+  .header__logo {
+    order: 1;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .header__right {
+    order: 2;
+    min-height: 44px;
+  }
+  .header .nav {
+    order: 3;
+    flex: 0 0 100%;
+  }
+}
+.menu__list.hdrpop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 360px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: var(--text-sm2);
+}
+.hdrpop__note {
+  color: var(--fg-faint);
+}
+
 .header__path {
   margin-left: auto;
   font-family: var(--font-term);

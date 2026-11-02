@@ -160,7 +160,7 @@ export function ProjectsMenu({ pantalla }: { pantalla: ProjectScreen | null }) {
               key={o.pantalla}
               role="menuitem"
               className="menu__item"
-              href={projectHref(o.pantalla, proyecto)}
+              href={projectHref(o.pantalla, o.pantalla === 'worktrees' && pantalla !== 'worktrees' ? null : proyecto)}
               aria-current={pantalla === o.pantalla ? 'page' : undefined}
               tabIndex={-1}
               onClick={() => cerrar(false)}

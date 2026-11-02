@@ -20,6 +20,51 @@ export type SessionInfo = {
   created: number;
   /** Texto del aviso del agente mientras espera ('' si no espera o no se conoce). */
   notice: string;
+  /** Modelo, esfuerzo, contexto y worktree según la statusline de Claude; null si no se conocen (otros agentes o sesión aún sin datos). */
+  usage: SessionUsage | null;
+  /** Subagentes, shells en segundo plano y artifacts; null si no hay ninguno. */
+  activity: SessionActivity | null;
+  /** Archivada en la barra lateral: sigue viva, pero se muestra aparte. */
+  archived: boolean;
+};
+
+export type ContextUsage = {
+  /** Tokens de entrada de la última llamada (null si no se conocen). */
+  used: number | null;
+  size: number | null;
+  /** 0 a 100; null hasta el primer mensaje. */
+  percent: number | null;
+};
+
+export type SessionUsage = {
+  model: string | null;
+  /** low, medium, high, xhigh o max. */
+  effort: string | null;
+  context: ContextUsage | null;
+  worktree: { name: string; branch: string | null } | null;
+  /** Milisegundos desde la época de la última escritura de la statusline. */
+  updatedAt: number;
+};
+
+export type SessionActivity = {
+  subagents: { id: string; type: string; since: number | null }[];
+  shells: { label: string }[];
+  artifacts: { url: string; title: string | null }[];
+};
+
+export type RateLimit = {
+  /** 0 a 100. */
+  percent: number;
+  /** Milisegundos desde la época a los que se reinicia la ventana. */
+  resetsAt: number | null;
+};
+
+/** Límites de la cuenta (GET /api/account y evento `account`). */
+export type AccountLimits = {
+  fiveHour: RateLimit | null;
+  sevenDay: RateLimit | null;
+  /** Milisegundos desde la época del dato. */
+  updatedAt: number;
 };
 
 export type Worktree = { name: string; path: string; branch: string | null };
@@ -64,7 +109,12 @@ export type RecentSession = {
   /** Actividad en los últimos minutos: puede seguir abierta en otra ventana. */
   possiblyOpen: boolean;
   sizeBytes: number;
+  /** Archivada en la barra lateral: sale de «Anteriores» y se muestra en «Archivadas». */
+  archived: boolean;
 };
+
+/** Lista de archivadas (PUT /api/archive): sesiones del panel por nombre y creación, y conversaciones por id. */
+export type ArchiveList = { sessions: { name: string; created: number }[]; conversations: string[] };
 
 /** Estado visual de una sesión: lo que se pinta en luces, chips y textos. */
 export type VisualState = 'waiting' | 'working' | 'idle' | 'closed' | 'alive' | 'ended';

@@ -7,6 +7,7 @@ import {
   MESSAGE_PROBE_BYTES,
   POSSIBLY_OPEN_MS,
   RECENT_MAX_AGE_MS,
+  RECENT_MAX_ARCHIVED_PER_PROJECT,
   RECENT_MAX_PER_PROJECT,
   RecentIndex,
   projectSlug,
@@ -166,6 +167,31 @@ describe('RecentIndex', () => {
     expect(r.map((s) => s.id)).not.toContain(uuid(1));
     expect(r.map((s) => s.id)).not.toContain(uuid(2));
     expect(r.at(-1)!.id).toBe(uuid(17));
+  });
+
+  it('las archivadas no gastan la cuota de las demás: archivar deja aparecer las siguientes', async () => {
+    for (let i = 1; i <= 20; i++) transcript(balanz, '', uuid(i), mensajes, i * MIN);
+    const sin = await idx.list([balanz]);
+    expect(sin.map((s) => s.id)).toEqual(Array.from({ length: RECENT_MAX_PER_PROJECT }, (_, i) => uuid(i + 1)));
+    // Se archivan las tres más recientes: salen de la cuota y entran las tres siguientes.
+    const archivadas = [uuid(1), uuid(2), uuid(3)];
+    const r = await idx.list([balanz], new Set(), archivadas);
+    const ids = r.map((s) => s.id);
+    expect(ids).toEqual(Array.from({ length: RECENT_MAX_PER_PROJECT + 3 }, (_, i) => uuid(i + 1)));
+    expect(ids).toContain(uuid(18));
+    expect(ids).not.toContain(uuid(19));
+  });
+
+  it('las archivadas tienen su propio máximo y solo se ven dentro de los 30 días', async () => {
+    const n = RECENT_MAX_ARCHIVED_PER_PROJECT + 2;
+    for (let i = 1; i <= n; i++) transcript(balanz, '', uuid(i), mensajes, i * MIN);
+    transcript(balanz, '', uuid(90), mensajes, 31 * DIA);
+    const archivadas = [...Array.from({ length: n }, (_, i) => uuid(i + 1)), uuid(90)];
+    const r = await idx.list([balanz], new Set(), archivadas);
+    expect(r).toHaveLength(RECENT_MAX_ARCHIVED_PER_PROJECT);
+    expect(r.map((s) => s.id)).not.toContain(uuid(90));
+    // Las del panel siguen excluidas aunque estén archivadas.
+    expect((await idx.list([balanz], new Set([uuid(1)]), [uuid(1)])).map((s) => s.id)).not.toContain(uuid(1));
   });
 
   it('ignora los transcripts de worktrees que ya no existen y de proyectos desconocidos', async () => {

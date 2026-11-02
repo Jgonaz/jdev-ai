@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
+import { archivedEntries, notArchived } from '../../lib/archive.ts';
 import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, visibleRecent } from '../../lib/recent.ts';
 import type { RecentGroup } from '../../lib/recent.ts';
 import { groupSessions, sessionMeta, visualState } from '../../lib/sessions.ts';
 import type { ProjectGroup } from '../../lib/sessions.ts';
+import { recentTip, sessionTip } from '../../lib/sidebarTip.ts';
 import { formatRelative } from '../../lib/time.ts';
 import { useNow } from '../../lib/useNow.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
@@ -12,64 +14,94 @@ import type { ProjectInfo, RecentSession, SessionInfo } from '../../types.ts';
 import { IconChevron, IconClock, IconFilter } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
+import { ArchivedSection } from './ArchivedSessions.tsx';
+import { useConversationMenu } from './ConversationMenu.tsx';
 import { Legend } from './Legend.tsx';
 import { LiveSidebarSection } from './LiveSessions.tsx';
+import { RowTipBlock, RowTooltip, useRowTip } from './RowTooltip.tsx';
 import { useSessionMenu } from './SessionMenu.tsx';
 import { useLiveUnopened } from './useLiveUnopened.ts';
 
 type MenuHandlers = Pick<ReturnType<typeof useSessionMenu>, 'onContextMenu' | 'onKeyDown'>;
+type ConversationHandlers = Pick<ReturnType<typeof useConversationMenu>, 'onContextMenu' | 'onKeyDown'>;
 
 function SessionRow({
   s,
+  project,
   ahora,
   abierta,
   onOpen,
   menu,
 }: {
   s: SessionInfo;
+  project: ProjectInfo;
   ahora: number;
   abierta: boolean;
   onOpen: () => void;
   menu: MenuHandlers;
 }) {
   const estado = visualState(s);
+  const tip = useRowTip();
   return (
-    <button
-      type="button"
-      className={`srow srow--${estado}`}
-      aria-current={abierta ? 'true' : undefined}
-      onClick={onOpen}
-      onContextMenu={(e) => menu.onContextMenu(e, s)}
-      onKeyDown={(e) => menu.onKeyDown(e, s)}
-    >
-      <StatusLight state={estado} label />
-      <span className="srow__text">
-        <span className="srow__title">{s.title}</span>
-        <span className="srow__meta">{sessionMeta(s)}</span>
-      </span>
-      <span className="srow__time">{formatRelative(s.updatedAt, ahora)}</span>
-    </button>
+    <>
+      <button
+        type="button"
+        className={`srow srow--${estado}`}
+        aria-current={abierta ? 'true' : undefined}
+        {...tip.props}
+        onClick={onOpen}
+        onContextMenu={(e) => menu.onContextMenu(e, s)}
+        onKeyDown={(e) => menu.onKeyDown(e, s)}
+      >
+        <StatusLight state={estado} label />
+        <span className="srow__text">
+          <span className="srow__title">{s.title}</span>
+          <span className="srow__meta">{sessionMeta(s)}</span>
+        </span>
+        <span className="srow__time">{formatRelative(s.updatedAt, ahora)}</span>
+      </button>
+      {tip.anchor && <RowTooltip anchor={tip.anchor} id={tip.id} build={(t) => sessionTip(s, project, t)} />}
+    </>
   );
 }
 
-function RecentRow({ r, ahora, onResume }: { r: RecentSession; ahora: number; onResume: () => void }) {
+function RecentRow({
+  r,
+  project,
+  ahora,
+  onResume,
+  menu,
+}: {
+  r: RecentSession;
+  project: ProjectInfo;
+  ahora: number;
+  onResume: () => void;
+  menu: ConversationHandlers;
+}) {
+  const tip = useRowTip();
   return (
-    <button
-      type="button"
-      className={`rrow${r.closed ? ' rrow--closed' : ''}`}
-      aria-label={`Retomar en el panel: ${r.title}, ${recentPlace(r)}, ${agoLabel(r.lastActivity, ahora)}`}
-      onClick={onResume}
-    >
-      <IconClock size={13} className="rrow__icon" />
-      <span className="srow__text">
-        <span className="srow__title">{r.title}</span>
-        <span className="srow__meta">{recentPlace(r)}</span>
-      </span>
-      <span className="srow__time rrow__time">{formatRelative(r.lastActivity, ahora)}</span>
-      <span className="rrow__action" aria-hidden="true">
-        Retomar
-      </span>
-    </button>
+    <>
+      <button
+        type="button"
+        className={`rrow${r.closed ? ' rrow--closed' : ''}`}
+        aria-label={`Retomar en el panel: ${r.title}, ${recentPlace(r)}, ${agoLabel(r.lastActivity, ahora)}`}
+        {...tip.props}
+        onClick={onResume}
+        onContextMenu={(e) => menu.onContextMenu(e, r)}
+        onKeyDown={(e) => menu.onKeyDown(e, r)}
+      >
+        <IconClock size={13} className="rrow__icon" />
+        <span className="srow__text">
+          <span className="srow__title">{r.title}</span>
+          <span className="srow__meta">{recentPlace(r)}</span>
+        </span>
+        <span className="srow__time rrow__time">{formatRelative(r.lastActivity, ahora)}</span>
+        <span className="rrow__action" aria-hidden="true">
+          Retomar
+        </span>
+      </button>
+      {tip.anchor && <RowTooltip anchor={tip.anchor} id={tip.id} build={(t) => recentTip(r, project, t)} />}
+    </>
   );
 }
 
@@ -78,7 +110,7 @@ function RecentRow({ r, ahora, onResume }: { r: RecentSession; ahora: number; on
  * panel (terminadas o abiertas en otra ventana). Plegadas por defecto: se
  * retoman desde aquí y pasan a ser sesiones vivas del mismo proyecto.
  */
-function Previous({ project, items, ahora }: { project: ProjectInfo; items: RecentSession[]; ahora: number }) {
+function Previous({ project, items, ahora, menu }: { project: ProjectInfo; items: RecentSession[]; ahora: number; menu: ConversationHandlers }) {
   const { openResume } = useWorkspace();
   const [abierto, setAbierto] = useState(false);
   const [expandido, setExpandido] = useState(false);
@@ -94,7 +126,7 @@ function Previous({ project, items, ahora }: { project: ProjectInfo; items: Rece
       {abierto && (
         <>
           {shown.map((r) => (
-            <RecentRow key={r.id} r={r} ahora={ahora} onResume={() => openResume(r)} />
+            <RecentRow key={r.id} r={r} project={project} ahora={ahora} onResume={() => openResume(r)} menu={menu} />
           ))}
           {items.length > RECENT_COLLAPSED && (
             <button type="button" className="rmore" aria-expanded={expandido} onClick={() => setExpandido(!expandido)}>
@@ -121,7 +153,7 @@ function mergeGroups(vivas: ProjectGroup[], anteriores: RecentGroup[]): SidebarG
   return [...porId.values()];
 }
 
-function Group({ g, ahora, menu }: { g: SidebarGroup; ahora: number; menu: MenuHandlers }) {
+function Group({ g, ahora, menu, conversationMenu }: { g: SidebarGroup; ahora: number; menu: MenuHandlers; conversationMenu: ConversationHandlers }) {
   const { visible, openSession } = useWorkspace();
   return (
     <section className="group" aria-label={g.project.name}>
@@ -135,9 +167,9 @@ function Group({ g, ahora, menu }: { g: SidebarGroup; ahora: number; menu: MenuH
         )}
       </div>
       {g.sessions.map((s) => (
-        <SessionRow key={s.name} s={s} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} menu={menu} />
+        <SessionRow key={s.name} s={s} project={g.project} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} menu={menu} />
       ))}
-      {g.previous.length > 0 && <Previous project={g.project} items={g.previous} ahora={ahora} />}
+      {g.previous.length > 0 && <Previous project={g.project} items={g.previous} ahora={ahora} menu={conversationMenu} />}
     </section>
   );
 }
@@ -147,37 +179,48 @@ export function Sidebar({ style }: { style?: CSSProperties }) {
   const { prefs, setPrefs } = useWorkspace();
   const ahora = useNow();
   const sinAbrir = useLiveUnopened();
-  const { menu, onContextMenu, onKeyDown } = useSessionMenu({ withOpen: true });
-  const vivas = groupSessions(sessions, projects, { hideClosed: prefs.hideClosed });
-  const grupos = mergeGroups(vivas, groupRecent(recent, projects, { hideClosed: prefs.hideClosed }));
-  const oculta = sessions.length - vivas.reduce((n, g) => n + g.sessions.length, 0);
+  const { menu, open: menuAbierto, onContextMenu, onKeyDown } = useSessionMenu({ withOpen: true });
+  const conversacion = useConversationMenu();
+  // Lo archivado sale de su proyecto, de «Anteriores» y de «En segundo plano»: tiene su propia sección.
+  const activas = notArchived(sessions);
+  const vivas = groupSessions(activas, projects, { hideClosed: prefs.hideClosed });
+  const grupos = mergeGroups(vivas, groupRecent(notArchived(recent), projects, { hideClosed: prefs.hideClosed }));
+  const oculta = activas.length - vivas.reduce((n, g) => n + g.sessions.length, 0);
+  const archivadas = archivedEntries(sessions, recent, projects, { hideClosed: prefs.hideClosed });
 
   return (
     <aside className="sidebar" aria-label="Proyectos y sesiones" style={style}>
-      <div className="sidebar__head">
-        <span className="label-mono">
-          ~/proyectos <span className="sidebar__count">({grupos.length})</span>
-        </span>
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label="Ocultar sesiones cerradas"
-          aria-pressed={prefs.hideClosed}
-          title={prefs.hideClosed ? 'Mostrar las sesiones cerradas' : 'Ocultar las sesiones cerradas'}
-          onClick={() => setPrefs({ hideClosed: !prefs.hideClosed })}
-        >
-          <IconFilter size={15} />
-        </button>
-      </div>
-      {grupos.map((g) => (
-        <Group key={g.project.id} g={g} ahora={ahora} menu={{ onContextMenu, onKeyDown }} />
-      ))}
-      {loaded && grupos.length === 0 && (
-        <p className="sidebar__empty">{error ?? (oculta > 0 ? 'Solo hay sesiones cerradas.' : 'Aún no hay sesiones.')}</p>
-      )}
-      <LiveSidebarSection items={sinAbrir} menu={{ onContextMenu, onKeyDown }} />
-      <Legend sessions={sessions} />
-      {menu}
+      <RowTipBlock value={menuAbierto || conversacion.open}>
+        <div className="sidebar__head">
+          <span className="label-mono">
+            ~/proyectos <span className="sidebar__count">({grupos.length})</span>
+          </span>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Ocultar sesiones cerradas"
+            aria-pressed={prefs.hideClosed}
+            title={prefs.hideClosed ? 'Mostrar las sesiones cerradas' : 'Ocultar las sesiones cerradas'}
+            onClick={() => setPrefs({ hideClosed: !prefs.hideClosed })}
+          >
+            <IconFilter size={15} />
+          </button>
+        </div>
+        {grupos.map((g) => (
+          <Group key={g.project.id} g={g} ahora={ahora} menu={{ onContextMenu, onKeyDown }} conversationMenu={conversacion} />
+        ))}
+        {loaded && grupos.length === 0 && (
+          <p className="sidebar__empty">
+            {error ??
+              (oculta > 0 ? 'Solo hay sesiones cerradas.' : archivadas.length > 0 ? 'Solo hay sesiones archivadas.' : 'Aún no hay sesiones.')}
+          </p>
+        )}
+        <LiveSidebarSection items={sinAbrir} menu={{ onContextMenu, onKeyDown }} />
+        <ArchivedSection entries={archivadas} session={{ onContextMenu, onKeyDown }} conversation={conversacion} />
+        <Legend sessions={sessions} />
+        {menu}
+        {conversacion.menu}
+      </RowTipBlock>
     </aside>
   );
 }

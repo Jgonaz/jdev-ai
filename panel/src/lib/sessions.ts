@@ -7,6 +7,14 @@ export const AGENT_LABELS: Record<string, string> = {
   opencode: 'OpenCode',
 };
 
+/** Nombre del producto de cada agente, como se muestra en la cabecera global. */
+export const AGENT_PRODUCTS: Record<'claude' | 'codex' | 'copilot' | 'opencode', string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  copilot: 'Copilot',
+  opencode: 'OpenCode',
+};
+
 export const STATE_LABELS: Record<VisualState, string> = {
   waiting: 'Te espera',
   working: 'Trabajando',

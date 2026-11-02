@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Monogram } from '../Monogram.tsx';
 import { ResizeHandle } from '../ResizeHandle.tsx';
+import { saveLastProject } from '../../lib/backlog.ts';
 import { projectHref } from '../../lib/route.ts';
 import type { ProjectScreen } from '../../lib/route.ts';
 import type { PanelLimits } from '../../lib/panelWidth.ts';
@@ -51,7 +52,7 @@ export function ProjectSidebar(props: {
             const n = props.counts[p.id] ?? null;
             return (
               <li key={p.id}>
-                <a className="prow" href={projectHref(props.screen, p.id)} aria-current={p.id === props.currentId ? 'page' : undefined}>
+                <a className="prow" href={projectHref(props.screen, p.id)} onClick={() => saveLastProject(p.id)} aria-current={p.id === props.currentId ? 'page' : undefined}>
                   <Monogram project={p} />
                   <span className="prow__name">{p.name}</span>
                   {n !== null && (

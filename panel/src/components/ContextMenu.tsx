@@ -34,9 +34,9 @@ export function MenuItems({ actions, onPick }: { actions: MenuAction[]; onPick: 
   );
 }
 
-/** Flechas, Inicio y Fin entre las opciones de un menú. Devuelve true si la tecla se atendió. */
+/** Flechas, Inicio y Fin entre las opciones de un menú (`menuitem` y `menuitemradio`). Devuelve true si la tecla se atendió. */
 export function moveMenuFocus(e: KeyboardEvent, contenedor: HTMLElement | null): boolean {
-  const items = [...(contenedor?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? [])];
+  const items = [...(contenedor?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled]), [role="menuitemradio"]:not([disabled])') ?? [])];
   if (items.length === 0) return false;
   const i = items.indexOf(document.activeElement as HTMLElement);
   let j: number;

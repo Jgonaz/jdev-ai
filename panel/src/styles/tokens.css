@@ -22,6 +22,8 @@
   --text-xl: calc(22px * var(--u));
   --text-2xl: calc(26px * var(--u));
 
+  /* Texto en el color de peligro: igual que --danger, salvo donde este no llega a 4,5:1 sobre sus fondos (Papel). */
+  --danger-text: var(--danger);
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;
@@ -177,6 +179,7 @@
   --working-bg: #d9eadf;
   --working-line: #9cc7b8;
   --danger: #b3361f;
+  --danger-text: #9a2c18;
   --danger-ink: #ffffff;
   --mono-ink: #1f2328;
   /* Contorno de los monogramas: los colores claros (crema) se pierden sobre el papel. */

@@ -22,7 +22,7 @@ check() {
 
 # Harness temporal con un proyecto de prueba y su historial.
 mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/adapters/claude" "$work/h/projects/demo/.agent/history" "$work/bin"
-cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/session-title" "$harness_root/bin/session-state" "$harness_root/bin/worktree" "$work/h/bin/"
+cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/session-title" "$harness_root/bin/session-state" "$harness_root/bin/session-statusline" "$harness_root/bin/session-activity" "$harness_root/bin/worktree" "$work/h/bin/"
 cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
 cp "$harness_root/adapters/claude/agents.json" "$work/h/adapters/claude/"
@@ -85,6 +85,8 @@ check "sintaxis de bin/session-status" 'sh -n "$harness_root/bin/session-status"
 check "sintaxis de bin/subagent-notice" 'sh -n "$harness_root/bin/subagent-notice"'
 check "sintaxis de bin/session-title" 'sh -n "$harness_root/bin/session-title"'
 check "sintaxis de bin/session-state" 'sh -n "$harness_root/bin/session-state"'
+check "sintaxis de bin/session-statusline" 'sh -n "$harness_root/bin/session-statusline"'
+check "sintaxis de bin/session-activity" 'sh -n "$harness_root/bin/session-activity"'
 check "sintaxis de bin/panel" 'sh -n "$harness_root/bin/panel"'
 check "sin argumentos muestra la ayuda" 'run && grep -q "^Uso:" "$work/out"'
 
@@ -195,6 +197,51 @@ check "claude registra el contexto de superficie sin tocar el resumen" 'run demo
 check "agent exporta JDEV_PROJECT con el checkout principal" 'run demo && [ "$(sed -n 3p "$work/claude.env")" = "demo" ] && (cd "$work/h" && run . ) && [ "$(sed -n 3p "$work/claude.env")" = "h" ]'
 check "claude falla sin session-state" 'mv "$work/h/bin/session-state" "$work/session-state" && ! run demo; r=$?; mv "$work/session-state" "$work/h/bin/session-state"; [ $r -eq 0 ] && grep -q "estado de sesión" "$work/out"'
 
+# Statusline y actividad del panel: solo con JDEV_SURFACE=panel y Claude.
+panel_run() { (export JDEV_SURFACE=panel; run "$@"); }
+check "terminal: el --settings de claude no cambia la statusline ni añade actividad" 'run demo && s=$(settings) && ! printf "%s" "$s" | grep -q "statusLine\|session-statusline\|session-activity\|SubagentStart\|SubagentStop"'
+check "panel: claude recibe la statusline del harness" 'panel_run demo && settings | grep -q "^{\"statusLine\":{\"type\":\"command\",\"command\":\"[^\"]*/bin/session-statusline.\"},\"hooks\":{"'
+check "panel: claude recibe los hooks de actividad" 'panel_run demo && s=$(settings) && printf "%s" "$s" | grep -q "\"SubagentStart\":\[{\"hooks\":\[{\"type\":\"command\",\"command\":\"[^\"]*session-activity. --hook\"}\]}\]" && printf "%s" "$s" | grep -q "\"SubagentStop\":\[{\"hooks\":\[{\"type\":\"command\",\"command\":\"[^\"]*session-activity. --hook\"}\]}\]"'
+check "panel: otros agentes no reciben statusline ni actividad" 'for a in codex copilot; do panel_run demo --$a && ! { [ -f "$work/$a.args" ] && args $a | grep -q "statusLine\|session-statusline\|session-activity"; } || return 1; done'
+check "panel: claude falla sin session-statusline" 'mv "$work/h/bin/session-statusline" "$work/session-statusline" && ! panel_run demo; r=$?; mv "$work/session-statusline" "$work/h/bin/session-statusline"; [ $r -eq 0 ] && grep -q "statusline del panel" "$work/out"'
+check "panel: claude falla sin session-activity" 'mv "$work/h/bin/session-activity" "$work/session-activity" && ! panel_run demo; r=$?; mv "$work/session-activity" "$work/h/bin/session-activity"; [ $r -eq 0 ] && grep -q "registro de actividad" "$work/out"'
+check "terminal: claude no necesita session-statusline ni session-activity" 'mv "$work/h/bin/session-statusline" "$work/session-statusline" && mv "$work/h/bin/session-activity" "$work/session-activity" && run demo; r=$?; mv "$work/session-statusline" "$work/h/bin/session-statusline"; mv "$work/session-activity" "$work/h/bin/session-activity"; [ $r -eq 0 ]'
+if command -v python3 >/dev/null 2>&1; then
+    cat > "$work/panel-hooks.py" <<'EOF'
+import json, sys
+
+cfg = json.load(sys.stdin)
+hooks = cfg["hooks"]
+
+def commands(event, matcher=None):
+    return [h["command"] for g in hooks.get(event, []) if matcher is None or g.get("matcher") == matcher for h in g["hooks"]]
+
+def unmatched(event):
+    return [h["command"] for g in hooks.get(event, []) if "matcher" not in g for h in g["hooks"]]
+
+status = cfg["statusLine"]
+ok = (
+    status["type"] == "command"
+    and status["command"].startswith("'") and status["command"].endswith("/bin/session-statusline'")
+    and any("session-activity' --hook" in c for c in commands("SubagentStart"))
+    and any("session-activity' --hook" in c for c in commands("SubagentStop"))
+    # En Stop, session-state sigue primero y la actividad va detrás.
+    and [("state" if "session-state" in c else "activity") for c in commands("Stop")] == ["state", "activity"]
+    # PostToolUse conserva session-state sin matcher y la actividad solo es para Artifact.
+    and any("session-state" in c for c in unmatched("PostToolUse"))
+    and not any("session-activity" in c for c in unmatched("PostToolUse"))
+    and any("session-activity' --hook" in c for c in commands("PostToolUse", "Artifact"))
+    # Los hooks anteriores siguen ahí.
+    and all(any("session-state" in c for c in commands(e)) for e in ("SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"))
+    and any("subagent-notice" in c for c in commands("PreToolUse", "Agent"))
+    and any("session-title" in c for c in commands("UserPromptSubmit"))
+)
+sys.exit(0 if ok else 1)
+EOF
+    check "panel: el --settings de claude es JSON válido con statusline y actividad" 'panel_run demo && settings | python3 -I "$work/panel-hooks.py"'
+    check "terminal: el --settings de claude es JSON válido sin statusLine ni actividad" 'run demo && settings | python3 -I -c "import json,sys; c=json.load(sys.stdin); sys.exit(0 if \"statusLine\" not in c and \"SubagentStart\" not in c[\"hooks\"] else 1)"'
+fi
+
 # Superficie de trabajo: JDEV_SURFACE se valida y exporta en bin/agent, y
 # session-status --context la comunica al modelo.
 check "JDEV_SURFACE por defecto es terminal para todos los agentes" 'for a in claude codex copilot; do run demo --$a && [ "$(cat "$work/$a.surface")" = "terminal" ] || return 1; done'
@@ -276,6 +323,56 @@ chmod +x "$work/tmuxbin/tmux"
 check "session-state: guarda la sesión de tmux si hay \$TMUX" 'rm -rf "$ss_state"; PATH="$work/tmuxbin:$PATH" TMUX=/x ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"sesion-x\"" "$ss_file"'
 check "session-state: tmux sin \$TMUX o que falla deja la sesión vacía" 'rm -rf "$ss_state"; PATH="$work/tmuxbin:$PATH" ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"\"" "$ss_file" && rm -f "$ss_file" && PATH="$work/tmuxbin:$PATH" TMUX=/x FAKE_TMUX_FAIL=1 ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"\"" "$ss_file"'
 check "session-state: sin --hook muestra el uso y sale con 2" '"$work/h/bin/session-state" >/dev/null 2>"$work/ss.err"; r1=$?; "$work/h/bin/session-state" otra >/dev/null 2>&1; r2=$?; [ $r1 -eq 2 ] && [ $r2 -eq 2 ] && grep -q "^Uso:" "$work/ss.err"'
+
+# Statusline del panel: session-statusline guarda el JSON de Claude y no imprime nada.
+sl_state="$work/slstate"
+sl_file="$sl_state/jdev-ai/statusline/s1.json"
+sl() { printf '%s' "$1" | XDG_STATE_HOME="${SL_HOME:-$sl_state}" "$work/h/bin/session-statusline" > "$work/sl.out" 2>&1; }
+sl_quiet() { [ ! -s "$work/sl.out" ]; }
+sl_sample='{"session_id":"s1","model":{"id":"claude-opus","display_name":"Opus"},"context_window":{"context_window_size":1000000,"used_percentage":19},"rate_limits":{"five_hour":{"used_percentage":3,"resets_at":1790000000}}}'
+check "statusline: guarda el JSON tal cual y no imprime nada" 'rm -rf "$sl_state"; sl "$sl_sample" && sl_quiet && [ "$(cat "$sl_file")" = "$sl_sample" ] && ss_json_ok "$sl_file"'
+check "statusline: sustituye el archivo anterior de la sesión" 'sl "{\"session_id\":\"s1\",\"model\":{\"id\":\"otro\"}}" && sl_quiet && grep -q "\"otro\"" "$sl_file" && ! grep -q "claude-opus" "$sl_file" && [ "$(ls "$sl_state/jdev-ai/statusline" | wc -l)" -eq 1 ]'
+check "statusline: acepta el JSON en varias líneas" 'rm -rf "$sl_state"; sl "{
+  \"model\": {\"id\": \"x\"},
+  \"session_id\": \"s1\"
+}" && sl_quiet && ss_json_ok "$sl_file"'
+check "statusline: ignora session_id dentro de otros valores" 'rm -rf "$sl_state"; sl "{\"workspace\":{\"session_id\":\"y\"},\"note\":\"\\\"session_id\\\":\\\"z\\\"\",\"session_id\":\"s1\"}" && sl_quiet && [ -f "$sl_file" ] && [ "$(ls "$sl_state/jdev-ai/statusline" | wc -l)" -eq 1 ]'
+check "statusline: session_id no válido no escribe" 'rm -rf "$sl_state"; for id in "a\\\"b" "a/b" "..\\/x" "a b" ""; do sl "{\"session_id\":\"$id\"}" && sl_quiet || return 1; done; sl "{\"model\":{}}" && sl_quiet && [ -z "$(find "$sl_state/jdev-ai/statusline" -type f 2>/dev/null)" ]'
+check "statusline: entrada vacía o basura sale 0 sin salida ni archivos" 'rm -rf "$sl_state"; for in in "" "basura" "[1,2" "{\"session_id\":\"s1\\"; do sl "$in" && sl_quiet || return 1; done; [ -z "$(find "$sl_state/jdev-ai/statusline" -type f 2>/dev/null)" ]'
+check "statusline: más de 64 KiB no escribe" 'rm -rf "$sl_state"; { printf "{\"session_id\":\"s1\",\"x\":\""; awk "BEGIN { for (i = 0; i < 65600; i++) printf \"a\" }"; printf "\"}"; } | XDG_STATE_HOME="$sl_state" "$work/h/bin/session-statusline" > "$work/sl.out" 2>&1; r=$?; [ $r -eq 0 ] && sl_quiet && [ ! -e "$sl_file" ] && [ -z "$(find "$sl_state/jdev-ai/statusline" -type f)" ]'
+check "statusline: justo 64 KiB sí escribe" 'rm -rf "$sl_state"; pad=$((65536 - $(printf "%s" "{\"session_id\":\"s1\",\"x\":\"\"}" | wc -c))); { printf "{\"session_id\":\"s1\",\"x\":\""; awk -v n="$pad" "BEGIN { for (i = 0; i < n; i++) printf \"a\" }"; printf "\"}"; } | XDG_STATE_HOME="$sl_state" "$work/h/bin/session-statusline" > "$work/sl.out" 2>&1; sl_quiet && [ "$(wc -c < "$sl_file")" -eq 65536 ]'
+check "statusline: directorio no escribible sale 0 sin salida" ': > "$work/no-dir-sl"; SL_HOME="$work/no-dir-sl" sl "$sl_sample" && sl_quiet'
+check "statusline: no deja temporales" 'rm -rf "$sl_state"; sl "$sl_sample"; sl "{\"session_id\":\"s2\"}"; sl "basura"; [ -z "$(find "$sl_state/jdev-ai/statusline" -type f ! -name "*.json")" ] && [ "$(ls "$sl_state/jdev-ai/statusline" | wc -l)" -eq 2 ]'
+
+# Actividad del panel: session-activity añade una línea por evento.
+sa_state="$work/sastate"
+sa_file="$sa_state/jdev-ai/activity/s1.jsonl"
+sa() { printf '%s' "$1" | XDG_STATE_HOME="${SA_HOME:-$sa_state}" "$work/h/bin/session-activity" --hook > "$work/sa.out" 2>&1; }
+sa_quiet() { [ ! -s "$work/sa.out" ]; }
+sa_lines_ok() {
+    command -v python3 >/dev/null 2>&1 || return 0
+    python3 -I -c 'import json,sys; [json.loads(l) for l in open(sys.argv[1])]' "$1"
+}
+check "actividad: SubagentStart se añade con la hora" 'rm -rf "$sa_state"; sa "{\"session_id\":\"s1\",\"hook_event_name\":\"SubagentStart\",\"agent_id\":\"a1\",\"agent_type\":\"qa\"}" && sa_quiet && [ "$(wc -l < "$sa_file")" -eq 1 ] && grep -q "^{\"jdev_at\":\"[0-9]\{4\}-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z\",\"session_id\":\"s1\",\"hook_event_name\":\"SubagentStart\",\"agent_id\":\"a1\",\"agent_type\":\"qa\"}\$" "$sa_file" && sa_lines_ok "$sa_file"'
+check "actividad: SubagentStop y Stop se añaden en orden" 'sa "{\"session_id\":\"s1\",\"hook_event_name\":\"SubagentStop\",\"agent_id\":\"a1\"}" && sa "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\",\"background_tasks\":[{\"id\":\"b1\",\"type\":\"shell\",\"status\":\"running\",\"description\":\"pnpm dev\"}]}" && sa_quiet && [ "$(wc -l < "$sa_file")" -eq 3 ] && sed -n 2p "$sa_file" | grep -q SubagentStop && sed -n 3p "$sa_file" | grep -q "\"background_tasks\"" && sa_lines_ok "$sa_file"'
+check "actividad: PostToolUse solo de Artifact" 'rm -rf "$sa_state"; sa "{\"session_id\":\"s1\",\"hook_event_name\":\"PostToolUse\",\"tool_name\":\"Read\"}" && sa_quiet && [ ! -e "$sa_file" ] && sa "{\"session_id\":\"s1\",\"hook_event_name\":\"PostToolUse\",\"tool_name\":\"Artifact\",\"tool_input\":{\"title\":\"Plan\"},\"tool_response\":\"https://claude.ai/artifact/abc\"}" && sa_quiet && [ "$(wc -l < "$sa_file")" -eq 1 ] && grep -q "\"tool_name\":\"Artifact\"" "$sa_file" && sa_lines_ok "$sa_file"'
+check "actividad: otros eventos no se registran" 'rm -rf "$sa_state"; for e in SessionStart UserPromptSubmit Notification SessionEnd PreToolUse; do sa "{\"session_id\":\"s1\",\"hook_event_name\":\"$e\"}" && sa_quiet || return 1; done; [ ! -e "$sa_state" ]'
+check "actividad: normaliza los saltos de línea del evento" 'rm -rf "$sa_state"; sa "{
+  \"session_id\": \"s1\",
+  \"hook_event_name\": \"Stop\",
+  \"last_assistant_message\": \"hola\\nmundo\"
+}" && sa_quiet && [ "$(wc -l < "$sa_file")" -eq 1 ] && sa_lines_ok "$sa_file" && { ! command -v python3 >/dev/null 2>&1 || python3 -I -c "import json,sys; d=json.loads(open(sys.argv[1]).read()); sys.exit(0 if d[\"last_assistant_message\"]==\"hola\nmundo\" and d[\"session_id\"]==\"s1\" else 1)" "$sa_file"; }'
+check "actividad: ignora claves dentro de otros valores" 'rm -rf "$sa_state"; sa "{\"message\":\"\\\"session_id\\\":\\\"x\\\"\",\"nested\":{\"session_id\":\"y\"},\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && [ -f "$sa_file" ] && [ "$(ls "$sa_state/jdev-ai/activity" | wc -l)" -eq 1 ]'
+check "actividad: session_id no válido no escribe" 'rm -rf "$sa_state"; for id in "a\\\"b" "a/b" "..\\/x" "a b" ""; do sa "{\"session_id\":\"$id\",\"hook_event_name\":\"Stop\"}" && sa_quiet || return 1; done; sa "{\"hook_event_name\":\"Stop\"}" && sa_quiet && [ ! -e "$sa_state" ]'
+check "actividad: entrada vacía o basura sale 0 sin salida" 'rm -rf "$sa_state"; for in in "" "basura" "[1,2" "{\"session_id\":\"s1\"" "{\"session_id\":\"s1\",\"hook_event_name\":\"St\\xp\"}"; do sa "$in" && sa_quiet || return 1; done; [ ! -e "$sa_state" ]'
+check "actividad: el registro nuevo es privado (0600)" 'rm -rf "$sa_state"; (umask 022; sa "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}") && [ "$(ls -l "$sa_file" | cut -c1-10)" = "-rw-------" ]'
+check "actividad: un registro con permisos abiertos se corrige a 0600" 'rm -rf "$sa_state"; mkdir -p "$sa_state/jdev-ai/activity"; : > "$sa_file"; chmod 644 "$sa_file"; sa "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && [ "$(ls -l "$sa_file" | cut -c1-10)" = "-rw-------" ]'
+check "actividad: vacía el registro al pasar de 256 KiB" 'rm -rf "$sa_state"; mkdir -p "$sa_state/jdev-ai/activity"; awk "BEGIN { for (i = 0; i < 262145; i++) printf \"a\" }" > "$sa_file"; sa "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && sa_quiet && [ "$(wc -l < "$sa_file")" -eq 1 ] && [ "$(wc -c < "$sa_file")" -lt 1000 ]'
+check "actividad: no vacía un registro dentro del límite" 'rm -rf "$sa_state"; sa "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}"; sa "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}"; [ "$(wc -l < "$sa_file")" -eq 2 ]'
+check "actividad: un evento de más de 64 KiB no se registra" 'rm -rf "$sa_state"; { printf "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\",\"last_assistant_message\":\""; awk "BEGIN { for (i = 0; i < 65600; i++) printf \"a\" }"; printf "\"}"; } | XDG_STATE_HOME="$sa_state" "$work/h/bin/session-activity" --hook > "$work/sa.out" 2>&1; r=$?; [ $r -eq 0 ] && sa_quiet && [ ! -e "$sa_file" ]'
+check "actividad: no escribe en un enlace simbólico" 'rm -rf "$sa_state"; mkdir -p "$sa_state/jdev-ai/activity"; : > "$work/destino"; ln -s "$work/destino" "$sa_file"; sa "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && sa_quiet && [ ! -s "$work/destino" ]'
+check "actividad: directorio no escribible sale 0 sin salida" ': > "$work/no-dir-sa"; SA_HOME="$work/no-dir-sa" sa "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && sa_quiet'
+check "actividad: sin --hook muestra el uso y sale con 2" '"$work/h/bin/session-activity" >/dev/null 2>"$work/sa.err"; r1=$?; "$work/h/bin/session-activity" otra >/dev/null 2>&1; r2=$?; [ $r1 -eq 2 ] && [ $r2 -eq 2 ] && grep -q "^Uso:" "$work/sa.err"'
 
 # Títulos de sesión sobre un transcript simulado de Claude Code.
 mkdir -p "$work/claude/projects/p"

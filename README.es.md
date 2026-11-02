@@ -294,6 +294,36 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   una notificación deja la sesión esperando, guarda también su texto (recortado
   a 300 caracteres, tal como lo escribe Claude, en inglés). Codex, Copilot y
   OpenCode solo muestran si la sesión está viva.
+- **Estado de la sesión en la cabecera.** Cada terminal muestra, en tres filas:
+  el título con su estado y «⋯»; una línea con el proyecto, la rama o el
+  worktree, el modelo y el esfuerzo, el tiempo de sesión y, a la derecha, la
+  barra de contexto (neutra por debajo del 50 %, ámbar desde el 50 % y roja con
+  icono desde el 80 %); y, solo si hay trabajo en curso, chips de subagentes
+  activos, shells en segundo plano y artifacts publicados que despliegan su
+  detalle. Si los datos llevan más de 15 minutos sin cambiar y la sesión no
+  trabaja, se atenúan y muestran su antigüedad; en columnas estrechas (menos de
+  unos 520 px) se ocultan el proyecto, el tiempo y los tokens y el trabajo pasa
+  a contadores junto al título. Los datos de modelo, contexto y trabajo en curso
+  solo existen para Claude lanzado desde el panel; Codex, Copilot y OpenCode
+  muestran proyecto, rama, agente y tiempo. La cabecera global (salvo en
+  Ajustes) trae el agente por defecto de las sesiones nuevas, con un menú para
+  cambiarlo, y los límites de 5 horas y 7 días de la cuenta, con su hora de
+  reinicio al pulsarlos (se ocultan hasta que una sesión de Claude del panel los
+  informe). En ventanas estrechas la cabecera se compacta: por debajo de 1280 px
+  los límites van sin barras, por debajo de 1024 px el agente y «Nueva sesión»
+  solo muestran su icono y por debajo de ~1180 px las secciones bajan a una
+  segunda fila.
+- **Statusline del panel.** Con `JDEV_SURFACE=panel`, `bin/agent` configura
+  `bin/session-statusline` como statusline de Claude: guarda el JSON que recibe
+  en `~/.local/state/jdev-ai/statusline/<sesión>.json` (máximo 64 KiB) y no
+  imprime nada, así que la terminal del panel no repite lo que ya muestra la
+  cabecera. `bin/session-activity` registra en
+  `~/.local/state/jdev-ai/activity/<sesión>.jsonl` (permisos 0600, máximo 256 KiB,
+  se vacía al pasarlo) el inicio y el fin de los subagentes, las tareas en segundo plano al
+  acabar cada turno (por eso las shells se actualizan solo entonces) y los
+  artifacts publicados. En una terminal normal no se toca tu statusline. El
+  panel borra esos archivos cuando la sesión de tmux ya no existe. El coste
+  deja de verse en las sesiones del panel.
 - **Conversaciones anteriores.** Dentro de cada proyecto de la barra lateral,
   bajo sus sesiones en marcha, un apartado plegado «Anteriores (N)» lista (tres,
   con «Ver más») las conversaciones de Claude Code que no están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de
@@ -303,6 +333,21 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   sesión en su ventana original: dos procesos sobre la misma conversación se
   pisarían el historial. El panel avisa de las que tuvieron actividad en los
   últimos 3 minutos porque pueden seguir abiertas en otra ventana.
+- **Tooltip y archivado en la barra lateral.** Al pasar el ratón (400 ms) o con
+  el foco del teclado por una sesión o una conversación de «Anteriores», un
+  tooltip muestra su título completo, el proyecto, la rama o el worktree y el
+  agente; en una sesión viva de Claude añade el modelo y el esfuerzo, la barra de
+  contexto, el tiempo y el trabajo en curso. «Archivar» en el menú contextual
+  (barra, pestañas y «⋯») aparta una sesión o una conversación sin terminarla ni
+  cerrar su pestaña: sale de su proyecto, de «Anteriores» y de «En segundo plano»
+  y pasa a un apartado plegable «Archivadas (N)», debajo de «En segundo plano»,
+  desde el que se abre, se retoma o se desarchiva. Una sesión archivada que espera
+  sigue contando en la cabecera, el título de la pestaña e Inicio; las demás no
+  cuentan en los recuentos ni en las tarjetas de Inicio. Las conversaciones
+  archivadas no gastan el límite de «Anteriores» (15 por proyecto; las archivadas
+  tienen su propio máximo y solo se ven dentro de los últimos 30 días) y retomar
+  una la desarchiva. La lista se guarda en `~/.config/jdev-ai/archived.json` (respeta `XDG_CONFIG_HOME`; las
+  sesiones que dejan de existir salen solas, máximo 500 conversaciones).
 - **Terminales vivas sin abrir.** Con el panel de Terminales vacío, una lista «Terminales vivas»
   (con «Abrir todas») reúne las sesiones vivas que no están en una pestaña, ordenadas por estado
   (te espera, trabajando, en reposo, cerradas) y actividad; un apartado plegable «En segundo plano (N)»
@@ -365,9 +410,10 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   el área central nunca baja de 360 px. En anchos estrechos, donde el contexto y
   el detalle se superponen, no hay tirador.
 - **Menú Proyectos.** «Proyectos» en la cabecera es un desplegable con Backlog,
-  Worktrees y Guías, tres pantallas independientes: cada opción abre esa pantalla
-  del último proyecto usado (o el primero visible) y la actual queda marcada en
-  el menú. Se abre con el clic, con Enter, Espacio o las flechas y, con un ratón,
+  Worktrees y Guías, tres pantallas independientes: Backlog y Guías abren
+  el último proyecto usado (o el primero visible) y Worktrees, el primero visible
+  con worktrees abiertos (o, si ninguno tiene, el primero); la pantalla actual
+  queda marcada en el menú. Se abre con el clic, con Enter, Espacio o las flechas y, con un ratón,
   al detenerse sobre el botón (se cierra al salir; en táctil, solo con clic). Las tres comparten la barra lateral de
   proyectos (con su ancho; al elegir otro proyecto se queda en la misma pantalla)
   y cada una tiene su propia cabecera y ruta: `#/backlog/<id>[/<elemento>]`,
@@ -438,7 +484,7 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
 
 ## Validación del harness
 
-Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/session-state`, `bin/worktree`, `bin/panel` o los archivos que inyectan, ejecuta:
+Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/session-state`, `bin/session-statusline`, `bin/session-activity`, `bin/worktree`, `bin/panel` o los archivos que inyectan, ejecuta:
 
 ```sh
 bin/check

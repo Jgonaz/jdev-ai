@@ -30,6 +30,9 @@ const sesion = (name: string, extra: Partial<SessionInfo> = {}): SessionInfo => 
   updatedAt: 1000,
   created: 0,
   notice: '',
+  usage: null,
+  activity: null,
+  archived: false,
   ...extra,
 });
 
@@ -70,6 +73,15 @@ describe('liveUnopened', () => {
     );
     expect(nombres(l)).toEqual(['espera', 'trabaja', 'reposo-nueva', 'codex', 'reposo-vieja', 'cerrada']);
     expect(l.map((i) => i.state)).toEqual(['waiting', 'working', 'idle', 'alive', 'idle', 'closed']);
+  });
+
+  it('omite las archivadas, también las que esperan: tienen su propia sección', () => {
+    const l = liveUnopened(
+      [sesion('a1', { archived: true }), sesion('a2', { archived: true, state: 'waiting' }), sesion('normal')],
+      proyectos,
+      [],
+    );
+    expect(nombres(l)).toEqual(['normal']);
   });
 
   it('desempata por nombre', () => {

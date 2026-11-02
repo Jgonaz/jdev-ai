@@ -6,7 +6,7 @@ import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { SessionInfo } from '../../types.ts';
 import type { MenuAction } from '../ContextMenu.tsx';
-import { IconClose, IconCopy, IconExternal, IconPencil, IconStop } from '../Icons.tsx';
+import { IconArchive, IconClose, IconCopy, IconExternal, IconPencil, IconStop } from '../Icons.tsx';
 import { Modal } from '../Modal.tsx';
 import { RenameDialog } from './RenameDialog.tsx';
 
@@ -28,11 +28,12 @@ export type SessionActions = {
  * Acciones de una sesión del panel que comparten «Más acciones» y el menú
  * contextual de la barra lateral y de las pestañas: Abrir (solo con `withOpen`
  * y si no está abierta en una pestaña), Renombrar, Copiar comando para
- * adjuntar, Cerrar pestaña (solo si está abierta) y Terminar sesión.
+ * adjuntar, Archivar o Desarchivar, Cerrar pestaña (solo si está abierta) y
+ * Terminar sesión.
  */
 export function useSessionActions(session: SessionInfo, opciones: { withOpen?: boolean; onTabClosed?: () => void } = {}): SessionActions {
   const { closeTab, openSession, workspace } = useWorkspace();
-  const { tmuxSocket } = useSessions();
+  const { tmuxSocket, setArchived } = useSessions();
   const [dialogo, setDialogo] = useState<Dialogo>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +50,16 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setError('No se pudo copiar al portapapeles.');
+    }
+  };
+
+  // Archivar solo aparta la fila: la sesión y su pestaña siguen como estaban.
+  const archivar = async () => {
+    try {
+      await setArchived('session', session.name, !session.archived);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo archivar la sesión.');
     }
   };
 
@@ -79,6 +90,12 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
     { id: 'renombrar', label: 'Renombrar…', icon: <IconPencil size={14} />, onSelect: () => setDialogo('renombrar') },
     { id: 'copiar', label: 'Copiar comando para adjuntar', icon: <IconCopy size={14} />, restoreFocus: true, onSelect: () => void copiar() },
   );
+  actions.push({
+    id: 'archivar',
+    label: session.archived ? 'Desarchivar' : 'Archivar',
+    icon: <IconArchive size={14} />,
+    onSelect: () => void archivar(),
+  });
   if (abierta) {
     actions.push({
       id: 'cerrar',

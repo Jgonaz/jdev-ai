@@ -1,0 +1,148 @@
+#!/bin/sh
+
+# Actividad de la sesión de Claude Code para el panel gráfico (bin/panel). Es un
+# hook de Claude Code (SubagentStart, SubagentStop, Stop y PostToolUse de la
+# herramienta Artifact): recibe el evento en JSON por stdin y lo añade, como una
+# línea, a
+#
+#   ${XDG_STATE_HOME:-$HOME/.local/state}/jdev-ai/activity/<session_id>.jsonl
+#
+# Cada línea es el evento tal como llega, más «jdev_at» (UTC) con el momento en
+# que se registró: el panel lo interpreta (subagentes activos, tareas en segundo
+# plano del último Stop y artifacts publicados). El registro no crece sin
+# límite: si el archivo pasa de 256 KiB, se vacía antes de añadir. Los eventos
+# de más de 64 KiB (p. ej. un Stop con una respuesta enorme) no se registran.
+#
+# Solo añade a un archivo; no necesita que el panel esté arrancado. Solo lo
+# instala bin/agent con JDEV_SURFACE=panel.
+#
+#   session-activity --hook   lee el evento de stdin y lo añade al registro.
+#
+# Nunca interrumpe al agente: en modo hook, ante cualquier problema termina con
+# código 0 y sin salida alguna.
+
+set -u
+
+usage() {
+    printf 'Uso: session-activity --hook   (el evento del hook llega por stdin)\n' >&2
+    exit 2
+}
+
+[ $# -eq 1 ] && [ "$1" = "--hook" ] || usage
+
+exec >/dev/null 2>&1
+trap 'exit 0' EXIT HUP INT TERM
+
+MAX_EVENT=65536
+MAX_FILE=262144
+
+# Una entrada interactiva no es un hook: no espera a que se escriba nada.
+[ -t 0 ] && exit 0
+# Se lee un byte más que el máximo para detectar el exceso sin leer una entrada
+# sin fin. El resultado de $(...) pierde los saltos de línea finales, que da igual.
+input=$(head -c $((MAX_EVENT + 1))) || exit 0
+[ -n "$input" ] || exit 0
+bytes=$(printf '%s' "$input" | wc -c) || exit 0
+[ "$bytes" -le "$MAX_EVENT" ] || exit 0
+
+# Valor del campo de texto «$1» del objeto JSON de primer nivel, tal como viene
+# escapado. Igual que en session-state.
+field() {
+    printf '%s\n' "$input" | awk -v key="$1" '
+        { buf = buf (NR > 1 ? " " : "") $0 }
+        END {
+            gsub(/[\001-\037]/, " ", buf)
+            n = length(buf); depth = 0; expect = ""; curkey = ""
+            for (i = 1; i <= n; i++) {
+                c = substr(buf, i, 1)
+                if (c == "{" || c == "[") {
+                    depth++
+                    if (depth == 1) expect = "key"
+                } else if (c == "}" || c == "]") {
+                    depth--
+                } else if (depth == 1 && c == ":") {
+                    expect = "value"
+                } else if (depth == 1 && c == ",") {
+                    expect = "key"
+                } else if (c == "\"") {
+                    j = i + 1
+                    while (j <= n) {
+                        ch = substr(buf, j, 1)
+                        if (ch == "\\") {
+                            nx = substr(buf, j + 1, 1)
+                            if (nx == "u") {
+                                if (substr(buf, j + 2, 4) !~ /^[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/) exit
+                                j += 6
+                            } else if (nx != "" && index("\"\\/bfnrt", nx) > 0) {
+                                j += 2
+                            } else exit
+                        } else if (ch == "\"") {
+                            break
+                        } else {
+                            j++
+                        }
+                    }
+                    if (j > n) exit
+                    if (depth == 1) {
+                        s = substr(buf, i + 1, j - i - 1)
+                        if (expect == "key") {
+                            curkey = s
+                        } else if (expect == "value") {
+                            if (curkey == key) { print s; exit }
+                            expect = ""
+                        }
+                    }
+                    i = j
+                }
+            }
+        }
+    '
+}
+
+session_id=$(field session_id)
+case "$session_id" in
+    ""|*[!A-Za-z0-9-]*) exit 0 ;;
+esac
+
+event=$(field hook_event_name)
+case "$event" in
+    SubagentStart|SubagentStop|Stop) ;;
+    PostToolUse) [ "$(field tool_name)" = "Artifact" ] || exit 0 ;;
+    *) exit 0 ;;
+esac
+
+# El evento va en una sola línea: un salto fuera de una cadena es solo un
+# espacio en blanco y dentro de una cadena JSON no puede haber saltos sin escapar.
+# Debe ser un objeto, porque se le antepone «jdev_at».
+line=$(printf '%s' "$input" | tr '\n\r' '  ')
+case "$line" in
+    "{"*) ;;
+    *) exit 0 ;;
+esac
+rest=${line#\{}
+rest=${rest#"${rest%%[! ]*}"}
+at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+case "$rest" in
+    "}"*) line="{\"jdev_at\":\"$at\"}" ;;
+    *) line="{\"jdev_at\":\"$at\",$rest" ;;
+esac
+
+state_root=${XDG_STATE_HOME:-${HOME:-}/.local/state}
+[ -n "$state_root" ] && [ "$state_root" != "/.local/state" ] || exit 0
+dir="$state_root/jdev-ai/activity"
+# El registro es privado, como el estado y la statusline (0600; los directorios nuevos, 0700).
+umask 077
+mkdir -p -- "$dir" || exit 0
+file="$dir/$session_id.jsonl"
+
+# Un archivo que no es regular (enlace simbólico, etc.) no se toca.
+if [ -e "$file" ] || [ -L "$file" ]; then
+    [ -f "$file" ] && [ ! -L "$file" ] || exit 0
+    size=$(wc -c < "$file") || exit 0
+    # Se vacía en lugar de reescribir: el estado se reconstruye con el siguiente evento.
+    [ "$size" -le "$MAX_FILE" ] || : > "$file" || exit 0
+fi
+printf '%s\n' "$line" >> "$file"
+# Un registro creado por una versión anterior, con permisos más abiertos, se corrige.
+chmod 600 -- "$file"
+exit 0

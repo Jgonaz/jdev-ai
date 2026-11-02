@@ -1,10 +1,14 @@
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import type { ArchiveStore } from './archive.ts';
+import { DirStore } from './dirstore.ts';
 import { claudeConfigDir } from './paths.ts';
 import { StateStore, deriveState, stateByTmuxSession } from './states.ts';
 import type { SessionState } from './states.ts';
 import { CLOSED_MARK, TitleReader, appendCustomTitle, bestTitle, defaultTitle, parseTitle, resolveTranscript } from './titles.ts';
-import { createSession, killSession, listSessions, setSessionTitle } from './tmux.ts';
+import { createSession, isPanelSessionName, killSession, listSessions, setSessionTitle } from './tmux.ts';
 import type { CreateOptions, SessionPlan, TmuxConfig } from './tmux.ts';
+import { ACTIVITY_MAX_BYTES, STATUSLINE_MAX_BYTES, accountFrom, deriveActivity, parseActivityLog, parseStatusline } from './usage.ts';
+import type { Account, ActivityEvent, SessionActivity, SessionUsage, Statusline } from './usage.ts';
 import type { Project } from './projects.ts';
 
 export type SessionInfo = {
@@ -29,6 +33,15 @@ export type SessionInfo = {
    * pide), tal como llega de Claude; '' si no espera o no se conoce.
    */
   notice: string;
+  /**
+   * Modelo, esfuerzo, contexto y worktree según la statusline de Claude (solo en
+   * las sesiones de Claude lanzadas desde el panel que ya la han escrito).
+   */
+  usage: SessionUsage | null;
+  /** Subagentes, shells en segundo plano y artifacts de la sesión; null si no hay ninguno. */
+  activity: SessionActivity | null;
+  /** La persona la ha archivado: sigue viva, pero se muestra aparte en la barra lateral. */
+  archived: boolean;
   /** Comando equivalente de bin/agent, si se conoce (solo en la respuesta de creación). */
   command?: string;
 };
@@ -52,11 +65,19 @@ const EMIT_DEBOUNCE_MS = 100;
 export type SessionServiceOptions = {
   tmux: TmuxConfig;
   stateDir: string;
+  /** Statusline de Claude por sesión; por defecto, `statusline/` junto a stateDir. */
+  statuslineDir?: string;
+  /** Registro de actividad por sesión; por defecto, `activity/` junto a stateDir. */
+  activityDir?: string;
+  /** Lista de archivadas; sin ella, ninguna sesión lo está. */
+  archive?: ArchiveStore;
   /** Directorio de proyectos de Claude (con los transcripts); por defecto, el de CLAUDE_CONFIG_DIR o ~/.claude. */
   claudeProjectsDir?: string;
   listProjects: () => Promise<Project[]>;
   /** Se invoca (con debounce) cuando cambia algo de la lista combinada. */
   onChange: (sesiones: SessionInfo[]) => void;
+  /** Se invoca cuando cambian los límites de la cuenta (null si dejan de conocerse). */
+  onAccount?: (account: Account | null) => void;
   /** Relectura periódica de tmux y de los títulos. */
   pollMs?: number;
   stateFallbackMs?: number;
@@ -69,9 +90,15 @@ export type SessionServiceOptions = {
 export class SessionService {
   private readonly opts: SessionServiceOptions;
   private readonly states: StateStore;
+  private readonly statuslines: DirStore<Statusline>;
+  private readonly activities: DirStore<ActivityEvent[]>;
   private readonly titles = new TitleReader();
   private current: SessionInfo[] = [];
   private emitted = '';
+  private account: Account | null = null;
+  private emittedAccount = 'null';
+  /** Sesión de Claude → instante del último SessionStart visto: la actividad anterior es de una ejecución previa. */
+  private readonly restarted = new Map<string, number>();
   private projects: { at: number; list: Project[] } | null = null;
   private poll: NodeJS.Timeout | null = null;
   private timer: NodeJS.Timeout | null = null;
@@ -84,6 +111,26 @@ export class SessionService {
   constructor(opts: SessionServiceOptions) {
     this.opts = opts;
     this.states = new StateStore(opts.stateDir, () => this.schedule(), opts.stateFallbackMs);
+    this.statuslines = new DirStore<Statusline>({
+      dir: opts.statuslineDir ?? join(dirname(opts.stateDir), 'statusline'),
+      ext: '.json',
+      maxBytes: STATUSLINE_MAX_BYTES,
+      // El nombre manda: una statusline que dice ser de otra sesión no se usa.
+      parse: (contenido, mtimeMs, id) => {
+        const s = parseStatusline(contenido, mtimeMs);
+        return s && s.sessionId === id ? s : null;
+      },
+      onChange: () => this.schedule(),
+      pollMs: opts.stateFallbackMs,
+    });
+    this.activities = new DirStore<ActivityEvent[]>({
+      dir: opts.activityDir ?? join(dirname(opts.stateDir), 'activity'),
+      ext: '.jsonl',
+      maxBytes: ACTIVITY_MAX_BYTES,
+      parse: (contenido) => parseActivityLog(contenido),
+      onChange: () => this.schedule(),
+      pollMs: opts.stateFallbackMs,
+    });
   }
 
   get tmux(): TmuxConfig {
@@ -92,8 +139,9 @@ export class SessionService {
 
   async start(): Promise<void> {
     this.stopped = false;
-    await this.states.start();
+    await Promise.all([this.states.start(), this.statuslines.start(), this.activities.start()]);
     this.emitted = JSON.stringify(await this.refresh());
+    this.emittedAccount = JSON.stringify(this.account);
     this.poll = setInterval(() => this.schedule(), this.opts.pollMs ?? 2000);
     this.poll.unref();
   }
@@ -101,6 +149,8 @@ export class SessionService {
   stop(): void {
     this.stopped = true;
     this.states.stop();
+    this.statuslines.stop();
+    this.activities.stop();
     if (this.poll) clearInterval(this.poll);
     if (this.timer) clearTimeout(this.timer);
     this.poll = this.timer = null;
@@ -109,6 +159,11 @@ export class SessionService {
   /** Última lista calculada. */
   list(): SessionInfo[] {
     return this.current;
+  }
+
+  /** Límites de la cuenta de la statusline más reciente de una sesión del panel; null si no se conocen. */
+  accountLimits(): Account | null {
+    return this.account;
   }
 
   /**
@@ -184,6 +239,19 @@ export class SessionService {
     return true;
   }
 
+  /**
+   * Archiva o desarchiva una sesión del panel. Al archivar devuelve false si la
+   * sesión no existe; al desarchivar basta con quitarla de la lista, exista o no.
+   */
+  async setArchived(name: string, archived: boolean): Promise<boolean> {
+    const archive = this.opts.archive;
+    if (!archive) return false;
+    const sesion = (await listSessions(this.opts.tmux)).find((s) => s.name === name);
+    if (archived && !sesion) return false;
+    if (archive.setSession(name, sesion?.created ?? 0, archived)) this.emitIfChanged(await this.refresh());
+    return true;
+  }
+
   private schedule(): void {
     if (this.stopped || this.timer) return;
     this.timer = setTimeout(() => {
@@ -194,6 +262,11 @@ export class SessionService {
   }
 
   private emitIfChanged(lista: SessionInfo[]): void {
+    const cuenta = JSON.stringify(this.account);
+    if (cuenta !== this.emittedAccount) {
+      this.emittedAccount = cuenta;
+      if (!this.stopped) this.opts.onAccount?.(this.account);
+    }
     const firma = JSON.stringify(lista);
     if (firma === this.emitted) return;
     this.emitted = firma;
@@ -227,8 +300,12 @@ export class SessionService {
       console.error('No se pudo listar las sesiones de tmux:', e instanceof Error ? e.message : e);
       return this.current;
     }
-    await this.states.refresh();
+    // Solo con una lista de tmux leída con éxito: un fallo no debe vaciar lo archivado.
+    this.opts.archive?.pruneSessions(sesiones);
+    await Promise.all([this.states.refresh(), this.statuslines.refresh(), this.activities.refresh()]);
     const estados = stateByTmuxSession(this.states.snapshot(), sesiones);
+    this.noteRestarts();
+    await this.pruneEnded(sesiones);
     let proyectos: Project[] = [];
     try {
       proyectos = await this.projectList();
@@ -262,10 +339,50 @@ export class SessionService {
         updatedAt: lastChange(s.created, file),
         created: s.created,
         notice: file && s.alive && file.state === 'waiting' ? file.message : '',
+        usage: (file ? this.statuslines.snapshot().get(file.sessionId)?.usage : undefined) ?? null,
+        // Una sesión terminada ya no tiene nada en marcha, aunque su último Stop dijera otra cosa.
+        activity:
+          file && s.alive && file.state !== 'ended'
+            ? deriveActivity(this.activities.snapshot().get(file.sessionId) ?? [], this.restarted.get(file.sessionId) ?? 0)
+            : null,
+        archived: this.opts.archive?.hasSession(s.name, s.created) ?? false,
       });
     }
     lista.sort((a, b) => a.created - b.created || a.name.localeCompare(b.name));
     this.current = lista;
+    this.account = accountFrom(
+      [...estados.values()].flatMap((f) => {
+        const st = this.statuslines.snapshot().get(f.sessionId);
+        return st ? [st] : [];
+      }),
+    );
     return lista;
+  }
+
+  /**
+   * Un SessionStart (sesión nueva, reanudada o tras /clear) deja sin efecto la
+   * actividad registrada antes: sus subagentes ya no existen.
+   */
+  private noteRestarts(): void {
+    for (const f of this.states.snapshot()) {
+      if (f.event === 'SessionStart') this.restarted.set(f.sessionId, Math.max(this.restarted.get(f.sessionId) ?? 0, f.updatedAt));
+    }
+  }
+
+  /**
+   * Borra la statusline y la actividad de las sesiones del panel que ya han
+   * terminado: su sesión de tmux ya no existe o es posterior al último estado
+   * que dejó (el nombre se reutilizó). Los archivos de estado no se tocan.
+   */
+  private async pruneEnded(sesiones: readonly { name: string; created: number }[]): Promise<void> {
+    const creada = new Map(sesiones.map((s) => [s.name, s.created]));
+    for (const f of this.states.snapshot()) {
+      if (!isPanelSessionName(f.tmuxSession)) continue;
+      const desde = creada.get(f.tmuxSession);
+      if (desde !== undefined && f.updatedAt >= Math.floor(desde / 1000) * 1000) continue;
+      this.restarted.delete(f.sessionId);
+      if (this.statuslines.snapshot().has(f.sessionId)) await this.statuslines.remove(f.sessionId);
+      if (this.activities.snapshot().has(f.sessionId)) await this.activities.remove(f.sessionId);
+    }
   }
 }

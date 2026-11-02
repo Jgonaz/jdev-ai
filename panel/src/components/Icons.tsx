@@ -150,3 +150,39 @@ export const IconToBottom = (p: Props) => (
     <path d="M6 20h12M7 10l5 5 5-5M7 4l5 5 5-5" />
   </Svg>
 );
+export const IconWarning = (p: Props) => (
+  <Svg {...p}>
+    <path d="M12 3l9 16H3z" />
+    <path d="M12 10v4M12 17v.5" />
+  </Svg>
+);
+export const IconBranch = (p: Props) => (
+  <Svg {...p}>
+    <circle cx="6" cy="6" r="2" />
+    <circle cx="6" cy="18" r="2" />
+    <circle cx="18" cy="8" r="2" />
+    <path d="M6 8v8M18 10c0 4-6 3-12 6" />
+  </Svg>
+);
+export const IconSpark = (p: Props) => (
+  <Svg {...p}>
+    <path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5z" />
+  </Svg>
+);
+export const IconShell = (p: Props) => (
+  <Svg {...p}>
+    <path d="M5 7l5 5-5 5M12 17h7" />
+  </Svg>
+);
+export const IconArtifact = (p: Props) => (
+  <Svg {...p}>
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <path d="M4 9h16" />
+  </Svg>
+);
+export const IconArchive = (p: Props) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="4" rx="1" />
+    <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4" />
+  </Svg>
+);
