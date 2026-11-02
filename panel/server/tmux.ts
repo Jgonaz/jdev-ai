@@ -100,6 +100,8 @@ export type TmuxSession = {
   /** false si el proceso de la sesión terminó pero la sesión sigue en tmux. */
   alive: boolean;
   attached: number;
+  /** Título propio guardado con el renombrado del panel (@jdev_title); '' si no hay. */
+  title: string;
 };
 
 export function tmuxConfig(
@@ -300,6 +302,7 @@ const LIST_FORMAT = [
   '#{session_created}',
   '#{session_attached}',
   '#{pane_dead}',
+  '#{@jdev_title}',
 ].join('\t');
 
 export async function listSessions(cfg: TmuxConfig): Promise<TmuxSession[]> {
@@ -313,7 +316,7 @@ export async function listSessions(cfg: TmuxConfig): Promise<TmuxSession[]> {
   const sesiones: TmuxSession[] = [];
   for (const linea of salida.split('\n')) {
     if (linea === '') continue;
-    const [name = '', project = '', agent = '', worktree = '', createdIso = '', activity = '', created = '', attached = '', dead = ''] =
+    const [name = '', project = '', agent = '', worktree = '', createdIso = '', activity = '', created = '', attached = '', dead = '', title = ''] =
       linea.split('\t');
     if (!isPanelSessionName(name)) continue;
     const creadaIso = Date.parse(createdIso);
@@ -326,6 +329,7 @@ export async function listSessions(cfg: TmuxConfig): Promise<TmuxSession[]> {
       activity: Number(activity) * 1000,
       alive: dead !== '1',
       attached: Number(attached) || 0,
+      title,
     });
   }
   return sesiones;
@@ -351,6 +355,154 @@ export async function paneCurrentPath(cfg: TmuxConfig, name: string): Promise<st
   // Solo se quita el salto de línea final: una ruta puede acabar en espacio.
   const ruta = salida.replace(/\r?\n$/, '');
   return ruta.startsWith('/') ? ruta : null;
+}
+
+// ------------------------------------------------------------------- Scroll
+
+// Posición en el historial de tmux del panel activo de una sesión. El historial
+// lo tiene tmux (cada terminal del panel es un cliente suyo), no xterm.js: la
+// barra de scroll del panel se alimenta de aquí.
+export type PaneScroll = {
+  /** El panel está en copy-mode (el usuario ha subido por el historial). */
+  inMode: boolean;
+  /** Líneas por encima del final que se están viendo; 0 si no está en copy-mode. */
+  position: number;
+  /** Líneas guardadas en el historial, sin contar las visibles. */
+  history: number;
+  /** Alto visible del panel, en líneas. */
+  height: number;
+  /**
+   * La aplicación usa la pantalla alternativa (Claude Code a pantalla completa,
+   * vim, less…): el historial es suyo, no de tmux, y la barra le manda sus teclas.
+   */
+  alternate: boolean;
+};
+
+export const SCROLL_ACTIONS = ['top', 'bottom', 'page-up', 'page-down', 'line'] as const;
+export type ScrollAction = (typeof SCROLL_ACTIONS)[number];
+export type ScrollRequest = { action: ScrollAction; line?: number };
+// Cota de «line»: de sobra para el máximo de history-limit (100000) y evita números absurdos.
+export const MAX_SCROLL_LINE = 1_000_000;
+
+/**
+ * Valida el cuerpo de POST /api/sessions/:name/scroll. `line` es la posición
+ * que se quiere ver, en la misma unidad que `position` de GET: líneas por encima
+ * del final (0 = abajo, `history` = lo más antiguo). Es lo que entiende goto-line
+ * de tmux, que cuenta desde abajo.
+ */
+export function checkScrollRequest(entrada: unknown): ScrollRequest {
+  if (typeof entrada !== 'object' || entrada === null || Array.isArray(entrada)) {
+    throw new SessionInputError('Se esperaba un objeto con la acción de scroll.');
+  }
+  const e = entrada as Record<string, unknown>;
+  const action = e.action;
+  if (typeof action !== 'string' || !(SCROLL_ACTIONS as readonly string[]).includes(action)) {
+    throw new SessionInputError(`Acción de scroll no válida: usa ${SCROLL_ACTIONS.join(', ')}.`);
+  }
+  if (action !== 'line') {
+    if (e.line !== undefined) throw new SessionInputError('«line» solo se admite con la acción «line».');
+    return { action: action as ScrollAction };
+  }
+  const line = e.line;
+  if (typeof line !== 'number' || !Number.isInteger(line) || line < 0 || line > MAX_SCROLL_LINE) {
+    throw new SessionInputError(`«line» debe ser un entero entre 0 y ${MAX_SCROLL_LINE}.`);
+  }
+  return { action: 'line', line };
+}
+
+function noSession(e: unknown): boolean {
+  return sinServidor(e) || (e instanceof TmuxError && /can't find (session|pane|window)/i.test(e.stderr));
+}
+
+const SCROLL_FORMAT = ['#{pane_in_mode}', '#{scroll_position}', '#{history_size}', '#{pane_height}', '#{alternate_on}'].join('\t');
+
+/** Posición de scroll de la sesión, o null si no existe. */
+export async function paneScroll(cfg: TmuxConfig, name: string): Promise<PaneScroll | null> {
+  if (!isPanelSessionName(name)) return null;
+  let salida: string;
+  try {
+    salida = (await runTmux(cfg, ['display-message', '-p', '-t', `=${name}:`, SCROLL_FORMAT])).stdout;
+  } catch (e) {
+    if (noSession(e)) return null;
+    throw e;
+  }
+  const [modo = '', posicion = '', historia = '', alto = '', alterna = ''] = salida.replace(/\r?\n$/, '').split('\t');
+  // Con un objetivo inexistente display-message no falla: imprime los campos vacíos.
+  if (!/^[0-9]+$/.test(alto)) return null;
+  const entero = (v: string) => (/^[0-9]+$/.test(v) ? Number(v) : 0);
+  const inMode = modo !== '0' && modo !== '';
+  return {
+    inMode,
+    position: inMode ? entero(posicion) : 0,
+    history: entero(historia),
+    height: entero(alto),
+    alternate: alterna === '1',
+  };
+}
+
+/**
+ * Teclas de scroll que se mandan a una aplicación en pantalla alternativa. Son
+ * las de Claude Code a pantalla completa (RePág/AvPág, Ctrl+Inicio/Ctrl+Fin) y
+ * valen también para less y vim. `line` no tiene equivalente: no se sabe dónde
+ * está la aplicación, así que no hace nada.
+ */
+const ALTERNATE_KEYS: Partial<Record<ScrollAction, string>> = {
+  top: 'C-Home',
+  bottom: 'C-End',
+  'page-up': 'PPage',
+  'page-down': 'NPage',
+};
+
+/**
+ * Mueve la vista por el historial de tmux y devuelve la posición resultante, o
+ * null si la sesión no existe. Entrar en copy-mode usa `-e` (sale solo al llegar
+ * abajo), como la rueda. `bottom` sin estar en copy-mode no hace nada. Si la
+ * aplicación está en pantalla alternativa (y tmux no está en copy-mode), tmux no
+ * tiene historial: la orden se traduce a teclas de la aplicación.
+ */
+export async function scrollPane(cfg: TmuxConfig, name: string, peticion: ScrollRequest): Promise<PaneScroll | null> {
+  if (!isPanelSessionName(name)) return null;
+  const t = `=${name}:`;
+  const previo = await paneScroll(cfg, name);
+  if (previo === null) return null;
+  if (previo.alternate && !previo.inMode) {
+    const tecla = ALTERNATE_KEYS[peticion.action];
+    if (tecla) {
+      try {
+        await runTmux(cfg, ['send-keys', '-t', t, tecla]);
+      } catch (e) {
+        if (noSession(e)) return null;
+        throw e;
+      }
+    }
+    return paneScroll(cfg, name);
+  }
+  const entrar = ['copy-mode', '-e', '-t', t];
+  const tecla = (...x: string[]) => ['send-keys', '-X', '-t', t, ...x];
+  try {
+    switch (peticion.action) {
+      case 'top':
+        await runTmux(cfg, [...entrar, ';', ...tecla('history-top')]);
+        break;
+      case 'page-up':
+        await runTmux(cfg, [...entrar, ';', ...tecla('page-up')]);
+        break;
+      case 'line':
+        await runTmux(cfg, [...entrar, ';', ...tecla('goto-line', String(peticion.line))]);
+        break;
+      case 'page-down':
+      case 'bottom': {
+        // Fuera de copy-mode no hay nada que bajar y send-keys -X fallaría.
+        if (previo.inMode) await runTmux(cfg, tecla(peticion.action === 'bottom' ? 'cancel' : 'page-down'));
+        break;
+      }
+    }
+  } catch (e) {
+    if (noSession(e)) return null;
+    // Salió de copy-mode entre la lectura y la orden (p. ej. página abajo hasta el final).
+    if (!(e instanceof TmuxError && /not in a mode/i.test(e.stderr))) throw e;
+  }
+  return paneScroll(cfg, name);
 }
 
 function sanitizeProject(project: string): string {
@@ -404,6 +556,12 @@ export async function createSession(
     // y la exporta, y no se hereda del entorno del panel.
     '-e',
     `JDEV_SURFACE=${PANEL_SURFACE}`,
+    // Claude Code con su renderizador clásico (no el de pantalla completa): así
+    // su salida queda en el historial de tmux y la barra de scroll del panel
+    // puede mostrar la posición y arrastrarse. A pantalla completa el historial
+    // es virtual y no expone dónde está. Los demás agentes lo ignoran.
+    '-e',
+    'CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1',
   ];
 
   for (let intento = 0; intento < 5; intento++) {
@@ -427,6 +585,19 @@ export async function createSession(
     }
   }
   throw new Error('no se pudo asignar un nombre de sesión libre');
+}
+
+// Guarda el título propio de una sesión en la opción de usuario @jdev_title (para
+// los agentes sin transcript con custom-title). Devuelve false si la sesión no existe.
+export async function setSessionTitle(cfg: TmuxConfig, name: string, title: string): Promise<boolean> {
+  if (!isPanelSessionName(name)) return false;
+  try {
+    await runTmux(cfg, ['set-option', '-t', `=${name}:`, '@jdev_title', arg(title)]);
+  } catch (e) {
+    if (sinServidor(e) || (e instanceof TmuxError && /can't find (session|pane)/i.test(e.stderr))) return false;
+    throw e;
+  }
+  return true;
 }
 
 // Termina una sesión del panel (nunca otra). Devuelve false si no existía.

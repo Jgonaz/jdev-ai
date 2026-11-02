@@ -16,8 +16,8 @@
 
 /* Lista */
 .hlist {
-  flex: 0 0 440px;
-  min-width: 0;
+  flex: 0 1 var(--hlist-w, 440px);
+  min-width: 280px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -214,7 +214,7 @@
 /* Lector */
 .hreader {
   flex: 1;
-  min-width: 0;
+  min-width: min(360px, 100%);
   min-height: 0;
   overflow-y: auto;
 }
@@ -406,6 +406,7 @@
     overflow-y: auto;
   }
   .hlist {
+    min-width: 0;
     flex: 0 0 auto;
     max-height: 45vh;
     border-right: 0;

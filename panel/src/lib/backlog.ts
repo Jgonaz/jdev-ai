@@ -1,7 +1,7 @@
 import type { BacklogItem, BacklogState, BacklogWarning } from '../types.ts';
 import { safeStorage } from './workspace.ts';
 
-// Lógica pura de la pantalla Proyectos: agrupación, filtros, transiciones y
+// Lógica pura de la pantalla Backlog: agrupación, filtros, transiciones y
 // formatos. Las transiciones reflejan las de panel/server/backlog.ts.
 
 export const STATES: readonly BacklogState[] = ['backlog', 'todo', 'in-progress', 'done', 'discarded'];

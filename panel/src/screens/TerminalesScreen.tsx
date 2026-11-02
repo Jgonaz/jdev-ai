@@ -1,4 +1,8 @@
 import { useEffect, useRef } from 'react';
+import { ResizeHandle } from '../components/ResizeHandle.tsx';
+import { usePanelWidth } from '../lib/usePanelWidth.ts';
+import { useMediaQuery } from '../lib/useMediaQuery.ts';
+import type { PanelLimits } from '../lib/panelWidth.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
 import { useImages } from '../state/ImagesContext.tsx';
@@ -12,12 +16,26 @@ import { Sidebar } from '../components/terminales/Sidebar.tsx';
 import { StatusBar } from '../components/terminales/StatusBar.tsx';
 import { TabsBar } from '../components/terminales/TabsBar.tsx';
 
+const SIDEBAR_LIMITS: PanelLimits = { min: 200, max: 480, default: 280 };
+/** Ancho del panel derecho: Contexto y visor comparten hueco y también ancho. */
+const RIGHT_LIMITS: PanelLimits = { min: 280, max: 720, default: 320 };
+/** Igual que el `@media` de `.sidebar` en terminales.css, donde la barra pasa a tener un ancho fijo. */
+const SIDEBAR_COMPACT_QUERY = '(max-width: 800px)';
+
 /** Pantalla Terminales. Se mantiene montada (oculta) al ir a Ajustes para no perder las terminales. */
 export function TerminalesScreen({ hidden }: { hidden: boolean }) {
   const { sessions, connected, loaded } = useSessions();
-  const { workspace, visible, contextVisible, dialogOpen, openDialog } = useWorkspace();
+  const { workspace, visible, contextVisible, contextOverlay, dialogOpen, openDialog } = useWorkspace();
   const { settings } = useSettings();
   const { viewer, followTerminal } = useImages();
+  const compacta = useMediaQuery(SIDEBAR_COMPACT_QUERY);
+  const izquierdo = usePanelWidth('terminales-izquierdo', SIDEBAR_LIMITS);
+  // El visor tiene otro ancho por defecto que Contexto (el de su `clamp` en CSS).
+  const derecho = usePanelWidth('terminales-derecho', {
+    ...RIGHT_LIMITS,
+    default: viewer ? Math.min(520, Math.max(380, Math.round(window.innerWidth * 0.36))) : RIGHT_LIMITS.default,
+  });
+  const derechoEnLinea = (viewer !== null || contextVisible) && !contextOverlay;
 
   // El visor sigue a la terminal activa: al cambiar de pestaña muestra la última imagen de la nueva
   // terminal o, si no tiene ninguna, se cierra y vuelve el panel de Contexto.
@@ -40,7 +58,16 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
         </div>
       )}
       <div className="workspace">
-        <Sidebar />
+        <Sidebar style={izquierdo.style('--sidebar-w', !compacta)} />
+        {!compacta && (
+          <ResizeHandle
+            side="left"
+            limits={SIDEBAR_LIMITS}
+            panel={izquierdo}
+            label="Ancho de la barra de proyectos y sesiones"
+            reserved={derechoEnLinea ? derecho.width : 0}
+          />
+        )}
         <main className="main">
           <TabsBar />
           {workspace.tabs.length === 0 ? (
@@ -66,7 +93,20 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
           {settings.terminal.tmuxBar && <StatusBar />}
         </main>
         {/* El visor ocupa el lugar del panel de contexto mientras está abierto; al cerrarlo vuelve el estado previo. */}
-        {viewer ? <ImageViewer target={viewer} /> : contextVisible && <ContextPanel />}
+        {derechoEnLinea && (
+          <ResizeHandle
+            side="right"
+            limits={RIGHT_LIMITS}
+            panel={derecho}
+            label={viewer ? 'Ancho del visor de imágenes' : 'Ancho del panel de contexto'}
+            reserved={compacta ? 220 : izquierdo.width}
+          />
+        )}
+        {viewer ? (
+          <ImageViewer target={viewer} style={derecho.style('--right-w', !contextOverlay)} />
+        ) : (
+          contextVisible && <ContextPanel style={derecho.style('--right-w', !contextOverlay)} />
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,10 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import { startServer } from './main.ts';
 import { projectSlug } from './recent.ts';
@@ -415,6 +415,198 @@ describe('API de sesiones y terminal', () => {
       await api('DELETE', `/api/sessions/${session.name}`, undefined, { 'X-Jdev-Confirm': 'yes' });
       rmSync(join(tmp, 'state', 'otra.json'));
       await vi.waitFor(async () => expect((await recientes()).map((s) => s.id).sort()).toEqual([principal, enWorktree].sort()));
+    });
+  });
+
+  describe('renombrar sesiones', () => {
+    const idClaude = '44444444-aaaa-4bbb-8ccc-000000000004';
+    const sesionesCreadas: string[] = [];
+    const crear = async (agent: 'claude' | 'codex' = 'codex') => {
+      const r = await api('POST', '/api/sessions', { project: 'foo', agent });
+      expect(r.status).toBe(201);
+      const { session } = (await r.json()) as { session: Sesion };
+      sesionesCreadas.push(session.name);
+      return session.name;
+    };
+    const lista = async () => ((await (await api('GET', '/api/sessions')).json()) as { sessions: Sesion[] }).sessions;
+    const titulo = (nombre: string) => api('PUT', `/api/sessions/${nombre}/title`, undefined);
+    const renombrar = (nombre: string, title: unknown) => api('PUT', `/api/sessions/${nombre}/title`, { title });
+    const estado = (nombre: string, transcript: string, sessionId = idClaude) => {
+      mkdirSync(join(tmp, 'state'), { recursive: true });
+      writeFileSync(
+        join(tmp, 'state', `${sessionId}.json`),
+        JSON.stringify({
+          session_id: sessionId,
+          state: 'idle',
+          event: 'Stop',
+          updated_at: new Date(Date.now() + 2000).toISOString(),
+          project: 'foo',
+          agent: 'claude',
+          worktree: '',
+          transcript_path: transcript,
+          cwd: tmp,
+          tmux_session: nombre,
+        }),
+      );
+    };
+    const proyectosClaude = () => join(tmp, 'claude', 'projects', 'foo-slug');
+    const ultimaLinea = (ruta: string) => readFileSync(ruta, 'utf8').trimEnd().split('\n').at(-1);
+
+    // Los archivos de estado de pruebas anteriores no deben heredarse por reutilizar el nombre de tmux.
+    beforeAll(() => {
+      rmSync(join(tmp, 'state'), { recursive: true, force: true });
+    });
+
+    afterEach(() => {
+      rmSync(join(tmp, 'state', `${idClaude}.json`), { force: true });
+      rmSync(proyectosClaude(), { recursive: true, force: true });
+    });
+
+    afterAll(async () => {
+      for (const n of sesionesCreadas) await api('DELETE', `/api/sessions/${n}`, undefined, { 'X-Jdev-Confirm': 'yes' });
+      rmSync(join(tmp, 'claude', 'projects', 'foo-slug'), { recursive: true, force: true });
+    });
+
+    it('exige token, Origin propio y PUT, y valida el nombre y el título', async () => {
+      const nombre = await crear();
+      const ruta = `/api/sessions/${nombre}/title`;
+      expect((await fetch(`${base}${ruta}`, { method: 'PUT', body: '{"title":"x"}' })).status).toBe(401);
+      expect((await api('PUT', ruta, { title: 'x' }, { Origin: 'http://evil.example' })).status).toBe(403);
+      expect((await api('GET', ruta)).status).toBe(405);
+      expect((await api('POST', ruta, { title: 'x' })).status).toBe(405);
+      expect((await api('PUT', '/api/sessions/otra/title', { title: 'x' })).status).toBe(400);
+      expect((await api('PUT', '/api/sessions/jdev-nada-7/title', { title: 'x' })).status).toBe(404);
+      expect((await titulo(nombre)).status).toBe(400);
+      const mala = await fetch(`${base}${ruta}`, { method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' }, body: '{' });
+      expect(mala.status).toBe(400);
+      for (const malo of [undefined, 3, '', '   ', 'a'.repeat(81), 'con\nsalto', 'con\ttab', 'nulo\0', 'sep ador', '[Closed] x']) {
+        const r = await renombrar(nombre, malo);
+        expect(r.status, JSON.stringify(malo)).toBe(400);
+        expect(((await r.json()) as { error: string }).error).toMatch(/título|Escribe/i);
+      }
+      // 80 puntos de código valen aunque ocupen más unidades UTF-16.
+      expect((await renombrar(nombre, '😀'.repeat(80))).status).toBe(200);
+      expect((await renombrar(nombre, '😀'.repeat(81))).status).toBe(400);
+    });
+
+    it('sin transcript guarda el título en la sesión de tmux, lo usa en la lista y lo emite', async () => {
+      const nombre = await crear();
+      const eventos: { type: string; sessions?: Sesion[] }[] = [];
+      const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws/events`, { headers: wsHeaders() });
+      ws.on('message', (d) => eventos.push(JSON.parse(String(d))));
+      await vi.waitFor(() => expect(eventos.some((e) => e.type === 'sessions')).toBe(true));
+      try {
+        const nuevo = '-Revisar "login" \\ ñ 😀;';
+        const r = await renombrar(nombre, `  ${nuevo}  `);
+        expect(r.status).toBe(200);
+        expect(await r.json()).toEqual({ renamed: true, name: nombre, title: nuevo });
+        expect((await tmuxCli('show-options', '-v', '-t', `=${nombre}:`, '@jdev_title')).stdout.trimEnd()).toBe(nuevo);
+        expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: nuevo, closed: false });
+        await vi.waitFor(() => expect(eventos.at(-1)?.sessions?.find((s) => s.name === nombre)?.title).toBe(nuevo));
+        // El título propio también se impone al generado por Claude cuando aún no hay custom-title.
+        const transcript = join(proyectosClaude(), `${idClaude}.jsonl`);
+        mkdirSync(proyectosClaude(), { recursive: true });
+        writeFileSync(transcript, '{"type":"user"}\n{"type":"ai-title","aiTitle":"Título de IA","sessionId":"x"}\n');
+        estado(nombre, transcript);
+        await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)?.tracked).toBe(true));
+        expect((await lista()).find((s) => s.name === nombre)?.title).toBe(nuevo);
+      } finally {
+        ws.close();
+      }
+    });
+
+    it('con transcript de Claude añade una línea custom-title con el formato de bin/session-title y conserva «[Closed] »', async () => {
+      const nombre = await crear('claude');
+      const transcript = join(proyectosClaude(), `${idClaude}.jsonl`);
+      mkdirSync(proyectosClaude(), { recursive: true });
+      writeFileSync(transcript, '{"type":"user"}\n{"type":"custom-title","customTitle":"[Closed] Viejo","sessionId":"x"}\n');
+      estado(nombre, transcript);
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ tracked: true, title: 'Viejo', closed: true }));
+
+      const nuevo = 'Título "nuevo" con \\ y ñ — ok';
+      expect((await renombrar(nombre, nuevo)).status).toBe(200);
+      expect(ultimaLinea(transcript)).toBe(JSON.stringify({ type: 'custom-title', customTitle: `[Closed] ${nuevo}`, sessionId: idClaude }));
+      expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: nuevo, closed: true });
+      // No se toca la opción de tmux cuando hay transcript.
+      expect((await tmuxCli('show-options', '-v', '-t', `=${nombre}:`, '@jdev_title').catch(() => ({ stdout: '' }))).stdout.trim()).toBe('');
+
+      // Sin la marca, se escribe tal cual.
+      writeFileSync(transcript, '{"type":"user"}\n{"type":"custom-title","customTitle":"Abierta","sessionId":"x"}\n');
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: 'Abierta', closed: false }));
+      expect((await renombrar(nombre, 'Otra')).status).toBe(200);
+      expect(ultimaLinea(transcript)).toBe(JSON.stringify({ type: 'custom-title', customTitle: 'Otra', sessionId: idClaude }));
+      expect((await lista()).find((s) => s.name === nombre)?.title).toBe('Otra');
+
+      // Un transcript sin salto de línea final no se corrompe.
+      writeFileSync(transcript, '{"type":"user"}');
+      expect((await renombrar(nombre, 'Sin salto')).status).toBe(200);
+      expect(readFileSync(transcript, 'utf8')).toBe(
+        `{"type":"user"}\n${JSON.stringify({ type: 'custom-title', customTitle: 'Sin salto', sessionId: idClaude })}\n`,
+      );
+    });
+
+    it('escribe la misma línea que bin/session-title', async () => {
+      const nombre = await crear('claude');
+      const titulos = ['Simple', 'Con "comillas" y \\ barra', 'Acentos ñ é 😀', '{"x":1}'];
+      for (const t of titulos) {
+        const transcript = join(proyectosClaude(), `${idClaude}.jsonl`);
+        mkdirSync(proyectosClaude(), { recursive: true });
+        writeFileSync(transcript, '{"type":"user"}\n');
+        estado(nombre, transcript);
+        await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)?.tracked).toBe(true));
+        expect((await renombrar(nombre, t)).status).toBe(200);
+        const nuestra = ultimaLinea(transcript);
+
+        // El script del harness, con un CLAUDE_CONFIG_DIR temporal, sobre una copia del transcript.
+        const otro = join(tmp, 'claude-script');
+        mkdirSync(join(otro, 'projects', 'x'), { recursive: true });
+        writeFileSync(join(otro, 'projects', 'x', `${idClaude}.jsonl`), '{"type":"user"}\n');
+        await execFileAsync('sh', [join(REAL_HARNESS, 'bin', 'session-title'), t], {
+          env: { PATH: process.env.PATH, HOME: tmp, CLAUDE_CONFIG_DIR: otro, CLAUDE_CODE_SESSION_ID: idClaude },
+        });
+        expect(nuestra).toBe(ultimaLinea(join(otro, 'projects', 'x', `${idClaude}.jsonl`)));
+        rmSync(otro, { recursive: true, force: true });
+      }
+    });
+
+    it('rechaza un transcript fuera del directorio de Claude (también por enlace simbólico) sin tocarlo', async () => {
+      const nombre = await crear('claude');
+      const fuera = join(tmp, 'fuera.jsonl');
+      writeFileSync(fuera, '{"type":"user"}\n');
+      estado(nombre, fuera);
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)?.tracked).toBe(true));
+      const r = await renombrar(nombre, 'Nuevo');
+      expect(r.status).toBe(409);
+      expect(((await r.json()) as { error: string }).error).toMatch(/directorio de proyectos de Claude/);
+      expect(readFileSync(fuera, 'utf8')).toBe('{"type":"user"}\n');
+
+      mkdirSync(proyectosClaude(), { recursive: true });
+      const enlace = join(proyectosClaude(), `${idClaude}.jsonl`);
+      symlinkSync(fuera, enlace);
+      estado(nombre, enlace);
+      expect((await renombrar(nombre, 'Nuevo')).status).toBe(409);
+      expect(readFileSync(fuera, 'utf8')).toBe('{"type":"user"}\n');
+      rmSync(enlace);
+
+      // Con ".." dentro de la ruta, tampoco.
+      estado(nombre, join(proyectosClaude(), '..', '..', '..', 'fuera.jsonl'));
+      expect((await renombrar(nombre, 'Nuevo')).status).toBe(409);
+      expect(readFileSync(fuera, 'utf8')).toBe('{"type":"user"}\n');
+      // Y un archivo que no es .jsonl dentro del directorio permitido.
+      const otroTipo = join(proyectosClaude(), 'notas.txt');
+      writeFileSync(otroTipo, 'x\n');
+      estado(nombre, otroTipo);
+      expect((await renombrar(nombre, 'Nuevo')).status).toBe(409);
+      expect(readFileSync(otroTipo, 'utf8')).toBe('x\n');
+    });
+
+    it('un transcript aún inexistente (Claude sin transcript todavía) usa la opción de tmux', async () => {
+      const nombre = await crear('claude');
+      estado(nombre, join(proyectosClaude(), `${idClaude}.jsonl`));
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)?.tracked).toBe(true));
+      expect((await renombrar(nombre, 'Pronto')).status).toBe(200);
+      expect((await lista()).find((s) => s.name === nombre)?.title).toBe('Pronto');
+      expect(existsSync(join(proyectosClaude(), `${idClaude}.jsonl`))).toBe(false);
     });
   });
 });

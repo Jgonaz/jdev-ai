@@ -64,7 +64,8 @@ export function WorktreeStrip(props: { worktree: WorktreeDetail; sessions: reado
   );
 }
 
-export function WorktreesTab(props: {
+/** Lista de worktrees del proyecto con sus sesiones (pantalla Worktrees). */
+export function WorktreesList(props: {
   project: ProjectInfo;
   data: WorktreeList | null;
   error: string | null;
@@ -80,7 +81,7 @@ export function WorktreesTab(props: {
   return (
     <div className="wt">
       <p className="ptab__note">
-        Los elementos del backlog que se creen o muevan en una rama de worktree no se ven aquí hasta que se integran en {base}.
+        Cada worktree trabaja sobre su propia rama: sus cambios no llegan a {base} ni se ven en el panel, que lee el checkout principal, hasta que se integran.
       </p>
       {data.worktrees.length === 0 ? (
         <p className="ptab__empty">No hay worktrees abiertos en este proyecto.</p>

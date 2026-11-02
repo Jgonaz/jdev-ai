@@ -30,7 +30,7 @@ function Card({ item, project, selected }: { item: BacklogItem; project: string;
     <li>
       <a
         className={`bcard bcard--${item.status}${selected ? ' bcard--selected' : ''}`}
-        href={projectHref(project, item.id)}
+        href={projectHref('backlog', project, item.id)}
         aria-current={selected ? 'true' : undefined}
         data-item={item.id}
       >
@@ -56,7 +56,7 @@ function ClosedRow({ item, project, selected }: { item: BacklogItem; project: st
     <li>
       <a
         className={`bdone${selected ? ' bdone--selected' : ''}`}
-        href={projectHref(project, item.id)}
+        href={projectHref('backlog', project, item.id)}
         aria-current={selected ? 'true' : undefined}
         data-item={item.id}
       >

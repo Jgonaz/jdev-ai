@@ -9,6 +9,7 @@ import { CURSOR_STYLES, readXtermTheme } from '../../lib/xtermTheme.ts';
 import { terminalMayTakeFocus } from '../../lib/focus.ts';
 import { HOVER_DELAY_MS, rowBounds } from '../../lib/imageHover.ts';
 import { expandHome, scanBufferImagePaths } from '../../lib/imageLinks.ts';
+import { translateTerminalKey } from '../../lib/terminalKeys.ts';
 import { useImages } from '../../state/ImagesContext.tsx';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
@@ -19,11 +20,15 @@ import type { AutoOpener } from './autoOpenImages.ts';
 import { ImageHoverCard } from './ImageHoverCard.tsx';
 import type { HoverInfo } from './ImageHoverCard.tsx';
 import { createImageLinkProvider } from './imageLinkProvider.ts';
+import { ScrollBar } from './ScrollBar.tsx';
 import { useImageAttach } from './useImageAttach.ts';
+import { useTmuxScroll } from './useTmuxScroll.ts';
 
 type Conexion = 'conectando' | 'abierta' | 'reconectando' | 'cerrada' | 'inexistente';
 
 const CODIGO_NO_ENCONTRADA = 4404;
+/** Intervalo mínimo entre avisos de tamaño a tmux mientras se redimensiona. */
+const RESIZE_MS = 80;
 const BACKOFF_MIN = 500;
 const BACKOFF_MAX = 8000;
 
@@ -62,6 +67,10 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
   const aVista = useRef(false);
   aVista.current = !suspended;
   const autoApertura = useRef<AutoOpener | null>(null);
+  // Barra de scroll del historial de tmux. El efecto de la terminal la avisa por esta referencia.
+  const scroll = useTmuxScroll(name, !suspended);
+  const avisoScroll = useRef(scroll);
+  avisoScroll.current = scroll;
 
   useEffect(() => {
     const contenedor = host.current;
@@ -211,8 +220,37 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
       if (ws?.readyState === WebSocket.OPEN) ws.send(Uint8Array.from(d, (c) => c.charCodeAt(0)));
     });
     const dScroll = t.onScroll(ocultarHover);
+    // La salida de la terminal puede alargar el historial: se avisa (con espera) a la barra.
+    const dSalida = t.onWriteParsed(() => avisoScroll.current.noteOutput());
+    // Teclas que xterm.js no traduce como se espera: Ctrl+Retroceso/Supr borran palabras y
+    // Mayús+RePág/AvPág (que xterm se queda para su viewport, vacío con tmux) van al historial de tmux.
+    t.attachCustomKeyEventHandler((e) => {
+      const tr = translateTerminalKey(e);
+      if (!tr) return true;
+      e.preventDefault();
+      abridor.noteInput();
+      ocultarHover();
+      if (ws?.readyState === WebSocket.OPEN) ws.send(codificador.encode(tr.send));
+      if (tr.scroll) avisoScroll.current.bump();
+      return false;
+    });
+    // Al arrastrar un tirador el tamaño cambia en cada fotograma: a tmux se le avisa como mucho
+    // cada RESIZE_MS, con el último tamaño al final, para no inundarlo (cada aviso repinta).
+    let ultimoAviso = 0;
+    let tamanoPendiente: { cols: number; rows: number } | null = null;
+    let temporizadorAviso: number | null = null;
+    const avisarTamano = () => {
+      temporizadorAviso = null;
+      const p = tamanoPendiente;
+      tamanoPendiente = null;
+      if (!p) return;
+      ultimoAviso = Date.now();
+      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols: p.cols, rows: p.rows }));
+    };
     const dResize = t.onResize(({ cols, rows }) => {
-      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+      tamanoPendiente = { cols, rows };
+      if (temporizadorAviso !== null) return;
+      temporizadorAviso = window.setTimeout(avisarTamano, Math.max(0, RESIZE_MS - (Date.now() - ultimoAviso)));
     });
 
     let cuadro = 0;
@@ -232,8 +270,10 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
     const alRodar = () => {
       abridor.noteWheel();
       ocultarHover();
+      avisoScroll.current.bump();
     };
-    contenedor.addEventListener('wheel', alRodar, { passive: true });
+    // En captura: con el ratón activo (tmux) xterm.js atiende la rueda y corta su propagación.
+    contenedor.addEventListener('wheel', alRodar, { passive: true, capture: true });
     const alEnfocar = () => alFoco.current();
     contenedor.addEventListener('focusin', alEnfocar);
 
@@ -248,13 +288,15 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
       detenido = true;
       if (temporizador !== null) window.clearTimeout(temporizador);
       window.cancelAnimationFrame(cuadro);
+      if (temporizadorAviso !== null) window.clearTimeout(temporizadorAviso);
       observador.disconnect();
       contenedor.removeEventListener('mouseup', alSoltar);
-      contenedor.removeEventListener('wheel', alRodar);
+      contenedor.removeEventListener('wheel', alRodar, { capture: true });
       if (temporizadorHover !== null) window.clearTimeout(temporizadorHover);
       abridor.dispose();
       autoApertura.current = null;
       dScroll.dispose();
+      dSalida.dispose();
       contenedor.removeEventListener('focusin', alEnfocar);
       dData.dispose();
       dBinary.dispose();
@@ -309,7 +351,8 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
 
   return (
     <div ref={root} className="termbody" {...dropProps}>
-      <div ref={host} className="termbody__host" />
+      <div ref={host} id={`term-${name}`} className="termbody__host" />
+      <ScrollBar state={scroll.state} controls={`term-${name}`} onOrder={scroll.send} onHover={scroll.setHovering} onDragging={scroll.setDragging} />
       {hover && <ImageHoverCard key={hover.path} info={hover} session={name} preview={settings.terminal.hoverPreview} container={root.current} />}
       {dragging && <DropZone />}
       <AttachNotices notices={notices} onDismiss={dismiss} onView={(ruta) => openInViewer(name, ruta)} />

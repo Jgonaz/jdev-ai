@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { ResizeHandle } from '../components/ResizeHandle.tsx';
+import type { PanelLimits } from '../lib/panelWidth.ts';
+import { usePanelWidth } from '../lib/usePanelWidth.ts';
 import { useSettings } from '../state/SettingsContext.tsx';
 import { Appearance } from './settings/Appearance.tsx';
 import { AgentsSection } from './settings/AgentsSection.tsx';
@@ -32,7 +35,10 @@ function SaveStatus() {
   );
 }
 
+const NAV_LIMITS: PanelLimits = { min: 180, max: 400, default: 230 };
+
 export function SettingsScreen() {
+  const anchoNav = usePanelWidth('ajustes-navegacion', NAV_LIMITS);
   const { reset, loaded } = useSettings();
   const [activa, setActiva] = useState<string>(SECCIONES[0].id);
   const [confirmar, setConfirmar] = useState(false);
@@ -64,7 +70,7 @@ export function SettingsScreen() {
 
   return (
     <div className="screen screen--settings">
-      <nav className="setnav" aria-label="Secciones de ajustes">
+      <nav className="setnav" aria-label="Secciones de ajustes" style={anchoNav.style('--setnav-w')}>
         <span className="label-mono setnav__title">~/ajustes</span>
         {SECCIONES.map((s) => (
           <button key={s.id} type="button" className="setnav__link" aria-current={activa === s.id ? 'true' : undefined} onClick={() => ir(s.id)}>
@@ -72,6 +78,7 @@ export function SettingsScreen() {
           </button>
         ))}
       </nav>
+      <ResizeHandle side="left" limits={NAV_LIMITS} panel={anchoNav} label="Ancho de la navegación de ajustes" />
       <main className="setmain" ref={principal}>
         <div className="setmain__inner">
           {!loaded && <p className="hint">Cargando ajustes…</p>}

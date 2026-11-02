@@ -237,6 +237,10 @@ describe('tmux con un socket aislado', () => {
       const nueva = await createSession(cfgEnv, plan({ project: 'fitnessia' }));
       await vi.waitFor(() => expect(readFileSync(salida, 'utf8')).toBe('panel'));
       expect(tmux('show-environment', '-t', `=${nueva.name}`, 'JDEV_SURFACE').trim()).toBe('JDEV_SURFACE=panel');
+      // Renderizador clásico de Claude Code: su salida va al historial de tmux.
+      expect(tmux('show-environment', '-t', `=${nueva.name}`, 'CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN').trim()).toBe(
+        'CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1',
+      );
       await killSession(cfg, nueva.name);
 
       rmSync(salida);

@@ -18,6 +18,10 @@ describe('matchShortcut', () => {
     expect(matchShortcut(tecla('L'))).toBe('cycleLayout');
   });
 
+  it('Ctrl+Alt+W no es un atajo: la «x» y el clic central cierran las pestañas', () => {
+    expect(matchShortcut(tecla('w'))).toBeNull();
+  });
+
   it('Ctrl+Alt+Escape saca el foco de la terminal hacia la pestaña activa', () => {
     expect(matchShortcut(tecla('Escape'))).toBe('focusTabs');
   });

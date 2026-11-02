@@ -263,7 +263,7 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 agente de todos los proyectos: barra lateral con las sesiones agrupadas por
 proyecto, su título y su estado (te espera, trabajando, en reposo o cerrada),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
-con `bin/agent`, las pantallas Inicio, Proyectos e Historial y ajustes de
+con `bin/agent`, las pantallas Inicio, Backlog, Worktrees, Guías e Historial y ajustes de
 tema, fuentes, terminal y avisos.
 
 Requisitos: Node 24, pnpm, tmux y un compilador para `node-pty` (en Ubuntu,
@@ -303,6 +303,11 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   sesión en su ventana original: dos procesos sobre la misma conversación se
   pisarían el historial. El panel avisa de las que tuvieron actividad en los
   últimos 3 minutos porque pueden seguir abiertas en otra ventana.
+- **Terminales vivas sin abrir.** Con el panel de Terminales vacío, una lista «Terminales vivas»
+  (con «Abrir todas») reúne las sesiones vivas que no están en una pestaña, ordenadas por estado
+  (te espera, trabajando, en reposo, cerradas) y actividad; un apartado plegable «En segundo plano (N)»
+  de la barra lateral, encima de la leyenda, las lista siempre en compacto. Respetan «Ocultar sesiones
+  cerradas» y los proyectos ocultos, salvo las que te esperan.
 - **Seguridad.** El servidor solo escucha en `127.0.0.1` (puerto 4317 por
   defecto, `--port` para otro) y exige un token que se guarda en
   `~/.config/jdev-ai/panel-token`; `bin/panel --regenerate-token` lo cambia.
@@ -311,7 +316,63 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   nueva, `Ctrl+Alt+L` cambia la distribución y `Ctrl+Alt+Esc` saca el foco de
   la terminal a su pestaña (dentro de la terminal, Tab va a la shell). Para que el navegador no se
   quede `Ctrl+T`, úsalo como aplicación (`bin/panel --app` o la PWA
-  instalada); `Ctrl+W` sigue cerrando la ventana.
+  instalada); `Ctrl+W` sigue cerrando la ventana. Dentro de la terminal,
+  `Ctrl+Retroceso` borra la palabra anterior (envía `Ctrl+W`) y `Ctrl+Supr` la
+  siguiente (envía `Alt+D`), como en bash y Claude Code.
+- **Historial de las terminales.** El historial lo tiene tmux, no el navegador:
+  la rueda entra en el modo de copia de tmux (5 líneas por muesca) y
+  `Mayús+RePág` / `Mayús+AvPág` suben y bajan una página (al llegar abajo se
+  sale solo; `RePág` y `AvPág` sin Mayús siguen llegando a la aplicación). Cada terminal
+  tiene a la derecha una barra fina con la posición en el historial: arrastra el
+  pulgar para saltar, haz clic en la pista para paginar, y los botones «Ir arriba»
+  e «Ir al final» van a los extremos (con el teclado: flechas, RePág/AvPág, Inicio
+  y Fin sobre la barra). Se oculta si aún no hay historial. Para que esto valga
+  con Claude Code, el panel lo arranca con su renderizador clásico
+  (`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`, solo en las sesiones del panel): a
+  pantalla completa su historial es virtual y no dice en qué punto está. Si la aplicación usa
+  la pantalla alternativa (Claude Code a pantalla completa, vim, less), el
+  historial es suyo y no de tmux: la barra se queda sin pulgar, un clic en su
+  mitad de arriba o de abajo pagina, los botones envían `Ctrl+Inicio` y
+  `Ctrl+Fin`, y la rueda y `Mayús+RePág` / `Mayús+AvPág` le llegan a la
+  aplicación como su propio scroll. La barra consulta a
+  tmux solo mientras te mueves por el historial o el ratón está encima. Esa
+  configuración es de `panel/tmux.conf` y tmux solo la lee al arrancar su servidor:
+  para aplicarla a uno ya en marcha, ejecuta `tmux -L jdev source-file panel/tmux.conf`
+  (cambia `jdev` por tu socket si lo has cambiado con `JDEV_PANEL_TMUX_SOCKET`).
+- **Pestañas.** Cada pestaña de terminal lleva una «x» (siempre en la activa;
+  en las demás, al pasar el ratón o al enfocarlas) y el clic central también la
+  cierra: solo quita la terminal del panel, la sesión sigue viva en tmux y en la
+  barra lateral. La siguiente pestaña pasa a ser la activa.
+- **Menú contextual y renombrar.** El clic derecho (o la tecla Menú / Mayús+F10)
+  sobre una sesión de la barra lateral o sobre una pestaña abre un menú con
+  «Abrir» (solo en la barra lateral, si no está en una pestaña), «Renombrar…»,
+  «Copiar comando para adjuntar», «Cerrar pestaña» (solo si está abierta) y
+  «Terminar sesión…» (con confirmación); son las mismas acciones de «Más
+  acciones». Se mueve con las flechas, Inicio y Fin; Esc o un clic fuera lo
+  cierran. Dentro de la terminal el clic derecho no cambia. «Renombrar…» pide
+  un título de hasta 80 caracteres, sin saltos de línea ni caracteres de
+  control; Enter guarda y Esc cancela. En las sesiones de Claude con
+  transcript añade la línea `custom-title` que escribe `bin/session-title`
+  (conserva la marca «[Closed] » si la sesión estaba cerrada), así que también
+  es el título que verás en `/resume`; en el resto de agentes lo guarda en la
+  opción `@jdev_title` de la sesión de tmux y solo vale para el panel.
+- **Paneles redimensionables.** Arrastra el borde de la barra lateral, del panel
+  de Contexto y el visor de imágenes (comparten ancho), de la barra y el detalle
+  de Proyectos, de la lista de Historial o de la navegación de Ajustes. Con el
+  tirador enfocado, las flechas ←/→ cambian el ancho de 16 en 16 px (Mayús, de 64
+  en 64), Inicio y Fin van al mínimo y al máximo, y el doble clic restablece el
+  ancho por defecto. Cada ancho se recuerda en este navegador (`localStorage`) y
+  el área central nunca baja de 360 px. En anchos estrechos, donde el contexto y
+  el detalle se superponen, no hay tirador.
+- **Menú Proyectos.** «Proyectos» en la cabecera es un desplegable con Backlog,
+  Worktrees y Guías, tres pantallas independientes: cada opción abre esa pantalla
+  del último proyecto usado (o el primero visible) y la actual queda marcada en
+  el menú. Se abre con el clic, con Enter, Espacio o las flechas y, con un ratón,
+  al detenerse sobre el botón (se cierra al salir; en táctil, solo con clic). Las tres comparten la barra lateral de
+  proyectos (con su ancho; al elegir otro proyecto se queda en la misma pantalla)
+  y cada una tiene su propia cabecera y ruta: `#/backlog/<id>[/<elemento>]`,
+  `#/worktrees/<id>` y `#/guias/<id>[/<guía>]`. Los enlaces antiguos
+  `#/proyectos/…` se redirigen a las nuevas.
 - **Seleccionar texto.** Con el ratón de tmux activo, usa Mayús + arrastrar.
 - **Inicio.** Es la pantalla al abrir el panel (en Ajustes > Apariencia >
   Inicio puedes elegir Terminales). Saluda según la hora con «Tu nombre» o, si
@@ -328,7 +389,7 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   curso y worktrees, el último registro y los accesos a sus terminales, su
   backlog y una sesión nueva; al lado, las últimas entradas del historial.
   Solo lee: no mueve, marca ni cierra nada.
-- **Proyectos.** Muestra el backlog de cada proyecto (`docs/backlog/` del
+- **Backlog, Worktrees y Guías.** La pantalla Backlog muestra el backlog de cada proyecto (`docs/backlog/` del
   checkout principal) en columnas por estado, con filtros por tipo y prioridad
   y búsqueda. El detalle de un elemento enseña su resumen, su cabecera y el
   documento completo, y permite moverlo de estado («Pasar a por hacer» o
@@ -339,8 +400,10 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   (respetando los hooks del proyecto y mostrando su salida si fallan) y, si se
   marca, el push a su remoto.
   «Trabajar en esto» abre Nueva sesión con un prompt para abordar el elemento,
-  sin moverlo. Las pestañas Worktrees y Guías muestran las ramas abiertas (con
-  sus sesiones y cambios) y las guías de `docs/user-guides/`.
+  sin moverlo. Worktrees muestra las ramas abiertas del proyecto
+  (`projects/<proyecto>.worktrees/`, con sus sesiones y cambios) y Guías las de
+  `docs/user-guides/`; en la barra lateral, cada pantalla cuenta lo suyo
+  (elementos abiertos, worktrees o guías).
 - **Historial.** Reúne las entradas de `.agent/history/` del checkout
   principal de cada proyecto y del harness (sin subcarpetas como `archive/`),
   agrupadas por día, con filtros por proyecto y estado y «Solo con «Pendiente

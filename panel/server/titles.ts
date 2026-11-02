@@ -1,5 +1,8 @@
 import { createReadStream } from 'node:fs';
-import { open, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, realpath, stat } from 'node:fs/promises';
+import { sep } from 'node:path';
+import { CLOSED_MARK } from '../shared/session-title.ts';
 
 // Claude guarda el título de la sesión en el transcript (JSONL) como líneas
 // {"type":"custom-title","customTitle":"..."}; vale la última. bin/session-title
@@ -7,7 +10,7 @@ import { open, stat } from 'node:fs/promises';
 // Si no hay ninguno, Claude genera uno propio: {"type":"ai-title","aiTitle":"..."}
 // (también vale la última); es solo una alternativa al título por defecto.
 
-export const CLOSED_MARK = '[Closed] ';
+export { CLOSED_MARK };
 const TAIL_BYTES = 256 * 1024;
 const CUSTOM_MARKER = '"type":"custom-title"';
 const AI_MARKER = '"type":"ai-title"';
@@ -162,6 +165,68 @@ export class TitleReader {
     anota(titleOfLine(resto.toString('utf8')));
     entry.scannedTitles = vistos;
     entry.scanned = posicion;
+  }
+}
+
+export class TranscriptRejected extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TranscriptRejected';
+  }
+}
+
+/**
+ * Ruta real del transcript si es un .jsonl dentro del directorio de proyectos
+ * de Claude (se resuelven los enlaces simbólicos de ambos). null si el
+ * transcript aún no existe; TranscriptRejected si existe pero queda fuera: la ruta
+ * viene de un archivo de estado que puede escribir cualquier proceso del usuario
+ * y el panel no debe añadir líneas a un archivo cualquiera.
+ */
+export async function resolveTranscript(ruta: string, projectsDir: string): Promise<string | null> {
+  let real: string;
+  try {
+    real = await realpath(ruta);
+  } catch {
+    return null;
+  }
+  let base: string;
+  try {
+    base = await realpath(projectsDir);
+  } catch {
+    throw new TranscriptRejected('El transcript de la sesión no está en el directorio de proyectos de Claude.');
+  }
+  if (!real.startsWith(base + sep) || !real.endsWith('.jsonl')) {
+    throw new TranscriptRejected('El transcript de la sesión no está en el directorio de proyectos de Claude.');
+  }
+  return real;
+}
+
+/**
+ * Añade al transcript la línea custom-title con el mismo formato que
+ * bin/session-title. Es una sola escritura en modo append (O_APPEND), para no
+ * entrelazarse con las líneas que Claude escribe a la vez; si el archivo no
+ * acabara en salto de línea, se antepone uno en la misma escritura.
+ */
+export async function appendCustomTitle(realPath: string, sessionId: string, title: string): Promise<void> {
+  const fh = await open(realPath, constants.O_WRONLY | constants.O_APPEND | constants.O_NOFOLLOW);
+  try {
+    const st = await fh.stat();
+    if (!st.isFile()) throw new TranscriptRejected('El transcript de la sesión no es un archivo.');
+    let prefijo = '';
+    if (st.size > 0) {
+      const lector = await open(realPath, 'r');
+      try {
+        const ultimo = Buffer.alloc(1);
+        await lector.read(ultimo, 0, 1, st.size - 1);
+        if (ultimo[0] !== 0x0a) prefijo = '\n';
+      } finally {
+        await lector.close();
+      }
+    }
+    const linea = JSON.stringify({ type: 'custom-title', customTitle: title, sessionId });
+    await fh.write(Buffer.from(`${prefijo}${linea}\n`, 'utf8'));
+  } finally {
+    await fh.close();
   }
 }
 

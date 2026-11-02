@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { ApiError, imageUrl, probeImage } from '../../api.ts';
 import { neighbour, splitPath } from '../../lib/imageStrip.ts';
 import { clampScale, describeMeta, fitScale, percent, scrollAfterZoom, stepScale, wheelScale, AREA_PADDING, MAX_SCALE, MIN_SCALE } from '../../lib/imageZoom.ts';
@@ -17,7 +17,7 @@ type Modo = 'fit' | number;
  * abierto (en anchos estrechos, superpuesto igual que él). La tira de abajo
  * reúne las imágenes de la terminal desde la que se abrió.
  */
-export function ImageViewer({ target }: { target: ViewerTarget }) {
+export function ImageViewer({ target, style }: { target: ViewerTarget; style?: CSSProperties }) {
   const { session, path } = target;
   const { strips, openInViewer, closeViewer, reportResolved } = useImages();
   const { contextOverlay, requestTerminalFocus } = useWorkspace();
@@ -186,7 +186,7 @@ export function ImageViewer({ target }: { target: ViewerTarget }) {
   const meta = error ? dir : [dir, carga.tipo === 'ok' ? describeMeta(carga.meta, natural) : 'Cargando…'].filter(Boolean).join(' · ');
 
   return (
-    <aside className={`viewer${contextOverlay ? ' viewer--overlay' : ''}`} aria-label="Visor de imágenes" onKeyDown={alPulsarTecla}>
+    <aside className={`viewer${contextOverlay ? ' viewer--overlay' : ''}`} aria-label="Visor de imágenes" style={style} onKeyDown={alPulsarTecla}>
       <div className="viewer__head">
         <IconImage className="viewer__icon" />
         <div className="viewer__titles">

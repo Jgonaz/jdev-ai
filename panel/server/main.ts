@@ -30,12 +30,17 @@ import type { Project } from './projects.ts';
 import { RecentIndex } from './recent.ts';
 import { SessionService } from './sessions.ts';
 import { DEFAULT_PORT, readSettings, updateSettings } from './settings.ts';
+import { checkSessionTitle } from '../shared/session-title.ts';
+import { TranscriptRejected } from './titles.ts';
 import {
   SessionInputError,
   TmuxError,
   attachCommand,
   isPanelSessionName,
+  checkScrollRequest,
   paneCurrentPath,
+  paneScroll,
+  scrollPane,
   planSession,
   sessionExists,
   tmuxConfig,
@@ -218,6 +223,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const sesiones = new SessionService({
     tmux,
     stateDir: opts.stateDir ?? sessionStateDir(),
+    claudeProjectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects'),
     listProjects: async () => listProjects(opts.harnessRoot, readSettings(opts.configDir).projects),
     onChange: (lista) => broadcast({ type: 'sessions', sessions: lista }),
     pollMs: opts.pollMs,
@@ -384,6 +390,85 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       if (metodo !== 'GET') return noPermitido('GET');
       const plan = await planFrom(planInputFromQuery(url), res);
       if (plan) sendJson(res, 200, { dryRun: true, command: plan.command, args: plan.agentArgs });
+      return;
+    }
+
+    const t = /^\/api\/sessions\/([^/]+)\/title$/.exec(pathname);
+    if (t) {
+      if (metodo !== 'PUT') return noPermitido('PUT');
+      let nombre: string;
+      try {
+        nombre = decodeURIComponent(t[1]!);
+      } catch {
+        sendJson(res, 400, { error: 'nombre de sesión no válido' });
+        return;
+      }
+      if (!isPanelSessionName(nombre)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se pueden renombrar sesiones del panel (jdev-*)' });
+        return;
+      }
+      const cuerpo = await parseJsonBody(req, res);
+      if (!cuerpo) return;
+      const titulo = checkSessionTitle(cuerpo.title);
+      if (!titulo.ok) {
+        sendJson(res, 400, { error: titulo.error });
+        return;
+      }
+      try {
+        if (!(await sesiones.rename(nombre, titulo.title))) {
+          sendJson(res, 404, { error: 'la sesión no existe' });
+          return;
+        }
+      } catch (e) {
+        if (e instanceof TranscriptRejected) {
+          sendJson(res, 409, { error: e.message });
+          return;
+        }
+        console.error('Error renombrando la sesión:', e);
+        sendJson(res, 500, { error: 'No se pudo renombrar la sesión.' });
+        return;
+      }
+      sendJson(res, 200, { renamed: true, name: nombre, title: sesiones.list().find((s) => s.name === nombre)?.title ?? titulo.title });
+      return;
+    }
+
+    // GET: posición en el historial de tmux (la barra de scroll sondea esto solo
+    // mientras hace falta). POST: mueve la vista (arriba, abajo, página, línea).
+    const sc = /^\/api\/sessions\/([^/]+)\/scroll$/.exec(pathname);
+    if (sc) {
+      if (metodo !== 'GET' && metodo !== 'POST') return noPermitido('GET, POST');
+      let nombre: string;
+      try {
+        nombre = decodeURIComponent(sc[1]!);
+      } catch {
+        sendJson(res, 400, { error: 'nombre de sesión no válido' });
+        return;
+      }
+      if (!isPanelSessionName(nombre)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se admiten sesiones del panel (jdev-*)' });
+        return;
+      }
+      let estado;
+      if (metodo === 'GET') {
+        estado = await paneScroll(tmux, nombre);
+      } else {
+        const cuerpo = await parseJsonBody(req, res);
+        if (!cuerpo) return;
+        let peticion;
+        try {
+          peticion = checkScrollRequest(cuerpo);
+        } catch (e) {
+          if (!(e instanceof SessionInputError)) throw e;
+          sendJson(res, 400, { error: e.message });
+          return;
+        }
+        estado = await scrollPane(tmux, nombre, peticion);
+      }
+      if (estado === null) {
+        sendJson(res, 404, { error: 'la sesión no existe' });
+        return;
+      }
+      sendJson(res, 200, estado);
       return;
     }
 

@@ -19,6 +19,10 @@ import type {
 import type { SettingsPatch } from './lib/settingsPatch.ts';
 import { parseImageHeaders } from './lib/imageZoom.ts';
 import type { ImageMeta } from './lib/imageZoom.ts';
+import type { ScrollState } from './lib/scrollbar.ts';
+
+/** Orden de scroll por el historial de tmux (ver POST /api/sessions/:name/scroll). `line` es la posición, en líneas sobre el final. */
+export type ScrollRequest = { action: 'top' | 'bottom' | 'page-up' | 'page-down' } | { action: 'line'; line: number };
 
 export class ApiError extends Error {
   readonly status: number;
@@ -78,6 +82,15 @@ export const api = {
       method: 'DELETE',
       headers: { 'X-Jdev-Confirm': 'yes' },
     }),
+  renameSession: (nombre: string, title: string) =>
+    request<{ renamed: boolean; name: string; title: string }>(`/api/sessions/${encodeURIComponent(nombre)}/title`, {
+      method: 'PUT',
+      body: JSON.stringify({ title }),
+    }),
+  scrollState: (nombre: string, signal?: AbortSignal) =>
+    request<ScrollState>(`/api/sessions/${encodeURIComponent(nombre)}/scroll`, { signal }),
+  scrollSession: (nombre: string, orden: ScrollRequest) =>
+    request<ScrollState>(`/api/sessions/${encodeURIComponent(nombre)}/scroll`, { method: 'POST', body: JSON.stringify(orden) }),
   backlog: (proyecto: string, signal?: AbortSignal) => request<BacklogList>(`${projectBase(proyecto)}/backlog`, { signal }),
   backlogItem: (proyecto: string, item: string, signal?: AbortSignal) =>
     request<{ item: BacklogDetail }>(`${projectBase(proyecto)}/backlog/${encodeURIComponent(item)}`, { signal }).then((r) => r.item),

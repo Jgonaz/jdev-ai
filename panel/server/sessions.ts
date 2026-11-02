@@ -1,7 +1,9 @@
+import { join } from 'node:path';
+import { claudeConfigDir } from './paths.ts';
 import { StateStore, deriveState, stateByTmuxSession } from './states.ts';
 import type { SessionState } from './states.ts';
-import { TitleReader, bestTitle, defaultTitle, parseTitle } from './titles.ts';
-import { createSession, killSession, listSessions } from './tmux.ts';
+import { CLOSED_MARK, TitleReader, appendCustomTitle, bestTitle, defaultTitle, parseTitle, resolveTranscript } from './titles.ts';
+import { createSession, killSession, listSessions, setSessionTitle } from './tmux.ts';
 import type { CreateOptions, SessionPlan, TmuxConfig } from './tmux.ts';
 import type { Project } from './projects.ts';
 
@@ -50,6 +52,8 @@ const EMIT_DEBOUNCE_MS = 100;
 export type SessionServiceOptions = {
   tmux: TmuxConfig;
   stateDir: string;
+  /** Directorio de proyectos de Claude (con los transcripts); por defecto, el de CLAUDE_CONFIG_DIR o ~/.claude. */
+  claudeProjectsDir?: string;
   listProjects: () => Promise<Project[]>;
   /** Se invoca (con debounce) cuando cambia algo de la lista combinada. */
   onChange: (sesiones: SessionInfo[]) => void;
@@ -152,6 +156,34 @@ export class SessionService {
     });
   }
 
+  /**
+   * Cambia el título de una sesión. Con transcript de Claude (archivo de estado
+   * con transcript_path dentro del directorio de proyectos de Claude) añade una
+   * línea custom-title, que es de donde Claude y bin/session-title leen el
+   * título, y conserva la marca «[Closed] » si la tenía. Sin transcript (otros
+   * agentes, o Claude sin estado aún) lo guarda en la opción @jdev_title de la
+   * sesión de tmux. `title` ya viene validado. Devuelve false si la sesión no
+   * existe; lanza TranscriptRejected si su transcript queda fuera de Claude.
+   */
+  async rename(name: string, title: string): Promise<boolean> {
+    const sesiones = await listSessions(this.opts.tmux);
+    if (!sesiones.some((s) => s.name === name)) return false;
+    await this.states.refresh();
+    const file = stateByTmuxSession(this.states.snapshot(), sesiones).get(name);
+    const real = file?.transcriptPath
+      ? await resolveTranscript(file.transcriptPath, this.opts.claudeProjectsDir ?? join(claudeConfigDir(), 'projects'))
+      : null;
+    if (file && real) {
+      const actual = bestTitle(await this.titles.readTitles(real));
+      const cerrada = actual !== null && parseTitle(actual).closed;
+      await appendCustomTitle(real, file.sessionId, cerrada ? `${CLOSED_MARK}${title}` : title);
+    } else if (!(await setSessionTitle(this.opts.tmux, name, title))) {
+      return false;
+    }
+    this.emitIfChanged(await this.refresh());
+    return true;
+  }
+
   private schedule(): void {
     if (this.stopped || this.timer) return;
     this.timer = setTimeout(() => {
@@ -207,7 +239,10 @@ export class SessionService {
     const lista: SessionInfo[] = [];
     for (const s of sesiones) {
       const file = estados.get(s.name);
-      const bruto = file?.transcriptPath ? bestTitle(await this.titles.readTitles(file.transcriptPath)) : null;
+      // Prioridad: título propio del transcript (custom-title), el del renombrado
+      // sin transcript (@jdev_title) y el que genera Claude (ai-title).
+      const titulos = file?.transcriptPath ? await this.titles.readTitles(file.transcriptPath) : { custom: null, ai: null };
+      const bruto = titulos.custom ?? (s.title !== '' ? s.title : null) ?? titulos.ai;
       const parsed = bruto === null ? null : parseTitle(bruto);
       const proyecto = proyectos.find((p) => p.id === s.project);
       const branch = s.worktree

@@ -8,6 +8,14 @@ export function terminalMayTakeFocus(activo: Element | null, cuerpo: Element | n
   return activo === null || activo === cuerpo || activo.closest('.termbody') !== null;
 }
 
+/**
+ * Tras cerrar una pestaña, el foco va a la que queda activa. Se espera a que
+ * React pinte el cambio: la pestaña cerrada se lleva el foco al desaparecer.
+ */
+export function focusActiveTabSoon(): void {
+  window.setTimeout(focusActiveTab, 0);
+}
+
 /** Mueve el foco a la pestaña seleccionada (Ctrl+Alt+Escape). */
 export function focusActiveTab(): boolean {
   const pestaña = document.querySelector<HTMLElement>('.tab[aria-selected="true"]');

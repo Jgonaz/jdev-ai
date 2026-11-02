@@ -6,11 +6,13 @@ import { focusActiveTab } from './lib/focus.ts';
 import { useAlerts } from './lib/useAlerts.ts';
 import { useRoute } from './lib/route.ts';
 import { useShortcuts } from './lib/useShortcuts.ts';
+import { BacklogScreen } from './screens/BacklogScreen.tsx';
+import { GuiasScreen } from './screens/GuiasScreen.tsx';
 import { HistorialScreen } from './screens/HistorialScreen.tsx';
 import { InicioScreen } from './screens/InicioScreen.tsx';
-import { ProyectosScreen } from './screens/ProyectosScreen.tsx';
 import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { TerminalesScreen } from './screens/TerminalesScreen.tsx';
+import { WorktreesScreen } from './screens/WorktreesScreen.tsx';
 import { ImagesProvider } from './state/ImagesContext.tsx';
 import { SessionsProvider } from './state/SessionsContext.tsx';
 import { SettingsProvider, useSettings } from './state/SettingsContext.tsx';
@@ -57,7 +59,9 @@ function Shell() {
       )}
       <TerminalesScreen hidden={pendiente || ruta !== 'terminales'} />
       {!pendiente && ruta === 'inicio' && <InicioScreen onGoToTerminal={irATerminales} />}
-      {ruta === 'proyectos' && <ProyectosScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
+      {ruta === 'backlog' && <BacklogScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
+      {ruta === 'worktrees' && <WorktreesScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
+      {ruta === 'guias' && <GuiasScreen project={proyecto} item={elemento} onReplaceHash={reemplazar} />}
       {ruta === 'historial' && <HistorialScreen project={proyecto} file={elemento} onReplaceHash={reemplazar} />}
       {ruta === 'ajustes' && <SettingsScreen />}
       {newSessionOpen && <NewSessionDialog onCreated={irATerminales} />}

@@ -79,6 +79,20 @@ La barra lateral SHALL agrupar las sesiones por proyecto y SHALL mostrar de cada
 - **WHEN** una sesión ejecuta Copilot u OpenCode
 - **THEN** el panel muestra la sesión como viva o terminada, sin estados de turno
 
+### Requirement: Renombrar sesiones desde el panel
+
+El panel SHALL permitir renombrar una sesión desde un menú contextual (clic derecho o teclado) de la barra lateral y de las pestañas, con un título de hasta 80 caracteres sin caracteres de control. Para una sesión de Claude con transcript dentro del directorio de proyectos de Claude, el panel SHALL añadir al transcript una línea `custom-title` con el mismo formato que `bin/session-title`, conservando la marca `[Closed]` si la tenía, y SHALL rechazar un transcript fuera de ese directorio. Para el resto, el panel SHALL guardar el título en la propia sesión de tmux. El título nuevo SHALL mostrarse sin recargar.
+
+#### Scenario: Renombrar una sesión de Claude
+
+- **WHEN** la persona elige «Renombrar…» en el menú contextual de una sesión de Claude y guarda «Revisar login»
+- **THEN** el transcript recibe una línea `custom-title` con ese título y la barra lateral y la pestaña lo muestran
+
+#### Scenario: Renombrar una sesión sin transcript
+
+- **WHEN** la persona renombra una sesión de Codex
+- **THEN** el panel guarda el título en la sesión de tmux y lo muestra en lugar del título por defecto
+
 ### Requirement: El estado de sesión se registra fuera del panel
 
 El harness SHALL proporcionar `bin/session-state`, que el lanzador registra como hook de Claude Code y que escribe el estado de la sesión, su identificador, proyecto, agente, ruta del transcript y sesión de tmux en un archivo por sesión bajo el directorio de estado del usuario. El script SHALL funcionar aunque el panel no esté arrancado, SHALL NOT bloquear ni alterar el turno del agente ante un error y SHALL escribir el archivo de forma atómica.
@@ -219,13 +233,13 @@ Al pasar el ratón sobre una ruta de imagen enlazada en una terminal, el panel S
 - **WHEN** la opción está desactivada, que es su valor por defecto
 - **THEN** las rutas nuevas solo se enlazan y el visor no se abre solo
 
-### Requirement: Pantalla Proyectos con el backlog por estados
+### Requirement: Pantalla Backlog con el backlog por estados
 
-El panel SHALL ofrecer una pantalla Proyectos con la lista de proyectos (los de `projects/` y el harness) y, para el elegido, sus elementos de `docs/backlog/` del checkout principal agrupados en columnas por estado: backlog, por hacer, en curso, y hecho y descartado plegados. Cada tarjeta SHALL mostrar título, tipo, prioridad y fecha de creación. La persona SHALL poder filtrar por tipo y prioridad y buscar por texto en título, identificador y resumen. Un proyecto sin `docs/backlog/` SHALL mostrar un estado vacío. La vista SHALL actualizarse sola cuando cambien los archivos del backlog.
+El panel SHALL ofrecer una pantalla Backlog, a la que se llega desde el menú «Proyectos» de la cabecera, con la lista de proyectos (los de `projects/` y el harness) y, para el elegido, sus elementos de `docs/backlog/` del checkout principal agrupados en columnas por estado: backlog, por hacer, en curso, y hecho y descartado plegados. Cada tarjeta SHALL mostrar título, tipo, prioridad y fecha de creación. La persona SHALL poder filtrar por tipo y prioridad y buscar por texto en título, identificador y resumen. Un proyecto sin `docs/backlog/` SHALL mostrar un estado vacío. La vista SHALL actualizarse sola cuando cambien los archivos del backlog.
 
 #### Scenario: Ver el backlog de un proyecto
 
-- **WHEN** la persona abre Proyectos y elige balanz.io
+- **WHEN** la persona abre Backlog desde el menú Proyectos y elige balanz.io
 - **THEN** ve sus elementos repartidos por estado según la carpeta en la que está cada archivo
 
 #### Scenario: Cambio externo
@@ -275,14 +289,24 @@ El detalle SHALL ofrecer «Trabajar en esto», que abre el diálogo Nueva sesió
 - **WHEN** la persona pulsa «Trabajar en esto» en un elemento de fitnessia
 - **THEN** se abre Nueva sesión con fitnessia y un prompt con el identificador y la ruta del elemento, listo para revisar y lanzar
 
-### Requirement: Worktrees y guías del proyecto
+### Requirement: Pantallas de worktrees y guías del proyecto
 
-La pantalla Proyectos SHALL incluir una pestaña Worktrees con los worktrees del proyecto, su rama, commits por delante y por detrás de la rama principal, si tienen cambios sin commit y las sesiones del panel que trabajan en ellos, con acceso a su terminal o a abrir una sesión nueva en ese worktree. SHALL incluir una pestaña Guías con los documentos de `docs/user-guides/` del proyecto, para leerlos con el mismo visor de Markdown.
+El menú «Proyectos» de la cabecera SHALL ofrecer tres pantallas independientes: Backlog, Worktrees y Guías, con ruta propia (`#/backlog/<proyecto>[/<elemento>]`, `#/worktrees/<proyecto>` y `#/guias/<proyecto>[/<guía>]`), cada una con su cabecera (monograma, nombre del proyecto y la carpeta que muestra) y una barra lateral de proyectos común que mantiene la pantalla en curso al elegir otro proyecto. Las rutas antiguas `#/proyectos…` SHALL redirigirse a las de cada pantalla. La pantalla Worktrees SHALL mostrar los worktrees del proyecto, su rama, commits por delante y por detrás de la rama principal, si tienen cambios sin commit y las sesiones del panel que trabajan en ellos, con acceso a su terminal o a abrir una sesión nueva en ese worktree. La pantalla Guías SHALL mostrar los documentos de `docs/user-guides/` del proyecto, para leerlos con el mismo visor de Markdown.
 
 #### Scenario: Ir a la terminal de un worktree
 
-- **WHEN** la persona pulsa la sesión de un worktree en la pestaña Worktrees
+- **WHEN** la persona pulsa la sesión de un worktree en la pantalla Worktrees
 - **THEN** el panel abre esa terminal en la pantalla Terminales
+
+#### Scenario: Cambiar de proyecto sin cambiar de pantalla
+
+- **WHEN** la persona está en Worktrees de un proyecto y elige otro en la barra lateral
+- **THEN** el panel muestra los Worktrees del otro proyecto, con su propia cabecera, y no vuelve a Backlog
+
+#### Scenario: Enlace antiguo
+
+- **WHEN** la persona abre `#/proyectos/balanz.io/worktrees`
+- **THEN** el panel sustituye la dirección por `#/worktrees/balanz.io` sin añadir una entrada al historial del navegador
 
 ### Requirement: Confirmar los cambios del backlog
 
@@ -446,7 +470,7 @@ Inicio SHALL mostrar una tarjeta por proyecto visible, ordenadas por su última 
 #### Scenario: Ir al backlog de un proyecto
 
 - **WHEN** la persona pulsa «Backlog» en la tarjeta de balanz.io
-- **THEN** el panel abre Proyectos con balanz.io
+- **THEN** el panel abre Backlog con balanz.io
 
 ### Requirement: Mensaje de la notificación en el estado de sesión
 

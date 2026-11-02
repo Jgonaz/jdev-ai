@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { rememberHistoryFilters } from '../../lib/history.ts';
 import { historyHref, projectHref } from '../../lib/route.ts';
 import { attachCommand, fallbackProject, sessionPlace } from '../../lib/sessions.ts';
@@ -7,7 +8,7 @@ import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import { IconCopy } from '../Icons.tsx';
 
 /** Contexto de la terminal activa: solo datos que ya conoce el panel. */
-export function ContextPanel() {
+export function ContextPanel({ style }: { style?: CSSProperties }) {
   const { sessions, projects, tmuxSocket } = useSessions();
   const { workspace, contextOverlay, closeContextOverlay } = useWorkspace();
   const [copiado, setCopiado] = useState(false);
@@ -29,6 +30,7 @@ export function ContextPanel() {
     <aside
       className={`context${contextOverlay ? ' context--overlay' : ''}`}
       aria-label="Contexto del proyecto"
+      style={style}
       onKeyDown={(e) => {
         if (contextOverlay && e.key === 'Escape') closeContextOverlay();
       }}
@@ -83,7 +85,7 @@ export function ContextPanel() {
             Backlog e historial
           </h2>
           <div className="context__links">
-            <a className="btn btn--ghost btn--sm" href={projectHref(proyecto.id)} aria-label={`Ver backlog de ${proyecto.name}`}>
+            <a className="btn btn--ghost btn--sm" href={projectHref('backlog', proyecto.id)} aria-label={`Ver backlog de ${proyecto.name}`}>
               Ver backlog
             </a>
             {/* Historial abre con el filtro recordado: se deja solo el de este proyecto. */}

@@ -70,6 +70,19 @@ describe('espacio de trabajo', () => {
     expect(w).toMatchObject({ tabs: [], active: null, start: 0 });
   });
 
+  it('cerrar una pestaña (la «x») pasa la activa a la siguiente, o a la anterior si era la última', () => {
+    const w = aplicar(EMPTY_WORKSPACE, ...abrir('a', 'b', 'c'), { type: 'activate', name: 'a' });
+    // Primera: la siguiente ocupa su sitio.
+    expect(aplicar(w, { type: 'close', name: 'a' })).toMatchObject({ tabs: ['b', 'c'], active: 'b' });
+    // Última activa: pasa a la anterior.
+    expect(aplicar(w, { type: 'activate', name: 'c' }, { type: 'close', name: 'c' })).toMatchObject({ tabs: ['a', 'b'], active: 'b' });
+    // Cerrar otra pestaña no cambia la activa.
+    expect(aplicar(w, { type: 'close', name: 'c' })).toMatchObject({ tabs: ['a', 'b'], active: 'a' });
+    expect(aplicar(w, { type: 'close', name: 'b' })).toMatchObject({ tabs: ['a', 'c'], active: 'a' });
+    // Una pestaña que no existe no cambia nada.
+    expect(aplicar(w, { type: 'close', name: 'z' })).toBe(w);
+  });
+
   it('cicla la distribución 1 → 2 → 4 → 1', () => {
     let w = EMPTY_WORKSPACE;
     const vistas = [0, 1, 2, 3].map(() => (w = aplicar(w, { type: 'cycleLayout' })).layout);

@@ -40,6 +40,7 @@
 .logo {
   display: inline-flex;
   align-items: center;
+  white-space: nowrap;
   font-family: var(--font-title);
   font-weight: 800;
   font-size: 14px;
@@ -94,4 +95,92 @@ a.nav__link:hover {
 }
 .screen--terminales {
   flex-direction: column;
+}
+
+/* ---------- Tirador de los paneles laterales ---------- */
+/* Hermano del panel, sin ancho propio: la zona de agarre (8 px) se solapa con el borde del panel. */
+.rhandle {
+  position: relative;
+  flex: 0 0 0;
+  width: 0;
+  z-index: 15;
+}
+.rhandle__grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.rhandle__grip::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background-color 0.12s;
+}
+.rhandle__grip:hover::after {
+  background: var(--accent-line);
+}
+.rhandle__grip:focus-visible::after,
+.rhandle__grip--active::after {
+  background: var(--accent);
+}
+.rhandle__grip:focus-visible {
+  outline-offset: -1px;
+}
+/* Capa transparente mientras se arrastra: ni xterm ni otros elementos reciben el puntero. */
+.rhandle__shield {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  cursor: col-resize;
+}
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---------- Menú «Proyectos» de la cabecera ---------- */
+.navmenu {
+  position: relative;
+}
+button.nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+button.nav__link:hover {
+  color: var(--fg);
+}
+.nav__caret {
+  transition: transform 0.12s;
+  transform: rotate(90deg);
+}
+button.nav__link[aria-expanded='true'] .nav__caret {
+  transform: rotate(-90deg);
+}
+.navmenu .menu__list {
+  right: auto;
+  left: 0;
+  min-width: 190px;
+}
+a.menu__item {
+  color: var(--fg);
+}
+a.menu__item:hover {
+  color: var(--fg);
+}
+a.menu__item[aria-current='page'] {
+  background: var(--bg-raised);
+  font-weight: 500;
 }

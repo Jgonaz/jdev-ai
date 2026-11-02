@@ -134,3 +134,19 @@ export const IconAlert = (p: Props) => (
     <path d="M12 7v6M12 16.5v.5" />
   </Svg>
 );
+export const IconPencil = (p: Props) => (
+  <Svg {...p}>
+    <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z" />
+    <path d="M13.5 6.5l4 4" />
+  </Svg>
+);
+export const IconToTop = (p: Props) => (
+  <Svg {...p}>
+    <path d="M6 4h12M7 14l5-5 5 5M7 20l5-5 5 5" />
+  </Svg>
+);
+export const IconToBottom = (p: Props) => (
+  <Svg {...p}>
+    <path d="M6 20h12M7 10l5 5 5-5M7 4l5 5 5-5" />
+  </Svg>
+);

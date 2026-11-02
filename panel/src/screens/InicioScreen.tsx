@@ -253,7 +253,7 @@ function ProjectCardView({ card, ahora, acciones }: { card: ProjectCard; ahora: 
         <button type="button" className="pcard__btn pcard__btn--main" onClick={() => acciones.abrirProyecto(card.sessions)} aria-label={`Abrir terminales de ${p.name}`}>
           Abrir terminales
         </button>
-        <a className="pcard__btn" href={projectHref(p.id)} aria-label={`Backlog de ${p.name}`}>
+        <a className="pcard__btn" href={projectHref('backlog', p.id)} aria-label={`Backlog de ${p.name}`}>
           Backlog
         </a>
         <button type="button" className="pcard__btn pcard__btn--icon" onClick={() => acciones.nuevaSesion(p.id)} aria-label={`Nueva sesión en ${p.name}`} title="Nueva sesión en este proyecto">

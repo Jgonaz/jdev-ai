@@ -4,31 +4,28 @@ import { resolveLocalPath, shortDateMs } from '../../lib/backlog.ts';
 import type { Guide, GuideContent, ProjectInfo } from '../../types.ts';
 import { Markdown } from '../Markdown.tsx';
 
-export function GuidesTab({ project }: { project: ProjectInfo }) {
-  const [guias, setGuias] = useState<Guide[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [elegida, setElegida] = useState<string | null>(null);
+/**
+ * Guías de `docs/user-guides/` del proyecto y su lector (pantalla Guías). La
+ * lista y la guía abierta vienen de la pantalla, que las lleva en la ruta
+ * (`#/guias/<id>/<ruta>`); aquí solo se carga el contenido de la guía elegida.
+ */
+export function GuidesView(props: {
+  project: ProjectInfo;
+  guias: Guide[] | null;
+  error: string | null;
+  /** Ruta de la guía abierta, ya comprobada contra la lista. */
+  elegida: string | null;
+  onSelect: (path: string) => void;
+}) {
+  const { project, guias, error, elegida } = props;
   const [contenido, setContenido] = useState<GuideContent | null>(null);
   const [errorGuia, setErrorGuia] = useState<string | null>(null);
   const lector = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const control = new AbortController();
-    setGuias(null);
-    setError(null);
-    setElegida(null);
-    api
-      .guides(project.id, control.signal)
-      .then((g) => setGuias(g))
-      .catch((e: unknown) => {
-        if (!control.signal.aborted) setError(e instanceof Error ? e.message : String(e));
-      });
-    return () => control.abort();
-  }, [project.id]);
-
-  useEffect(() => {
     if (elegida === null) {
       setContenido(null);
+      setErrorGuia(null);
       return;
     }
     const control = new AbortController();
@@ -62,7 +59,7 @@ export function GuidesTab({ project }: { project: ProjectInfo }) {
         <ul>
           {guias.map((g) => (
             <li key={g.path}>
-              <button type="button" className="guides__item" aria-current={g.path === elegida ? 'true' : undefined} onClick={() => setElegida(g.path)}>
+              <button type="button" className="guides__item" aria-current={g.path === elegida ? 'true' : undefined} onClick={() => props.onSelect(g.path)}>
                 <span className="guides__title">{g.title}</span>
                 <span className="guides__meta">
                   <span className="guides__path">{g.path}</span>

@@ -4,6 +4,9 @@ const ATAJOS = [
   { teclas: 'Ctrl+Alt+N', accion: 'Nueva sesión' },
   { teclas: 'Ctrl+Alt+L', accion: 'Cambiar la distribución (una, dos columnas, cuatro)' },
   { teclas: 'Ctrl+Alt+Esc', accion: 'Salir del foco de la terminal: lleva el foco a la pestaña activa (Tab dentro de la terminal es de la shell, para autocompletar)' },
+  { teclas: 'Ctrl+Retroceso', accion: 'En la terminal: borra la palabra anterior (envía Ctrl+W)' },
+  { teclas: 'Ctrl+Supr', accion: 'En la terminal: borra la palabra siguiente (envía Alt+D)' },
+  { teclas: 'Mayús+RePág / Mayús+AvPág', accion: 'En la terminal: sube y baja una página por el historial (el de tmux o, a pantalla completa, el de la aplicación)' },
   { teclas: 'Esc', accion: 'Cerrar un diálogo o un menú' },
 ];
 

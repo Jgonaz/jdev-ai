@@ -3,6 +3,7 @@ import { api, markOldPending } from '../api.ts';
 import { IconAlert } from '../components/Icons.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { Monogram } from '../components/Monogram.tsx';
+import { ResizeHandle } from '../components/ResizeHandle.tsx';
 import { HistoryReader } from '../components/historial/Reader.tsx';
 import {
   HISTORY_COLLAPSED,
@@ -29,7 +30,10 @@ import {
   visibleInGroup,
 } from '../lib/history.ts';
 import type { HistoryFilters, HistoryView, OldPendingSummary } from '../lib/history.ts';
+import type { PanelLimits } from '../lib/panelWidth.ts';
 import { historyHref } from '../lib/route.ts';
+import { useMediaQuery } from '../lib/useMediaQuery.ts';
+import { usePanelWidth } from '../lib/usePanelWidth.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import type { HistoryEntry, HistoryState, ProjectInfo } from '../types.ts';
 
@@ -117,6 +121,10 @@ function MarkOldDialog(props: { project: string; summary: OldPendingSummary; bus
 }
 
 /** Pantalla Historial (Registro.dc.html): lista de entradas de todos los proyectos y lector. */
+const LIST_LIMITS: PanelLimits = { min: 280, max: 720, default: 440 };
+/** Igual que el `@media` de historial.css: por debajo la lista va encima del lector, sin tirador. */
+const SIDE_BY_SIDE_QUERY = '(min-width: 900px)';
+
 export function HistorialScreen(props: {
   project: string | null;
   file: string | null;
@@ -124,6 +132,8 @@ export function HistorialScreen(props: {
   onReplaceHash: (hash: string) => void;
 }) {
   const { projects, onHistoryChange } = useSessions();
+  const enColumnas = useMediaQuery(SIDE_BY_SIDE_QUERY);
+  const anchoLista = usePanelWidth('historial-lista', LIST_LIMITS);
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<HistoryFilters>(() => loadHistoryFilters());
@@ -219,7 +229,7 @@ export function HistorialScreen(props: {
 
   return (
     <div className="screen screen--historial">
-      <section className="hlist" aria-label="Lista de entradas del historial">
+      <section className="hlist" aria-label="Lista de entradas del historial" style={anchoLista.style('--hlist-w', enColumnas)}>
         <div className="hlist__filters" role="search" aria-label="Filtrar el historial">
           <div className="hlist__selects">
             <label className="hlist__field" htmlFor={idProyecto}>
@@ -332,6 +342,7 @@ export function HistorialScreen(props: {
           )}
         </div>
       </section>
+      {enColumnas && <ResizeHandle side="left" limits={LIST_LIMITS} panel={anchoLista} label="Ancho de la lista del historial" />}
 
       {limpiar && (
         <MarkOldDialog project={efectivos.project} summary={antiguos} busy={limpiando} onCancel={() => setLimpiar(false)} onConfirm={() => void confirmarLimpieza()} />

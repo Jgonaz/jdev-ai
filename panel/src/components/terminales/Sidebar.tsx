@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, visibleRecent } from '../../lib/recent.ts';
 import type { RecentGroup } from '../../lib/recent.ts';
 import { groupSessions, sessionMeta, visualState } from '../../lib/sessions.ts';
@@ -12,11 +13,35 @@ import { IconChevron, IconClock, IconFilter } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
 import { Legend } from './Legend.tsx';
+import { LiveSidebarSection } from './LiveSessions.tsx';
+import { useSessionMenu } from './SessionMenu.tsx';
+import { useLiveUnopened } from './useLiveUnopened.ts';
 
-function SessionRow({ s, ahora, abierta, onOpen }: { s: SessionInfo; ahora: number; abierta: boolean; onOpen: () => void }) {
+type MenuHandlers = Pick<ReturnType<typeof useSessionMenu>, 'onContextMenu' | 'onKeyDown'>;
+
+function SessionRow({
+  s,
+  ahora,
+  abierta,
+  onOpen,
+  menu,
+}: {
+  s: SessionInfo;
+  ahora: number;
+  abierta: boolean;
+  onOpen: () => void;
+  menu: MenuHandlers;
+}) {
   const estado = visualState(s);
   return (
-    <button type="button" className={`srow srow--${estado}`} aria-current={abierta ? 'true' : undefined} onClick={onOpen}>
+    <button
+      type="button"
+      className={`srow srow--${estado}`}
+      aria-current={abierta ? 'true' : undefined}
+      onClick={onOpen}
+      onContextMenu={(e) => menu.onContextMenu(e, s)}
+      onKeyDown={(e) => menu.onKeyDown(e, s)}
+    >
       <StatusLight state={estado} label />
       <span className="srow__text">
         <span className="srow__title">{s.title}</span>
@@ -96,7 +121,7 @@ function mergeGroups(vivas: ProjectGroup[], anteriores: RecentGroup[]): SidebarG
   return [...porId.values()];
 }
 
-function Group({ g, ahora }: { g: SidebarGroup; ahora: number }) {
+function Group({ g, ahora, menu }: { g: SidebarGroup; ahora: number; menu: MenuHandlers }) {
   const { visible, openSession } = useWorkspace();
   return (
     <section className="group" aria-label={g.project.name}>
@@ -110,23 +135,25 @@ function Group({ g, ahora }: { g: SidebarGroup; ahora: number }) {
         )}
       </div>
       {g.sessions.map((s) => (
-        <SessionRow key={s.name} s={s} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} />
+        <SessionRow key={s.name} s={s} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} menu={menu} />
       ))}
       {g.previous.length > 0 && <Previous project={g.project} items={g.previous} ahora={ahora} />}
     </section>
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ style }: { style?: CSSProperties }) {
   const { sessions, projects, loaded, error, recent } = useSessions();
   const { prefs, setPrefs } = useWorkspace();
   const ahora = useNow();
+  const sinAbrir = useLiveUnopened();
+  const { menu, onContextMenu, onKeyDown } = useSessionMenu({ withOpen: true });
   const vivas = groupSessions(sessions, projects, { hideClosed: prefs.hideClosed });
   const grupos = mergeGroups(vivas, groupRecent(recent, projects, { hideClosed: prefs.hideClosed }));
   const oculta = sessions.length - vivas.reduce((n, g) => n + g.sessions.length, 0);
 
   return (
-    <aside className="sidebar" aria-label="Proyectos y sesiones">
+    <aside className="sidebar" aria-label="Proyectos y sesiones" style={style}>
       <div className="sidebar__head">
         <span className="label-mono">
           ~/proyectos <span className="sidebar__count">({grupos.length})</span>
@@ -143,12 +170,14 @@ export function Sidebar() {
         </button>
       </div>
       {grupos.map((g) => (
-        <Group key={g.project.id} g={g} ahora={ahora} />
+        <Group key={g.project.id} g={g} ahora={ahora} menu={{ onContextMenu, onKeyDown }} />
       ))}
       {loaded && grupos.length === 0 && (
         <p className="sidebar__empty">{error ?? (oculta > 0 ? 'Solo hay sesiones cerradas.' : 'Aún no hay sesiones.')}</p>
       )}
+      <LiveSidebarSection items={sinAbrir} menu={{ onContextMenu, onKeyDown }} />
       <Legend sessions={sessions} />
+      {menu}
     </aside>
   );
 }

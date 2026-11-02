@@ -1,4 +1,4 @@
-/* ---------- Pantalla Proyectos (Proyecto.dc.html) ---------- */
+/* ---------- Pantallas de proyecto: Backlog, Worktrees y Guías (Proyecto.dc.html) ---------- */
 .screen--proyectos {
   position: relative;
 }
@@ -9,7 +9,8 @@
 
 /* Barra lateral de proyectos */
 .psidebar {
-  flex: 0 0 210px;
+  flex: 0 1 var(--psidebar-w, 210px);
+  min-width: 160px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -63,7 +64,7 @@
 /* Zona principal */
 .pmain {
   flex: 1;
-  min-width: 0;
+  min-width: min(360px, 100%);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -106,29 +107,6 @@
 }
 .phead__pending:empty {
   display: none;
-}
-.ptabs {
-  margin-left: auto;
-  display: flex;
-  padding: 3px;
-  border-radius: var(--radius);
-  background: var(--bg-surface);
-  border: 1px solid var(--line);
-}
-.ptabs [role='tab'] {
-  padding: 7px 14px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: var(--text-md);
-}
-.ptabs [role='tab']:hover {
-  color: var(--fg);
-}
-.ptabs [role='tab'][aria-selected='true'] {
-  background: var(--line);
-  color: var(--fg);
 }
 .ppanel {
   flex: 1;
@@ -235,7 +213,9 @@
 }
 .bcol {
   flex: 1 1 0;
-  min-width: 0;
+  /* Con el centro estrecho (paneles laterales anchos) las columnas no se aplastan:
+     el tablero desborda y .pmain hace scroll horizontal. */
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -315,6 +295,7 @@
 }
 .bcol--closed {
   flex: 0 0 168px;
+  min-width: 168px;
   gap: 6px;
 }
 .bcol--closed-open {
@@ -433,8 +414,8 @@
 
 /* Detalle */
 .ddet {
-  flex: 0 0 440px;
-  min-width: 0;
+  flex: 0 1 var(--ddet-w, 440px);
+  min-width: 320px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -992,6 +973,7 @@
    lo cierra) y por debajo de 860 px las columnas se apilan. Límites exclusivos. */
 @media (max-width: 1099.98px) {
   .ddet {
+    min-width: 0;
     position: absolute;
     top: 0;
     right: 0;
@@ -1010,7 +992,8 @@
 }
 @media (max-width: 859.98px) {
   .psidebar {
-    flex-basis: 64px;
+    flex: 0 0 64px;
+    min-width: 0;
   }
   /* El nombre sigue disponible para lectores de pantalla. */
   .prow__name {

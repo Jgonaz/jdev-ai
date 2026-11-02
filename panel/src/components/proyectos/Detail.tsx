@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { ApiError, api, imageUrl, moveBacklogItem } from '../../api.ts';
 import {
   STATE_LABELS,
@@ -134,6 +134,7 @@ export function Detail(props: {
   listStamp: number;
   /** Superpuesto al tablero (anchos estrechos y sin diálogo abierto): atrapa el foco. */
   overlay: boolean;
+  style?: CSSProperties;
   onClose: () => void;
   onMoved: () => void;
   /** El elemento no existe (404): la pantalla quita el itemId de la URL. */
@@ -247,7 +248,7 @@ export function Detail(props: {
   };
 
   return (
-    <aside className="ddet" aria-label="Detalle del elemento" ref={raiz}>
+    <aside className="ddet" aria-label="Detalle del elemento" ref={raiz} style={props.style}>
       <div className="ddet__head">
         <div className="ddet__idrow">
           <span className="ddet__id">{detalle?.id ?? itemId}</span>

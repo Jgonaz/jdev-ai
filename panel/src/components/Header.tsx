@@ -1,10 +1,11 @@
-import { historyHref, projectHref, routeHref } from '../lib/route.ts';
+import { historyHref, isProjectScreen, routeHref } from '../lib/route.ts';
 import type { Route } from '../lib/route.ts';
 import { waitingCount, waitingLabel } from '../lib/sessions.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
 import { IconPlus } from './Icons.tsx';
 import { Logo } from './Logo.tsx';
+import { ProjectsMenu } from './ProjectsMenu.tsx';
 
 export function Header({ route }: { route: Route | null }) {
   const { sessions } = useSessions();
@@ -23,9 +24,7 @@ export function Header({ route }: { route: Route | null }) {
         <a className="nav__link" href={routeHref('terminales')} aria-current={route === 'terminales' ? 'page' : undefined}>
           Terminales
         </a>
-        <a className="nav__link" href={projectHref()} aria-current={route === 'proyectos' ? 'page' : undefined}>
-          Proyectos
-        </a>
+        <ProjectsMenu pantalla={isProjectScreen(route) ? route : null} />
         <a className="nav__link" href={historyHref()} aria-current={route === 'historial' ? 'page' : undefined}>
           Historial
         </a>

@@ -2,7 +2,8 @@
   flex-direction: row;
 }
 .setnav {
-  flex: 0 0 230px;
+  flex: 0 1 var(--setnav-w, 230px);
+  min-width: 180px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -35,7 +36,7 @@
 }
 .setmain {
   flex: 1;
-  min-width: 0;
+  min-width: min(360px, 100%);
   overflow-y: auto;
 }
 .setmain__inner {
