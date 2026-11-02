@@ -18,6 +18,7 @@ import type {
   Settings,
   WorktreeList,
 } from './types.ts';
+import type { FollowKind, FollowResponse } from '../shared/follow.ts';
 import type { SettingsPatch } from './lib/settingsPatch.ts';
 import { parseImageHeaders } from './lib/imageZoom.ts';
 import type { ImageMeta } from './lib/imageZoom.ts';
@@ -93,6 +94,14 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ title }),
     }),
+  /** Lo nuevo de un subagente o una shell en segundo plano de una sesión, desde el byte `from` (null: la primera lectura). */
+  follow: (sesion: string, kind: FollowKind, id: string, from: number | null, signal?: AbortSignal) =>
+    request<FollowResponse>(
+      `/api/sessions/${encodeURIComponent(sesion)}/follow/${kind}/${encodeURIComponent(id)}${from === null ? '' : `?from=${from}`}`,
+      { signal },
+    ),
+  /** Sonidos de Windows disponibles para los avisos ([] fuera de WSL). */
+  windowsSounds: () => request<{ windows: string[] }>('/api/sounds'),
   scrollState: (nombre: string, signal?: AbortSignal) =>
     request<ScrollState>(`/api/sessions/${encodeURIComponent(nombre)}/scroll`, { signal }),
   scrollSession: (nombre: string, orden: ScrollRequest) =>

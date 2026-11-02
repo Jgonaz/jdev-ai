@@ -138,6 +138,13 @@ describe('ajustes', () => {
     expect(readSettings()).toEqual(r);
   });
 
+  it('sonidos de aviso: acepta los del catálogo y conserva el anterior si no es válido', () => {
+    expect(readSettings().notifications).toMatchObject({ soundWaiting: 'teletipo', soundFinish: 'gota' });
+    updateSettings({ notifications: { soundWaiting: 'campanilla', soundFinish: 'marimba' } });
+    updateSettings({ notifications: { soundWaiting: 'sirena', soundFinish: 3 } });
+    expect(readSettings().notifications).toMatchObject({ soundWaiting: 'campanilla', soundFinish: 'marimba' });
+  });
+
   it('overrides por proyecto: validación, fusión y borrado con null', () => {
     updateSettings({ projects: { 'balanz.io': { mono: 'bz', color: '#112233', visible: false } } });
     updateSettings({ projects: { 'balanz.io': { mono: 'largo' }, fitnessia: { color: 'rojo', visible: true } } });

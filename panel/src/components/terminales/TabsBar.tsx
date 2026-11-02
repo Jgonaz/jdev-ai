@@ -6,7 +6,9 @@ import { useImages } from '../../state/ImagesContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import { fallbackProject } from '../../lib/sessions.ts';
 import { focusActiveTabSoon } from '../../lib/focus.ts';
-import { IconClose, IconLayout1, IconLayout2, IconLayout4, IconSidePanel } from '../Icons.tsx';
+import { isFollowKey, parseFollowKey } from '../../lib/follow.ts';
+import { useFollowEntry } from '../../lib/useFollow.ts';
+import { IconClose, IconEye, IconLayout1, IconLayout2, IconLayout4, IconShell, IconSidePanel } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
 import { useSessionMenu } from './SessionMenu.tsx';
@@ -16,6 +18,67 @@ const LAYOUTS: { layout: Layout; label: string; Icon: typeof IconLayout1 }[] = [
   { layout: 2, label: 'Dos columnas', Icon: IconLayout2 },
   { layout: 4, label: 'Cuadrícula de cuatro', Icon: IconLayout4 },
 ];
+
+/** Pestaña de seguimiento de un subagente o una shell: solo lectura, sin luz de estado de sesión. */
+function FollowTab({ clave, activa, enPantalla, onClose }: { clave: string; activa: boolean; enPantalla: boolean; onClose: () => void }) {
+  const objetivo = parseFollowKey(clave);
+  const { sessions } = useSessions();
+  const { activate } = useWorkspace();
+  const guardado = useFollowEntry(clave);
+  if (!objetivo) return null;
+  const esAgente = objetivo.kind === 'agent';
+  const actividad = sessions.find((s) => s.name === objetivo.session)?.activity;
+  const tipo = guardado?.meta?.agentType || actividad?.subagents.find((a) => a.id === objetivo.id)?.type || 'subagente';
+  const nombre = esAgente
+    ? (guardado?.meta?.description ?? '')
+    : guardado?.meta?.command || actividad?.shells.find((a) => a.id === objetivo.id)?.label || 'shell';
+  const completo = esAgente ? `${tipo}${nombre ? ` · ${nombre}` : ''}` : nombre;
+  return (
+    <div
+      role="presentation"
+      className={`tabwrap${activa ? ' tabwrap--active' : ''}`}
+      // El clic central cierra la pestaña, como en el navegador; sin esto el navegador activa el autodesplazamiento.
+      onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+      onAuxClick={(e) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        onClose();
+      }}
+    >
+      <button
+        type="button"
+        role="tab"
+        id={`tab-${clave}`}
+        aria-selected={activa}
+        aria-controls={enPantalla ? `pane-${clave}` : undefined}
+        tabIndex={activa ? 0 : -1}
+        className={`tab tab--follow${enPantalla ? ' tab--visible' : ''}`}
+        onClick={() => activate(clave)}
+        title={`Seguimiento (solo lectura): ${completo}`}
+      >
+        <span className="tab__eye">{esAgente ? <IconEye size={14} /> : <IconShell size={14} />}</span>
+        {esAgente ? (
+          <>
+            <span className="tab__kind">{tipo}</span>
+            {nombre && <span className="tab__title">{nombre}</span>}
+          </>
+        ) : (
+          <span className="tab__kind tab__title">{nombre}</span>
+        )}
+      </button>
+      <button
+        type="button"
+        className="tab__close"
+        aria-label={`Cerrar el seguimiento de ${esAgente ? tipo : nombre}`}
+        title="Cerrar el seguimiento"
+        tabIndex={activa ? 0 : -1}
+        onClick={onClose}
+      >
+        <IconClose size={12} />
+      </button>
+    </div>
+  );
+}
 
 export function TabsBar() {
   const { sessions, projects } = useSessions();
@@ -56,6 +119,9 @@ export function TabsBar() {
         }}
       >
         {workspace.tabs.map((name) => {
+          if (isFollowKey(name)) {
+            return <FollowTab key={name} clave={name} activa={workspace.active === name} enPantalla={visible.includes(name)} onClose={() => cerrar(name)} />;
+          }
           const s = sessions.find((x) => x.name === name);
           if (!s) return null;
           const estado = visualState(s);

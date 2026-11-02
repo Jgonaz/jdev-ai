@@ -1,7 +1,8 @@
 import { createReadStream } from 'node:fs';
 import { constants } from 'node:fs';
-import { open, realpath, stat } from 'node:fs/promises';
+import { lstat, open, realpath, stat } from 'node:fs/promises';
 import { sep } from 'node:path';
+import { openRegularFile } from './safefile.ts';
 import { CLOSED_MARK } from '../shared/session-title.ts';
 
 // Claude guarda el título de la sesión en el transcript (JSONL) como líneas
@@ -67,7 +68,9 @@ function lastTitlesIn(texto: string): Titles {
 }
 
 async function readRange(ruta: string, start: number, length: number): Promise<Buffer> {
-  const fh = await open(ruta, 'r');
+  const abierto = await openRegularFile(ruta);
+  if (!abierto) throw new Error('no es un archivo regular');
+  const fh = abierto.fh;
   try {
     const buf = Buffer.alloc(length);
     const { bytesRead } = await fh.read(buf, 0, length, start);
@@ -208,13 +211,17 @@ export async function resolveTranscript(ruta: string, projectsDir: string): Prom
  * acabara en salto de línea, se antepone uno en la misma escritura.
  */
 export async function appendCustomTitle(realPath: string, sessionId: string, title: string): Promise<void> {
-  const fh = await open(realPath, constants.O_WRONLY | constants.O_APPEND | constants.O_NOFOLLOW);
+  // Antes de abrir: una tubería con este nombre bloquearía el servidor.
+  if (!(await lstat(realPath)).isFile()) throw new TranscriptRejected('El transcript de la sesión no es un archivo.');
+  const fh = await open(realPath, constants.O_WRONLY | constants.O_APPEND | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const st = await fh.stat();
     if (!st.isFile()) throw new TranscriptRejected('El transcript de la sesión no es un archivo.');
     let prefijo = '';
     if (st.size > 0) {
-      const lector = await open(realPath, 'r');
+      const lectura = await openRegularFile(realPath);
+      if (!lectura) throw new TranscriptRejected('El transcript de la sesión no es un archivo.');
+      const lector = lectura.fh;
       try {
         const ultimo = Buffer.alloc(1);
         await lector.read(ultimo, 0, 1, st.size - 1);

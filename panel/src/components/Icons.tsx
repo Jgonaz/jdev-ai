@@ -169,6 +169,12 @@ export const IconSpark = (p: Props) => (
     <path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5z" />
   </Svg>
 );
+export const IconEye = (p: Props) => (
+  <Svg {...p}>
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </Svg>
+);
 export const IconShell = (p: Props) => (
   <Svg {...p}>
     <path d="M5 7l5 5-5 5M12 17h7" />

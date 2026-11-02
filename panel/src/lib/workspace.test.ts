@@ -12,6 +12,7 @@ import {
   workspaceReducer,
 } from './workspace.ts';
 import type { Workspace, WorkspaceAction } from './workspace.ts';
+import { followKey } from './follow.ts';
 
 const aplicar = (w: Workspace, ...acciones: WorkspaceAction[]) => acciones.reduce(workspaceReducer, w);
 const abrir = (...nombres: string[]): WorkspaceAction[] => nombres.map((name) => ({ type: 'open', name }));
@@ -94,6 +95,46 @@ describe('espacio de trabajo', () => {
     expect(w).toMatchObject({ tabs: ['a', 'c'], active: 'c' });
     const intacto = aplicar(w, { type: 'prune', alive: new Set(['a', 'c', 'z']) });
     expect(intacto).toBe(w);
+  });
+});
+
+describe('pestañas de seguimiento', () => {
+  const agente = followKey('jdev-foo-1', 'agent', 'a0c02c');
+  const shell = followKey('jdev-foo-1', 'shell', 'bx1');
+
+  it('se abren junto a la última pestaña de su sesión, en orden, y quedan activas', () => {
+    let w = aplicar(EMPTY_WORKSPACE, ...abrir('jdev-foo-1', 'jdev-bar-2'), { type: 'openFollow', key: agente }, { type: 'openFollow', key: shell });
+    expect(w.tabs).toEqual(['jdev-foo-1', agente, shell, 'jdev-bar-2']);
+    expect(w.active).toBe(shell);
+    // Abrir una ya abierta solo la activa.
+    w = aplicar(w, { type: 'openFollow', key: agente });
+    expect(w).toMatchObject({ tabs: ['jdev-foo-1', agente, shell, 'jdev-bar-2'], active: agente });
+  });
+
+  it('sin la pestaña de su sesión se añaden al final', () => {
+    const w = aplicar(EMPTY_WORKSPACE, ...abrir('jdev-bar-2'), { type: 'openFollow', key: agente });
+    expect(w.tabs).toEqual(['jdev-bar-2', agente]);
+  });
+
+  it('se cierran como las demás y ocupan hueco en las distribuciones de 1, 2 y 4', () => {
+    let w = aplicar({ ...EMPTY_WORKSPACE, layout: 2 }, ...abrir('jdev-foo-1'), { type: 'openFollow', key: agente });
+    expect(visibleTabs(w)).toEqual(['jdev-foo-1', agente]);
+    w = aplicar(w, { type: 'layout', layout: 1 });
+    expect(visibleTabs(w)).toEqual([agente]);
+    w = aplicar(w, { type: 'layout', layout: 4 }, { type: 'close', name: agente });
+    expect(w).toMatchObject({ tabs: ['jdev-foo-1'], active: 'jdev-foo-1' });
+  });
+
+  it('prune las conserva mientras viva su sesión y las retira con ella', () => {
+    const w = aplicar(EMPTY_WORKSPACE, ...abrir('jdev-foo-1'), { type: 'openFollow', key: agente });
+    expect(aplicar(w, { type: 'prune', alive: new Set(['jdev-foo-1']) })).toBe(w);
+    expect(aplicar(w, { type: 'prune', alive: new Set(['jdev-otra-3']) }).tabs).toEqual([]);
+  });
+
+  it('al cargar se descartan las claves de seguimiento mal formadas y se recuerdan las buenas', () => {
+    const w = parseWorkspace(JSON.stringify({ tabs: ['jdev-foo-1', agente, 'follow:../x:agent:y', 'follow:jdev-foo-1:otro:a'], active: agente, layout: 2, start: 0 }));
+    expect(w?.tabs).toEqual(['jdev-foo-1', agente]);
+    expect(w?.active).toBe(agente);
   });
 });
 

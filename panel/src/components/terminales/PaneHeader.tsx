@@ -64,7 +64,7 @@ export function PaneHeader({ session, project }: { session: SessionInfo; project
     <div className={`pane__head${narrow ? ' pane__head--narrow' : ''}`} ref={raiz}>
       <div className="pane__row">
         <span className="pane__title">{session.title}</span>
-        {narrow && trabajo && <WorkChips counts={v.counts} activity={session.activity!} compact />}
+        {narrow && trabajo && <WorkChips counts={v.counts} activity={session.activity!} compact session={session.name} />}
         <span className={`chip chip--${estado}`}>{stateChip(session, formatRelative(session.updatedAt, ahora))}</span>
         <MoreMenu session={session} />
       </div>
@@ -111,7 +111,7 @@ export function PaneHeader({ session, project }: { session: SessionInfo; project
       </div>
       {!narrow && trabajo && (
         <div className="pane__work">
-          <WorkChips counts={v.counts} activity={session.activity!} compact={false} />
+          <WorkChips counts={v.counts} activity={session.activity!} compact={false} session={session.name} />
         </div>
       )}
     </div>

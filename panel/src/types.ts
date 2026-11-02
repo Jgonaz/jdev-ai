@@ -48,7 +48,8 @@ export type SessionUsage = {
 
 export type SessionActivity = {
   subagents: { id: string; type: string; since: number | null }[];
-  shells: { label: string }[];
+  /** `id` permite seguir su salida; falta si Claude no lo dio con un formato válido. */
+  shells: { label: string; id?: string }[];
   artifacts: { url: string; title: string | null }[];
 };
 

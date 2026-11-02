@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { accountFrom, deriveActivity, isArtifactUrl, isStateFileName, parseActivityLog, parseStatusline, readStateFile } from './usage.ts';
+import { accountFrom, deriveActivity, followTargets, isArtifactUrl, isStateFileName, parseActivityLog, parseStatusline, readStateFile } from './usage.ts';
 import { statuslineMuestra } from './statusline-fixtures.ts';
 import type { Statusline } from './usage.ts';
 
@@ -156,10 +156,10 @@ describe('parseActivityLog / deriveActivity', () => {
       ),
     ].join('\n');
     expect(deriveActivity(parseActivityLog(log))?.shells).toEqual([
-      { label: 'pnpm dev' },
-      { label: 'Espera el despliegue' },
-      { label: 'ci/logs' },
-      { label: 'tail -f x' },
+      { label: 'pnpm dev', id: 'b1' },
+      { label: 'Espera el despliegue', id: 'b3' },
+      { label: 'ci/logs', id: 'b4' },
+      { label: 'tail -f x', id: 'b7' },
     ]);
   });
 
@@ -169,6 +169,28 @@ describe('parseActivityLog / deriveActivity', () => {
       linea({ hook_event_name: 'Stop' }, t('10:10:00')),
     ].join('\n');
     expect(deriveActivity(parseActivityLog(log))).toBeNull();
+  });
+
+  it('followTargets conserva los subagentes terminados y las shells que ya no están en marcha', () => {
+    const stop = (tareas: unknown[], hms: string) => linea({ hook_event_name: 'Stop', background_tasks: tareas }, t(hms));
+    const log = [
+      inicio('a1', 'qa', '10:00:00'),
+      inicio('a2', 'implementer', '10:00:05'),
+      fin('a2', '10:01:00'),
+      stop([{ id: 'b1', type: 'shell', status: 'running', command: 'pnpm dev' }, { id: 'MAL ID', type: 'shell', status: 'running', command: 'x' }], '10:02:00'),
+      stop([{ id: 'b2', type: 'shell', status: 'running', command: 'tail -f x' }], '10:03:00'),
+    ].join('\n');
+    const r = followTargets(parseActivityLog(log));
+    expect([...r.subagents]).toEqual([
+      ['a1', { type: 'qa', since: ms('10:00:00'), stopped: false }],
+      ['a2', { type: 'implementer', since: ms('10:00:05'), stopped: true }],
+    ]);
+    expect([...r.shells]).toEqual([
+      ['b1', { label: 'pnpm dev', running: false }],
+      ['b2', { label: 'tail -f x', running: true }],
+    ]);
+    // Lo anterior a un SessionStart posterior no cuenta.
+    expect(followTargets(parseActivityLog(log), ms('10:02:30')).subagents.size).toBe(0);
   });
 
   const artifact = (respuesta: unknown, entrada: Record<string, unknown>, hms: string) =>
@@ -247,7 +269,7 @@ describe('parseActivityLog / deriveActivity', () => {
 
   it('lee la salida real de bin/session-activity (hora y el resto del evento en la misma línea)', () => {
     const real = '{"jdev_at":"2026-11-02T16:54:02Z","session_id":"s1", "hook_event_name":"Stop", "background_tasks":[{"id":"b","type":"shell","status":"running","command":"npm start"}]}';
-    expect(deriveActivity(parseActivityLog(real))?.shells).toEqual([{ label: 'npm start' }]);
+    expect(deriveActivity(parseActivityLog(real))?.shells).toEqual([{ label: 'npm start', id: 'b' }]);
   });
 });
 

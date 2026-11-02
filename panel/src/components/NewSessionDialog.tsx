@@ -5,6 +5,7 @@ import { useSessions } from '../state/SessionsContext.tsx';
 import { useSettings } from '../state/SettingsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
 import type { AgentId, LocationId, ProjectInfo, SessionRequest } from '../types.ts';
+import { ownerSession } from '../lib/follow.ts';
 import { IconTerminal } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { useRadioGroup } from './useRadioGroup.ts';
@@ -33,7 +34,7 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
   const idAgente = useId();
   const idLugar = useId();
 
-  const activa = sessions.find((s) => s.name === workspace.active);
+  const activa = sessions.find((s) => s.name === ownerSession(workspace.active));
   // Los valores iniciales (desde Proyectos) mandan sobre la terminal activa y los ajustes.
   const sugerido = init?.project ?? activa?.project;
   const [proyecto, setProyecto] = useState(() => proyectoInicial(projects, sugerido));

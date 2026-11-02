@@ -30,27 +30,3 @@ export function detectAlerts(previo: ReadonlyMap<string, VisualState> | null, ac
 export function documentTitle(esperan: number, contador: boolean): string {
   return contador && esperan > 0 ? `(${esperan}) jdev-ai` : 'jdev-ai';
 }
-
-/** Pitido corto estilo teletipo con Web Audio, sin archivos de audio. */
-export function playTick(): void {
-  try {
-    const Contexto =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Contexto) return;
-    const ctx = new Contexto();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(1800, ctx.currentTime);
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.05);
-    osc.connect(gain).connect(ctx.destination);
-    void ctx.resume();
-    osc.start();
-    osc.stop(ctx.currentTime + 0.06);
-    osc.onended = () => void ctx.close();
-  } catch {
-    // Sin audio disponible o bloqueado hasta que haya un gesto de la persona.
-  }
-}

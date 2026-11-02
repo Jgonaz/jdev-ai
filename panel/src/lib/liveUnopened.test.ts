@@ -58,6 +58,11 @@ describe('liveUnopened', () => {
     expect(nombres(l)).toEqual(['libre']);
   });
 
+  it('las pestañas de seguimiento no son sesiones: no ocultan a la suya ni aparecen como sesión viva', () => {
+    const l = liveUnopened([sesion('jdev-a-1'), sesion('jdev-a-2')], proyectos, ['jdev-a-2', 'follow:jdev-a-1:agent:abc1', 'follow:jdev-a-9:shell:b2']);
+    expect(nombres(l)).toEqual(['jdev-a-1']);
+  });
+
   it('ordena por estado y luego por actividad reciente', () => {
     const l = liveUnopened(
       [

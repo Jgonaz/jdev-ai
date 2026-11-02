@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { rememberHistoryFilters } from '../../lib/history.ts';
 import { historyHref, projectHref } from '../../lib/route.ts';
 import { attachCommand, fallbackProject, sessionPlace } from '../../lib/sessions.ts';
+import { ownerSession } from '../../lib/follow.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import { IconCopy } from '../Icons.tsx';
@@ -12,7 +13,8 @@ export function ContextPanel({ style }: { style?: CSSProperties }) {
   const { sessions, projects, tmuxSocket } = useSessions();
   const { workspace, contextOverlay, closeContextOverlay } = useWorkspace();
   const [copiado, setCopiado] = useState(false);
-  const sesion = sessions.find((s) => s.name === workspace.active);
+  // Con una pestaña de seguimiento activa, el contexto es el de la sesión que la lanzó.
+  const sesion = sessions.find((s) => s.name === ownerSession(workspace.active));
   const proyecto = sesion ? (projects.find((p) => p.id === sesion.project) ?? fallbackProject(sesion.project)) : null;
   const comando = sesion && tmuxSocket ? attachCommand(sesion.name, tmuxSocket) : '';
 

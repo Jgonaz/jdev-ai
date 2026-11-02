@@ -21,7 +21,7 @@ type Sesion = {
   agent: string;
   tracked: boolean;
   usage: { model: string | null; effort: string | null; context: { used: number | null; size: number | null; percent: number | null } | null; updatedAt: number } | null;
-  activity: { subagents: { id: string; type: string; since: number | null }[]; shells: { label: string }[]; artifacts: { url: string; title: string | null }[] } | null;
+  activity: { subagents: { id: string; type: string; since: number | null }[]; shells: { label: string; id?: string }[]; artifacts: { url: string; title: string | null }[] } | null;
 };
 type Cuenta = { fiveHour: { percent: number; resetsAt: number | null } | null; sevenDay: { percent: number } | null; updatedAt: number } | null;
 
@@ -165,7 +165,7 @@ describe('statusline y actividad de las sesiones de Claude', () => {
     expect(s.usage).toMatchObject({ model: 'Opus 5.5', effort: 'medium', context: { used: 194000, size: 1000000, percent: 19 } });
     expect(s.activity).toEqual({
       subagents: [{ id: 'a1', type: 'qa', since: expect.any(Number) }],
-      shells: [{ label: 'pnpm dev' }],
+      shells: [{ label: 'pnpm dev', id: 'b1' }],
       artifacts: [{ url: 'https://claude.ai/artifact/6AW2wshSfooPFsidhdegjU', title: 'Plan de pruebas' }],
     });
     // Una sesión de Codex nunca tiene estos datos.

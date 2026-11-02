@@ -264,7 +264,12 @@ agente de todos los proyectos: barra lateral con las sesiones agrupadas por
 proyecto, su título y su estado (te espera, trabajando, en reposo o cerrada),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
 con `bin/agent`, las pantallas Inicio, Backlog, Worktrees, Guías e Historial y ajustes de
-tema, fuentes, terminal y avisos.
+tema, fuentes, terminal y avisos. En los avisos se elige un sonido para cuando
+una sesión te espera y otro para cuando termina, entre varios sintetizados en el
+navegador (teletipo, campanilla, dos tonos, gota, pulso, acorde, marimba y
+radar) o, en WSL, entre los de Windows (`C:\Windows\Media`, como el «Notify
+Calendar»), que el panel sirve desde el disco sin copiarlos; con un botón para
+probarlos.
 
 Requisitos: Node 24, pnpm, tmux y un compilador para `node-pty` (en Ubuntu,
 `sudo apt install build-essential`). La primera vez:
@@ -324,6 +329,24 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   artifacts publicados. En una terminal normal no se toca tu statusline. El
   panel borra esos archivos cuando la sesión de tmux ya no existe. El coste
   deja de verse en las sesiones del panel.
+- **Seguimiento de subagentes y shells.** En el modo clásico Claude no recibe
+  clics, así que sus subagentes y shells en segundo plano no se abren desde su
+  barra inferior. En el panel, al pulsar uno en el desplegable de su chip de la
+  cabecera se abre una pestaña de solo lectura (icono de ojo) junto a las de
+  terminal, que sirve en las distribuciones de 1, 2 y 4 columnas y se cierra con
+  «×». Para un subagente muestra su descripción, su estado, su tipo, la sesión
+  que lo lanzó, el encargo (plegable), cada herramienta con un verbo («Leo»,
+  «Busco», «Edito», «Ejecuto»…) y un resumen de su resultado, en rojo si falla,
+  sus mensajes y, al terminar, su resultado final; no muestra el razonamiento
+  interno. Para una shell, el comando, su estado y las últimas 2 000 líneas de su
+  salida como texto plano. Se actualiza en directo (sondeo cada segundo mientras
+  sigue en marcha) con «Seguir al final», y la pestaña sigue abierta con
+  «Terminado» hasta que la cierres. El servidor solo lee archivos tuyos dentro de
+  las carpetas de Claude y de sesiones del panel: el transcript de cada subagente
+  (`<transcript de la sesión>/<sesión>/subagents/agent-<id>.jsonl`) y la salida de
+  la shell en la ruta que Claude anunció bajo `/tmp/claude-<uid>/`. Depende de
+  formatos internos de Claude Code (2.1.316), que pueden cambiar; lo que no
+  entiende lo ignora y, si falta un archivo, la pestaña lo explica.
 - **Conversaciones anteriores.** Dentro de cada proyecto de la barra lateral,
   bajo sus sesiones en marcha, un apartado plegado «Anteriores (N)» lista (tres,
   con «Ver más») las conversaciones de Claude Code que no están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de

@@ -1,10 +1,16 @@
 // Estado puro del espacio de trabajo: pestañas abiertas, la activa, la
 // distribución y qué pestañas se ven. Sin React, para poder probarlo.
+//
+// Las pestañas son nombres de sesión de tmux o, para el seguimiento de un
+// subagente o una shell, claves `follow:<sesión>:<tipo>:<id>` (ver lib/follow.ts).
+// Estas últimas no son sesiones: pertenecen a la sesión que las lanzó.
+
+import { isFollowKey, ownerSession, parseFollowKey } from './follow.ts';
 
 export type Layout = 1 | 2 | 4;
 
 export type Workspace = {
-  /** Nombres de sesión de las pestañas abiertas, en orden. */
+  /** Pestañas abiertas, en orden: nombres de sesión y claves de seguimiento. */
   tabs: string[];
   active: string | null;
   layout: Layout;
@@ -16,6 +22,8 @@ export const EMPTY_WORKSPACE: Workspace = { tabs: [], active: null, layout: 1, s
 
 export type WorkspaceAction =
   | { type: 'open'; name: string; nextToActive?: boolean; minLayout?: Layout }
+  /** Abre (o activa) una pestaña de seguimiento junto a la última de la sesión que la lanzó. */
+  | { type: 'openFollow'; key: string }
   | { type: 'activate'; name: string }
   | { type: 'close'; name: string }
   | { type: 'move'; delta: number }
@@ -47,6 +55,16 @@ export function workspaceReducer(w: Workspace, a: WorkspaceAction): Workspace {
       const layout = a.minLayout && a.minLayout > w.layout ? a.minLayout : w.layout;
       return normalize({ ...w, tabs, active: a.name, layout });
     }
+    case 'openFollow': {
+      if (w.tabs.includes(a.key)) return normalize({ ...w, active: a.key });
+      const dueño = ownerSession(a.key);
+      let ultima = -1;
+      w.tabs.forEach((t, i) => {
+        if (dueño !== null && ownerSession(t) === dueño) ultima = i;
+      });
+      const at = ultima >= 0 ? ultima + 1 : w.tabs.length;
+      return normalize({ ...w, tabs: [...w.tabs.slice(0, at), a.key, ...w.tabs.slice(at)], active: a.key });
+    }
     case 'activate':
       return w.tabs.includes(a.name) ? normalize({ ...w, active: a.name }) : w;
     case 'close': {
@@ -69,7 +87,11 @@ export function workspaceReducer(w: Workspace, a: WorkspaceAction): Workspace {
       return normalize({ ...w, layout: siguiente });
     }
     case 'prune': {
-      const tabs = w.tabs.filter((t) => a.alive.has(t));
+      // Una pestaña de seguimiento vive mientras viva la sesión que la lanzó.
+      const tabs = w.tabs.filter((t) => {
+        const dueño = ownerSession(t);
+        return dueño !== null && a.alive.has(dueño);
+      });
       if (tabs.length === w.tabs.length) return w;
       const active = w.active !== null && tabs.includes(w.active) ? w.active : (tabs[0] ?? null);
       return normalize({ ...w, tabs, active });
@@ -92,7 +114,7 @@ export function parseWorkspace(crudo: string | null): Workspace | null {
   try {
     const v = JSON.parse(crudo) as Partial<Workspace> | null;
     if (typeof v !== 'object' || v === null || !Array.isArray(v.tabs)) return null;
-    const tabs = [...new Set(v.tabs.filter((t): t is string => typeof t === 'string'))];
+    const tabs = [...new Set(v.tabs.filter((t): t is string => typeof t === 'string' && (!isFollowKey(t) || parseFollowKey(t) !== null)))];
     const layout: Layout = v.layout === 2 || v.layout === 4 ? v.layout : 1;
     const active = typeof v.active === 'string' ? v.active : null;
     return normalize({ tabs, active, layout, start: typeof v.start === 'number' ? v.start : 0 });

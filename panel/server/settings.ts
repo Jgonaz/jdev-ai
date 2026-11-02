@@ -12,6 +12,7 @@ import {
   LOCATIONS,
   START_SCREENS,
   THEMES,
+  isSoundId,
   isValidProfileName,
 } from '../shared/settings-schema.ts';
 import type { ProjectOverride, Settings } from '../shared/settings-schema.ts';
@@ -69,7 +70,14 @@ const ESQUEMA: Record<string, Nodo> = {
     grupo: { cursor: booleano, lights: booleano, ascii: booleano, greeting: booleano, grid: booleano },
   },
   notifications: {
-    grupo: { system: booleano, counter: booleano, sound: booleano, onFinish: booleano },
+    grupo: {
+      system: booleano,
+      counter: booleano,
+      sound: booleano,
+      onFinish: booleano,
+      soundWaiting: isSoundId,
+      soundFinish: isSoundId,
+    },
   },
   newSession: { grupo: { agent: enumerado(...AGENTS), location: enumerado(...LOCATIONS) } },
   profile: { grupo: { name: nombre } },

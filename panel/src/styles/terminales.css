@@ -212,6 +212,21 @@
 .tab--visible.tab--waiting {
   border-top-color: var(--waiting);
 }
+.tab--follow.tab--visible {
+  border-top-color: var(--working);
+}
+.tab__eye {
+  display: inline-flex;
+  color: var(--working-text);
+}
+.tab__kind {
+  font-family: var(--font-term);
+  font-size: var(--text-sm);
+  color: var(--working-text);
+}
+.tab__title.tab__kind {
+  color: inherit;
+}
 .tab[aria-selected='true'] {
   color: var(--fg);
   font-weight: 600;
@@ -523,6 +538,19 @@
   padding: 8px;
   border-radius: 6px;
   font-size: var(--text-sm2);
+}
+.wpop__row--open {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-sm2);
+  text-align: left;
+  cursor: pointer;
+}
+.wpop__row--open:hover {
+  background: var(--bg-raised);
 }
 .wpop__type {
   /* El tipo («general-purpose») no se parte: ocupa lo que necesita, hasta la mitad de la fila, y si no cabe lleva puntos suspensivos. */
@@ -1811,4 +1839,208 @@
 }
 .rowtip--stale .ctxbar__fill {
   opacity: 0.5;
+}
+
+/* ---------- Seguimiento de subagentes y shells (solo lectura) ---------- */
+.fv__head {
+  /* Que la cabecera no cambie de alto al cambiar el texto del estado. */
+  min-width: 0;
+}
+.fv__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(13.5px * var(--u));
+  font-weight: 600;
+}
+.fv__title--mono {
+  font-family: var(--font-term);
+}
+.fv__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* En una columna estrecha los datos pasan a otra línea en vez de recortarse. */
+  gap: 2px 14px;
+  min-width: 0;
+  white-space: nowrap;
+  font-family: var(--font-term);
+  font-size: calc(11.5px * var(--u));
+  color: var(--fg-muted);
+}
+.fv__type {
+  color: var(--working-text);
+}
+.fv__from {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fv__from .link-btn {
+  font: inherit;
+  cursor: pointer;
+}
+.fv__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg-term);
+  font-family: var(--font-term);
+  font-size: calc(12.5px * var(--u));
+  line-height: 1.55;
+  color: var(--term-text);
+}
+.fv__task {
+  flex: none;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  color: var(--fg-soft);
+}
+.fv__task summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--fg);
+}
+.fv__task p {
+  margin: 6px 0 0;
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fv__step {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: none;
+  color: var(--working-text);
+}
+.fv__step--error {
+  color: var(--danger-text);
+}
+.fv__step--pending {
+  align-items: center;
+  gap: 8px;
+}
+.fv__bullet {
+  flex: none;
+}
+.fv__line {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.fv__verb {
+  color: var(--term-text);
+}
+.fv__muted {
+  color: var(--fg-faint);
+}
+.fv__fail {
+  color: var(--danger-text);
+}
+.fv__pending {
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+.fv__result {
+  flex: none;
+  padding-left: 18px;
+  color: var(--fg-faint);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fv__result--error {
+  color: var(--fg-muted);
+}
+.fv__msg {
+  flex: none;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--line-strong);
+  font-family: var(--font-ui);
+  font-size: calc(13.5px * var(--u));
+  line-height: 1.5;
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fv__final {
+  flex: none;
+  padding: 10px 12px;
+  border: 1px solid var(--working-line);
+  border-radius: var(--radius);
+  background: var(--working-bg);
+  font-family: var(--font-ui);
+}
+.fv__finalh {
+  margin: 0 0 4px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--working-text);
+}
+.fv__finaltext {
+  font-size: calc(13.5px * var(--u));
+  line-height: 1.5;
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fv__out {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  color: var(--term-text);
+}
+.fv__empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: auto;
+  max-width: 44ch;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  color: var(--fg-muted);
+}
+.fv__empty strong {
+  color: var(--fg);
+}
+.fv__foot {
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--bg-panel);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+.fv__follow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.fv__ago,
+.fv__stale {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fv__stale {
+  color: var(--waiting-text);
 }

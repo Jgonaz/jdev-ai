@@ -48,6 +48,9 @@ import {
 } from './tmux.ts';
 import type { TmuxConfig } from './tmux.ts';
 import { MAX_UPLOAD_BYTES, UploadError, readUploadBody, saveUpload, startUploadCleanup, uploadType } from './uploads.ts';
+import { FollowError, Follower } from './follow.ts';
+import { FOLLOW_ID } from '../shared/follow.ts';
+import { DEFAULT_WINDOWS_MEDIA, SoundError, listWindowsSounds, openWindowsSound } from './winsounds.ts';
 
 const MAX_BODY = 64 * 1024;
 
@@ -96,6 +99,10 @@ export type ServerOptions = {
   activityDir?: string;
   /** Directorio de configuración de Claude (con projects/ dentro); por defecto, CLAUDE_CONFIG_DIR o ~/.claude. */
   claudeConfigDir?: string;
+  /** Raíces bajo las que Claude deja `claude-<uid>/` con la salida de sus shells; por defecto /tmp y TMPDIR. Para pruebas. */
+  claudeTmpRoots?: string[];
+  /** Carpeta de los sonidos de Windows para los avisos; por defecto, /mnt/c/Windows/Media (WSL). */
+  windowsMediaDir?: string;
   /** Carpeta de las imágenes adjuntadas; por defecto, ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel/uploads. */
   uploadsDir?: string;
   /** Carpetas de las que /api/image entrega imágenes; por defecto, las de defaultImageDirs. Para pruebas. */
@@ -240,6 +247,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     stateFallbackMs: opts.stateFallbackMs,
   });
 
+  const seguidor = new Follower({ projectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects'), tmpRoots: opts.claudeTmpRoots });
   const subidas = opts.uploadsDir ?? uploadsDir();
   const carpetasImagen = opts.imageDirs ?? defaultImageDirs(opts.harnessRoot, subidas);
   const detenerLimpieza = startUploadCleanup(subidas);
@@ -410,6 +418,55 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       if (metodo !== 'GET') return noPermitido('GET');
       const plan = await planFrom(planInputFromQuery(url), res);
       if (plan) sendJson(res, 200, { dryRun: true, command: plan.command, args: plan.agentArgs });
+      return;
+    }
+
+    // GET: lo nuevo de un subagente o una shell en segundo plano de la sesión, por
+    // lectura incremental desde el byte `from`. Solo sesiones del panel; los
+    // archivos los localiza y valida el servidor (no se acepta ninguna ruta).
+    const seg = /^\/api\/sessions\/([^/]+)\/follow\/(agent|shell)\/([^/]+)$/.exec(pathname);
+    if (seg) {
+      if (metodo !== 'GET') return noPermitido('GET');
+      let nombre: string;
+      let id: string;
+      try {
+        nombre = decodeURIComponent(seg[1]!);
+        id = decodeURIComponent(seg[3]!);
+      } catch {
+        sendJson(res, 400, { error: 'identificador no válido' });
+        return;
+      }
+      if (!isPanelSessionName(nombre)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se admiten sesiones del panel (jdev-*)' });
+        return;
+      }
+      if (!FOLLOW_ID.test(id)) {
+        sendJson(res, 400, { error: 'identificador no válido' });
+        return;
+      }
+      const crudo = url.searchParams.get('from');
+      const from = crudo === null ? null : /^\d{1,15}$/.test(crudo) ? Number(crudo) : NaN;
+      if (from !== null && Number.isNaN(from)) {
+        sendJson(res, 400, { error: 'El parámetro «from» debe ser un número de bytes.' });
+        return;
+      }
+      const contexto = sesiones.followContext(nombre);
+      if (!contexto) {
+        sendJson(res, 404, { error: 'No hay datos que mostrar: la sesión no existe o aún no ha dejado actividad.' });
+        return;
+      }
+      try {
+        const cuerpo = seg[2] === 'agent' ? await seguidor.agent(contexto, id, from ?? 0) : await seguidor.shell(contexto, id, from);
+        res.setHeader('Cache-Control', 'no-store');
+        sendJson(res, 200, cuerpo);
+      } catch (e) {
+        if (e instanceof FollowError) {
+          sendJson(res, e.status, { error: e.message });
+          return;
+        }
+        console.error('Error leyendo el seguimiento:', e);
+        sendJson(res, 500, { error: 'No se pudo leer el seguimiento.' });
+      }
       return;
     }
 
@@ -966,6 +1023,55 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       // Límites de 5 h y 7 días de la statusline más reciente de una sesión de Claude del panel.
       await sesiones.refresh();
       sendJson(res, 200, { account: sesiones.accountLimits() });
+      return;
+    }
+    // Sonidos de Windows para los avisos: la lista y cada .wav, servidos desde el
+    // disco de la persona (solo lectura, nombres validados, dentro de la carpeta).
+    if (pathname === '/api/sounds') {
+      if (metodo !== 'GET') {
+        res.setHeader('Allow', 'GET');
+        sendJson(res, 405, { error: 'método no permitido' });
+        return;
+      }
+      sendJson(res, 200, { windows: await listWindowsSounds(opts.windowsMediaDir ?? DEFAULT_WINDOWS_MEDIA) });
+      return;
+    }
+    const snd = /^\/api\/sounds\/windows\/([^/]+)$/.exec(pathname);
+    if (snd) {
+      if (metodo !== 'GET' && metodo !== 'HEAD') {
+        res.setHeader('Allow', 'GET, HEAD');
+        sendJson(res, 405, { error: 'método no permitido' });
+        return;
+      }
+      let nombre: string;
+      try {
+        nombre = decodeURIComponent(snd[1]!);
+      } catch {
+        sendJson(res, 400, { error: 'Nombre de sonido no válido.' });
+        return;
+      }
+      let sonido;
+      try {
+        sonido = await openWindowsSound(opts.windowsMediaDir ?? DEFAULT_WINDOWS_MEDIA, nombre);
+      } catch (e) {
+        if (e instanceof SoundError) {
+          sendJson(res, e.status, { error: e.message });
+          return;
+        }
+        throw e;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'audio/wav',
+        'Content-Length': sonido.size,
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': 'private, max-age=86400',
+      });
+      if (metodo === 'HEAD') {
+        await sonido.handle.close();
+        res.end();
+        return;
+      }
+      pipeline(sonido.handle.createReadStream({ start: 0, end: sonido.size - 1 }), res, () => {});
       return;
     }
     if (pathname === '/api/overview') {

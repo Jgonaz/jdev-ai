@@ -1,5 +1,6 @@
-import { open, readdir, stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { openRegularFile } from './safefile.ts';
 import type { Project } from './projects.ts';
 import { TitleReader, bestTitle, parseTitle } from './titles.ts';
 
@@ -115,7 +116,9 @@ export class RecentIndex {
     if (previo && previo.mtimeMs === c.mtimeMs && previo.size === c.size) return previo.has;
     let has = false;
     try {
-      const fh = await open(c.path, 'r');
+      const abierto = await openRegularFile(c.path);
+      if (!abierto) return false;
+      const fh = abierto.fh;
       try {
         const largo = Math.min(c.size, MESSAGE_PROBE_BYTES);
         const buf = Buffer.alloc(largo);

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ResizeHandle } from '../components/ResizeHandle.tsx';
+import { ownerSession, parseFollowKey } from '../lib/follow.ts';
+import type { SessionInfo } from '../types.ts';
 import { usePanelWidth } from '../lib/usePanelWidth.ts';
 import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import type { PanelLimits } from '../lib/panelWidth.ts';
@@ -11,6 +13,7 @@ import { ImageViewer } from '../components/terminales/ImageViewer.tsx';
 import { ContextPanel } from '../components/terminales/ContextPanel.tsx';
 import { EmptyState } from '../components/terminales/EmptyState.tsx';
 import { IconPlus } from '../components/Icons.tsx';
+import { FollowPane } from '../components/terminales/FollowPane.tsx';
 import { Pane } from '../components/terminales/Pane.tsx';
 import { Sidebar } from '../components/terminales/Sidebar.tsx';
 import { StatusBar } from '../components/terminales/StatusBar.tsx';
@@ -38,8 +41,9 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
   const derechoEnLinea = (viewer !== null || contextVisible) && !contextOverlay;
 
   // El visor sigue a la terminal activa: al cambiar de pestaña muestra la última imagen de la nueva
-  // terminal o, si no tiene ninguna, se cierra y vuelve el panel de Contexto.
-  const activa = workspace.active;
+  // terminal o, si no tiene ninguna, se cierra y vuelve el panel de Contexto. Una pestaña de seguimiento
+  // cuenta como la terminal de la sesión que la lanzó.
+  const activa = ownerSession(workspace.active);
   const activaPrevia = useRef(activa);
   useEffect(() => {
     if (activaPrevia.current === activa) return;
@@ -47,7 +51,13 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
     followTerminal(activa);
   }, [activa, followTerminal]);
 
-  const abiertas = visible.map((n) => sessions.find((s) => s.name === n)).filter((s) => s !== undefined);
+  // Terminales y pestañas de seguimiento visibles, cada una con su clave: las terminales no se recrean al aparecer un seguimiento.
+  type Abierta = { clave: string; seguimiento: true } | { clave: string; seguimiento: false; session: SessionInfo };
+  const abiertas = visible.flatMap((n): Abierta[] => {
+    if (parseFollowKey(n)) return [{ clave: n, seguimiento: true }];
+    const s = sessions.find((x) => x.name === n);
+    return s ? [{ clave: n, seguimiento: false, session: s }] : [];
+  });
   const huecos = workspace.layout - abiertas.length;
 
   return (
@@ -76,9 +86,13 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
             </div>
           ) : (
             <div className={`canvas canvas--l${workspace.layout}`}>
-              {abiertas.map((s) => (
-                <Pane key={s.name} session={s} suspended={dialogOpen || hidden} />
-              ))}
+              {abiertas.map((p) =>
+                p.seguimiento ? (
+                  <FollowPane key={p.clave} tabKey={p.clave} />
+                ) : (
+                  <Pane key={p.clave} session={p.session} suspended={dialogOpen || hidden} />
+                ),
+              )}
               {Array.from({ length: Math.max(0, huecos) }, (_, i) => (
                 <div key={`hueco-${i}`} className="slot">
                   <span>Hueco libre</span>

@@ -1,3 +1,4 @@
+import { isFollowKey } from '../../lib/follow.ts';
 import { visualState } from '../../lib/sessions.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
@@ -7,12 +8,15 @@ export function StatusBar() {
   const { sessions, projects } = useSessions();
   const { workspace, visible } = useWorkspace();
   const vivas = sessions.filter((s) => s.alive).length;
+  // Las pestañas de seguimiento no son terminales: no cuentan como visibles.
+  const nVisibles = visible.filter((t) => !isFollowKey(t)).length;
 
   return (
     <footer className="statusbar" aria-label="Barra de estado">
       <span className="statusbar__session">[jdev]</span>
       <span className="statusbar__windows">
-        {workspace.tabs.map((name, i) => {
+        {/* Solo las terminales: las pestañas de seguimiento no son ventanas de tmux. */}
+        {workspace.tabs.filter((t) => !isFollowKey(t)).map((name, i) => {
           const s = sessions.find((x) => x.name === name);
           if (!s) return null;
           const estado = visualState(s);
@@ -39,7 +43,7 @@ export function StatusBar() {
         │
       </span>
       <span className="statusbar__count">
-        {vivas} {vivas === 1 ? 'viva' : 'vivas'} · {visible.length} {visible.length === 1 ? 'visible' : 'visibles'}
+        {vivas} {vivas === 1 ? 'viva' : 'vivas'} · {nVisibles} {nVisibles === 1 ? 'visible' : 'visibles'}
       </span>
     </footer>
   );

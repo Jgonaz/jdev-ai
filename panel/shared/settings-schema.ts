@@ -37,6 +37,17 @@ export const isValidProfileName = (v: unknown): v is string =>
 // Paleta fija de colores de proyecto (la misma que usa el servidor por defecto).
 export const PROJECT_PALETTE = ['#6fb7ff', '#ff8a6b', '#c79bff', '#f2a7c8', '#e9e1cf', '#6cc3b5'] as const;
 
+/** Sonidos de aviso, sintetizados en el navegador (sin archivos). */
+export const SOUNDS = ['teletipo', 'campanilla', 'dos-tonos', 'gota', 'pulso', 'acorde', 'marimba', 'radar'] as const;
+/** Sonido de Windows (C:\\Windows\\Media): «win:» y el nombre del .wav. */
+export type WindowsSoundId = `win:${string}`;
+export type SoundId = (typeof SOUNDS)[number] | WindowsSoundId;
+const WINDOWS_SOUND = /^win:[\p{L}\p{N} ._()&'-]{1,120}\.wav$/iu;
+/** Sonido aceptable en los ajustes: uno sintetizado o un .wav de Windows por nombre. */
+export function isSoundId(v: unknown): v is SoundId {
+  return typeof v === 'string' && ((SOUNDS as readonly string[]).includes(v) || (WINDOWS_SOUND.test(v) && !v.startsWith('win:.')));
+}
+
 export type ProjectOverride = { mono?: string; color?: string; visible?: boolean };
 
 export type Settings = {
@@ -55,7 +66,16 @@ export type Settings = {
     autoOpenImages: boolean;
   };
   personality: { cursor: boolean; lights: boolean; ascii: boolean; greeting: boolean; grid: boolean };
-  notifications: { system: boolean; counter: boolean; sound: boolean; onFinish: boolean };
+  notifications: {
+    system: boolean;
+    counter: boolean;
+    sound: boolean;
+    onFinish: boolean;
+    /** Sonido cuando una sesión pasa a esperarte. */
+    soundWaiting: SoundId;
+    /** Sonido cuando una sesión termina (con «Avisar también cuando una sesión termina»). */
+    soundFinish: SoundId;
+  };
   newSession: { agent: (typeof AGENTS)[number]; location: (typeof LOCATIONS)[number] };
   /** Nombre para el saludo de Inicio; '' toma el primer nombre de `git config user.name`. */
   profile: { name: string };
@@ -82,7 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
     autoOpenImages: false,
   },
   personality: { cursor: true, lights: true, ascii: true, greeting: true, grid: true },
-  notifications: { system: false, counter: true, sound: false, onFinish: false },
+  notifications: { system: false, counter: true, sound: false, onFinish: false, soundWaiting: 'teletipo', soundFinish: 'gota' },
   newSession: { agent: 'claude', location: 'principal' },
   profile: { name: '' },
   startScreen: 'inicio',

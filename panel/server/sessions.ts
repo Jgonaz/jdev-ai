@@ -7,9 +7,10 @@ import type { SessionState } from './states.ts';
 import { CLOSED_MARK, TitleReader, appendCustomTitle, bestTitle, defaultTitle, parseTitle, resolveTranscript } from './titles.ts';
 import { createSession, isPanelSessionName, killSession, listSessions, setSessionTitle } from './tmux.ts';
 import type { CreateOptions, SessionPlan, TmuxConfig } from './tmux.ts';
-import { ACTIVITY_MAX_BYTES, STATUSLINE_MAX_BYTES, accountFrom, deriveActivity, parseActivityLog, parseStatusline } from './usage.ts';
+import { ACTIVITY_MAX_BYTES, STATUSLINE_MAX_BYTES, accountFrom, deriveActivity, followTargets, parseActivityLog, parseStatusline } from './usage.ts';
 import type { Account, ActivityEvent, SessionActivity, SessionUsage, Statusline } from './usage.ts';
 import type { Project } from './projects.ts';
+import type { FollowContext } from './follow.ts';
 
 export type SessionInfo = {
   name: string;
@@ -159,6 +160,24 @@ export class SessionService {
   /** Última lista calculada. */
   list(): SessionInfo[] {
     return this.current;
+  }
+
+  /**
+   * Lo necesario para seguir los subagentes y shells de una sesión del panel:
+   * su session_id, su transcript y qué ids constan en su actividad. null si la
+   * sesión no existe o aún no ha dejado estado de Claude.
+   */
+  followContext(name: string): FollowContext | null {
+    const sesion = this.current.find((s) => s.name === name);
+    if (!sesion) return null;
+    const file = stateByTmuxSession(this.states.snapshot(), this.current).get(name);
+    if (!file) return null;
+    return {
+      sessionId: file.sessionId,
+      transcriptPath: file.transcriptPath,
+      cwd: file.cwd,
+      targets: followTargets(this.activities.snapshot().get(file.sessionId) ?? [], this.restarted.get(file.sessionId) ?? 0),
+    };
   }
 
   /** Límites de la cuenta de la statusline más reciente de una sesión del panel; null si no se conocen. */

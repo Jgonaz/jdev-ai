@@ -398,3 +398,25 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Sonidos de aviso: un selector por evento, con «Probar» al lado, sangrado bajo su casilla. */
+.sound-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 26px;
+}
+.sound-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sound-field .field {
+  flex: 0 1 260px;
+  min-width: 0;
+}
+.sound-field__error {
+  flex-basis: 100%;
+  color: var(--danger-text);
+}

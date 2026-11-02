@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useMediaQuery } from '../lib/useMediaQuery.ts';
+import { followKey, isFollowKey } from '../lib/follow.ts';
+import type { FollowKind } from '../lib/follow.ts';
+import { forgetFollow } from '../lib/useFollow.ts';
 import { visualState } from '../lib/sessions.ts';
 import {
   EMPTY_WORKSPACE,
@@ -20,6 +23,8 @@ type WorkspaceValue = {
   workspace: Workspace;
   visible: string[];
   openSession: (name: string, opciones?: { nextToActive?: boolean; minLayout?: Layout }) => void;
+  /** Abre la pestaña de seguimiento de un subagente o una shell en segundo plano (o la activa si ya está abierta). */
+  openFollow: (session: string, kind: FollowKind, id: string) => void;
   activate: (name: string) => void;
   closeTab: (name: string) => void;
   move: (delta: number) => void;
@@ -119,7 +124,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const openSession = useCallback<WorkspaceValue['openSession']>((name, opciones) => dispatch({ type: 'open', name, ...opciones }), []);
   const activate = useCallback((name: string) => dispatch({ type: 'activate', name }), []);
-  const closeTab = useCallback((name: string) => dispatch({ type: 'close', name }), []);
+  const openFollow = useCallback<WorkspaceValue['openFollow']>((session, kind, id) => dispatch({ type: 'openFollow', key: followKey(session, kind, id) }), []);
+  const closeTab = useCallback((name: string) => {
+    if (isFollowKey(name)) forgetFollow(name);
+    dispatch({ type: 'close', name });
+  }, []);
   const move = useCallback((delta: number) => dispatch({ type: 'move', delta }), []);
   const setLayout = useCallback((layout: Layout) => dispatch({ type: 'layout', layout }), []);
   const cycleLayout = useCallback(() => dispatch({ type: 'cycleLayout' }), []);
@@ -161,6 +170,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       workspace,
       visible,
       openSession,
+      openFollow,
       activate,
       closeTab,
       move,
@@ -188,6 +198,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       workspace,
       visible,
       openSession,
+      openFollow,
       activate,
       closeTab,
       move,

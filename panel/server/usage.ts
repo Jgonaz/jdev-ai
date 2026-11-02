@@ -12,6 +12,7 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { join } from 'node:path';
+import { FOLLOW_ID } from '../shared/follow.ts';
 
 /** Tamaño máximo que se lee de una statusline (el script no guarda más de 64 KiB). */
 export const STATUSLINE_MAX_BYTES = 64 * 1024;
@@ -38,7 +39,8 @@ export async function readStateFile(
   if (!isStateFileName(nombre, ext)) return null;
   let fh;
   try {
-    fh = await open(join(dir, nombre), constants.O_RDONLY | constants.O_NOFOLLOW);
+    // O_NONBLOCK: abrir una tubería con este nombre no debe bloquear el servidor.
+    fh = await open(join(dir, nombre), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const st = await fh.stat();
     if (!st.isFile() || st.size > maxBytes) return null;
     const texto = await fh.readFile({ encoding: 'utf8' });
@@ -218,18 +220,20 @@ export function isArtifactUrl(url: string): boolean {
 export type ActivityEvent =
   | { kind: 'subagent-start'; at: number | null; id: string; type: string }
   | { kind: 'subagent-stop'; at: number | null; id: string }
-  | { kind: 'stop'; at: number | null; shells: string[] }
+  | { kind: 'stop'; at: number | null; shells: ShellTask[] }
   | { kind: 'artifact'; at: number | null; urls: string[]; title: string | null };
 
 export type ActiveSubagent = { id: string; type: string; since: number | null };
+/** Tarea en segundo plano en marcha: su texto y, si Claude lo da con un formato válido, su id. */
+export type ShellTask = { id: string | null; label: string };
 export type SessionActivity = {
   subagents: ActiveSubagent[];
-  /** Descripción (o comando) de las shells y monitores en marcha en el último Stop. */
-  shells: { label: string }[];
+  /** Descripción (o comando) de las shells y monitores en marcha en el último Stop, con su id para seguirlas. */
+  shells: { label: string; id?: string }[];
   artifacts: { url: string; title: string | null }[];
 };
 
-function tareaEnMarcha(valor: unknown): string | null {
+function tareaEnMarcha(valor: unknown): ShellTask | null {
   const t = objeto(valor);
   if (!t) return null;
   const tipo = typeof t.type === 'string' ? t.type.toLowerCase() : '';
@@ -238,7 +242,8 @@ function tareaEnMarcha(valor: unknown): string | null {
   const servidor = texto(t.server, 100);
   const herramienta = texto(t.tool, 100);
   const monitor = servidor && herramienta ? `${servidor}/${herramienta}` : null;
-  return texto(t.command, 300) ?? texto(t.description, 300) ?? monitor ?? texto(t.id, 100) ?? tipo;
+  const label = texto(t.command, 300) ?? texto(t.description, 300) ?? monitor ?? texto(t.id, 100) ?? tipo;
+  return { id: typeof t.id === 'string' && FOLLOW_ID.test(t.id) ? t.id : null, label };
 }
 
 function urlsDe(valor: unknown): string[] {
@@ -274,7 +279,7 @@ export function parseActivityLog(contenido: string): ActivityEvent[] {
       eventos.push({ kind: 'subagent-stop', at, id: agente });
     } else if (evento === 'Stop') {
       const tareas = Array.isArray(o.background_tasks) ? o.background_tasks : [];
-      eventos.push({ kind: 'stop', at, shells: tareas.map(tareaEnMarcha).filter((t): t is string => t !== null) });
+      eventos.push({ kind: 'stop', at, shells: tareas.map(tareaEnMarcha).filter((t): t is ShellTask => t !== null) });
     } else if (evento === 'PostToolUse' && o.tool_name === 'Artifact') {
       const entrada = objeto(o.tool_input);
       let urls = urlsDe(o.tool_response);
@@ -292,7 +297,7 @@ export function parseActivityLog(contenido: string): ActivityEvent[] {
  */
 export function deriveActivity(eventos: readonly ActivityEvent[], notBefore = 0): SessionActivity | null {
   const subagentes = new Map<string, ActiveSubagent>();
-  let shells: string[] = [];
+  let shells: ShellTask[] = [];
   const artifacts = new Map<string, string | null>();
   for (const e of eventos) {
     if (e.at !== null && e.at < notBefore) continue;
@@ -312,8 +317,43 @@ export function deriveActivity(eventos: readonly ActivityEvent[], notBefore = 0)
   }
   const resultado: SessionActivity = {
     subagents: [...subagentes.values()].slice(0, MAX_SUBAGENTES),
-    shells: shells.slice(0, MAX_SHELLS).map((label) => ({ label })),
+    shells: shells.slice(0, MAX_SHELLS).map((t) => (t.id === null ? { label: t.label } : { label: t.label, id: t.id })),
     artifacts: [...artifacts].slice(-MAX_ARTIFACTS).map(([url, title]) => ({ url, title })),
   };
   return resultado.subagents.length + resultado.shells.length + resultado.artifacts.length === 0 ? null : resultado;
+}
+
+/**
+ * Qué subagentes y shells de una sesión se pueden seguir: los que aparecen en su
+ * registro de actividad (con los mismos eventos ignorados que `deriveActivity`),
+ * también los que ya terminaron. El panel solo abre archivos de ids que salgan de
+ * aquí. Las shells solo se conocen por los Stop; `running` es lo que decía el último.
+ */
+export type FollowTargets = {
+  subagents: Map<string, { type: string; since: number | null; stopped: boolean }>;
+  shells: Map<string, { label: string; running: boolean }>;
+};
+
+export function followTargets(eventos: readonly ActivityEvent[], notBefore = 0): FollowTargets {
+  const subagents: FollowTargets['subagents'] = new Map();
+  const shells: FollowTargets['shells'] = new Map();
+  let enMarcha = new Set<string>();
+  for (const e of eventos) {
+    if (e.at !== null && e.at < notBefore) continue;
+    if (e.kind === 'subagent-start') {
+      if (!subagents.has(e.id)) subagents.set(e.id, { type: e.type, since: e.at, stopped: false });
+    } else if (e.kind === 'subagent-stop') {
+      const s = subagents.get(e.id);
+      if (s) s.stopped = true;
+    } else if (e.kind === 'stop') {
+      enMarcha = new Set();
+      for (const t of e.shells) {
+        if (t.id === null) continue;
+        shells.set(t.id, { label: t.label, running: true });
+        enMarcha.add(t.id);
+      }
+      for (const [id, s] of shells) s.running = enMarcha.has(id);
+    }
+  }
+  return { subagents, shells };
 }
