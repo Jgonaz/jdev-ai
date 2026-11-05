@@ -371,6 +371,13 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   tienen su propio máximo y solo se ven dentro de los últimos 30 días) y retomar
   una la desarchiva. La lista se guarda en `~/.config/jdev-ai/archived.json` (respeta `XDG_CONFIG_HOME`; las
   sesiones que dejan de existir salen solas, máximo 500 conversaciones).
+- **Terminal (sin agente).** En «Nueva sesión» (o con el «+» de cada proyecto de la barra lateral, que abre el diálogo con ese proyecto y la terminal elegidos, y en el agente por defecto de la
+  cabecera y de Ajustes) puedes elegir «Terminal (sin agente)»: una sesión de tmux
+  con tu shell de login (`$SHELL -l`, o `bash -l`) en la carpeta del proyecto o de
+  un worktree existente, para lanzar comandos o servidores. No usa `bin/agent`, no
+  admite worktree nuevo ni prompt, lleva un icono de terminal en lugar de la luz de
+  estado y no cuenta en los avisos ni en los recuentos de Inicio. Funciona con
+  pestañas, renombrado, archivado y «En segundo plano».
 - **Terminales vivas sin abrir.** Con el panel de Terminales vacío, una lista «Terminales vivas»
   (con «Abrir todas») reúne las sesiones vivas que no están en una pestaña, ordenadas por estado
   (te espera, trabajando, en reposo, cerradas) y actividad; un apartado plegable «En segundo plano (N)»

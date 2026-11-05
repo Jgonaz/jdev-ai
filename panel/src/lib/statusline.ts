@@ -308,7 +308,7 @@ export function headerView(session: SessionInfo, ahora: number): HeaderView {
   const stale = uso ? isStale(uso.updatedAt, ahora, trabajando) : false;
   return {
     place,
-    model: uso?.model ?? session.agent,
+    model: uso?.model ?? (session.agent === 'shell' ? 'terminal' : session.agent),
     effort: uso?.model ? uso.effort : null,
     elapsed: formatDuration(ahora - session.created),
     context: contextView(session),

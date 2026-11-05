@@ -168,6 +168,15 @@ kbd {
   border-radius: 2px;
   background: var(--fg-faint);
 }
+/* Terminal sin agente: un icono en lugar de luz (no tiene estado que indicar). */
+.light--shell {
+  display: inline-grid;
+  place-items: center;
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
+  color: var(--fg-muted);
+}
 :root[data-lights='off'] .light {
   animation: none;
 }

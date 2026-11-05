@@ -17,7 +17,7 @@ export function isLive(s: Pick<SessionInfo, 'alive' | 'state'>): boolean {
 }
 
 // Te espera primero; las que no informan de turnos («viva») cuentan como en reposo.
-const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, closed: 3, ended: 4 };
+const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, shell: 2, closed: 3, ended: 4 };
 
 /**
  * Sesiones vivas que no están abiertas en pestañas, ordenadas por estado y

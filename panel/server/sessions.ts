@@ -60,6 +60,9 @@ export function lastChange(created: number, file: { updatedAt: number } | undefi
   return file && file.updatedAt > 0 ? file.updatedAt : created;
 }
 
+/** Agente de las terminales sin agente (una shell normal): no tienen estado de hooks, statusline ni seguimiento. */
+export const SHELL_AGENT = 'shell';
+
 const PROJECTS_TTL_MS = 10000;
 const EMIT_DEBOUNCE_MS = 100;
 
@@ -169,7 +172,8 @@ export class SessionService {
    */
   followContext(name: string): FollowContext | null {
     const sesion = this.current.find((s) => s.name === name);
-    if (!sesion) return null;
+    // Una terminal sin agente no tiene hooks ni nada que seguir.
+    if (!sesion || sesion.agent === SHELL_AGENT) return null;
     const file = stateByTmuxSession(this.states.snapshot(), this.current).get(name);
     if (!file) return null;
     return {
@@ -323,6 +327,9 @@ export class SessionService {
     this.opts.archive?.pruneSessions(sesiones);
     await Promise.all([this.states.refresh(), this.statuslines.refresh(), this.activities.refresh()]);
     const estados = stateByTmuxSession(this.states.snapshot(), sesiones);
+    // Si dentro de una terminal sin agente se lanza un agente, sus hooks dejarían
+    // un estado atribuido a esa sesión: no se tiene en cuenta (sería un «te espera»).
+    for (const s of sesiones) if (s.agent === SHELL_AGENT) estados.delete(s.name);
     this.noteRestarts();
     await this.pruneEnded(sesiones);
     let proyectos: Project[] = [];

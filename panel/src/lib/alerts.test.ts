@@ -45,6 +45,14 @@ describe('detectAlerts', () => {
     expect(detectAlerts(stateMap([]), [s('nueva', 'waiting')])).toEqual([]);
   });
 
+  it('una terminal sin agente nunca avisa, ni al terminar', () => {
+    const term = (state: SessionInfo['state'], alive = true) => s('t', state, { agent: 'shell', tracked: false, alive });
+    const previo = stateMap([term('alive')]);
+    expect(detectAlerts(previo, [term('waiting')])).toEqual([]);
+    expect(detectAlerts(previo, [term('ended', false)])).toEqual([]);
+    expect(documentTitle(0, true)).toBe('jdev-ai');
+  });
+
   it('las sesiones sin seguimiento de turnos nunca avisan', () => {
     const antes = stateMap([s('a', 'alive', { tracked: false })]);
     expect(detectAlerts(antes, [s('a', 'alive', { tracked: false })])).toEqual([]);

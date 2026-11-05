@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { ApiError, api } from '../api.ts';
-import { AGENT_LABELS } from '../lib/sessions.ts';
+import { AGENT_CHOICES, SHELL_AGENT } from '../lib/sessions.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import { useSettings } from '../state/SettingsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
@@ -10,7 +10,7 @@ import { IconTerminal } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { useRadioGroup } from './useRadioGroup.ts';
 
-const AGENTES: AgentId[] = ['claude', 'codex', 'copilot', 'opencode'];
+const AGENTES: AgentId[] = ['claude', 'codex', 'copilot', 'opencode', 'shell'];
 const PREVIEW_MS = 250;
 
 type Preview =
@@ -40,7 +40,10 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
   const [proyecto, setProyecto] = useState(() => proyectoInicial(projects, sugerido));
   // Si los proyectos llegan después de abrir el diálogo, se propone el que corresponde.
   const proyectoId = projects.some((p) => p.id === proyecto) ? proyecto : proyectoInicial(projects, sugerido);
-  const [agente, setAgente] = useState<AgentId>(settings.newSession.agent);
+  // Con un prompt de partida (p. ej. «Trabajar en esto» del backlog) se necesita un agente: una terminal no lo admite.
+  const [agente, setAgente] = useState<AgentId>(
+    init?.agent ?? (settings.newSession.agent === SHELL_AGENT && init?.prompt ? 'claude' : settings.newSession.agent),
+  );
   const [lugar, setLugar] = useState<LocationId>(
     init?.location ?? (settings.newSession.location === 'worktree-nuevo' ? 'new-worktree' : 'main'),
   );
@@ -55,15 +58,20 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
   const actual = projects.find((p) => p.id === proyectoId);
   const admiteWorktree = actual !== undefined && !actual.harness;
   const worktrees = actual?.worktrees ?? [];
+  // Una terminal sin agente no crea worktrees ni admite prompt: solo abre una shell en una carpeta.
+  const esTerminal = agente === SHELL_AGENT;
 
-  // Si el proyecto no admite worktrees (el harness), se vuelve al checkout principal.
-  const lugarEfectivo: LocationId = admiteWorktree ? lugar : 'main';
+  // Si el proyecto no admite worktrees (el harness), o una terminal pide uno nuevo, se vuelve al checkout principal.
+  const lugarEfectivo: LocationId = admiteWorktree && !(esTerminal && lugar === 'new-worktree') ? lugar : 'main';
   const existenteEfectivo = worktrees.some((w) => w.name === existente) ? existente : (worktrees[0]?.name ?? '');
 
   const opcionesAgente = AGENTES.map((a) => ({ value: a }));
   const grupoAgente = useRadioGroup<AgentId>(opcionesAgente, agente, setAgente);
   const opcionesLugar: { value: LocationId; disabled?: boolean }[] = [{ value: 'main' }];
-  if (admiteWorktree) opcionesLugar.push({ value: 'new-worktree' }, { value: 'existing-worktree', disabled: worktrees.length === 0 });
+  if (admiteWorktree) {
+    if (!esTerminal) opcionesLugar.push({ value: 'new-worktree' });
+    opcionesLugar.push({ value: 'existing-worktree', disabled: worktrees.length === 0 });
+  }
   const grupoLugar = useRadioGroup<LocationId>(opcionesLugar, lugarEfectivo, setLugar);
 
   const peticion = useMemo<SessionRequest | null>(() => {
@@ -71,9 +79,9 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
     const base: SessionRequest = { project: actual.id, agent: agente, location: lugarEfectivo };
     if (lugarEfectivo === 'new-worktree') base.feature = feature.trim();
     if (lugarEfectivo === 'existing-worktree') base.feature = existenteEfectivo;
-    if (prompt.trim() !== '') base.prompt = prompt;
+    if (!esTerminal && prompt.trim() !== '') base.prompt = prompt;
     return base;
-  }, [actual, agente, lugarEfectivo, feature, existenteEfectivo, prompt]);
+  }, [actual, agente, esTerminal, lugarEfectivo, feature, existenteEfectivo, prompt]);
 
   // Vista previa con debounce; la valida el servidor, que es quien conoce las reglas de bin/agent.
   useEffect(() => {
@@ -170,8 +178,8 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
           </legend>
           <div className="agent-grid" aria-labelledby={idAgente} {...grupoAgente.groupProps}>
             {AGENTES.map((a) => (
-              <button key={a} type="button" className="choice" {...grupoAgente.radioProps({ value: a })}>
-                {AGENT_LABELS[a]}
+              <button key={a} type="button" className={`choice${a === SHELL_AGENT ? ' choice--wide' : ''}`} {...grupoAgente.radioProps({ value: a })}>
+                {AGENT_CHOICES[a]}
               </button>
             ))}
           </div>
@@ -184,15 +192,23 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
           <PlaceOption
             radio={grupoLugar.radioProps({ value: 'main' })}
             label="Checkout principal"
-            hint={actual?.branch ? `Trabaja directamente sobre la rama ${actual.branch} del proyecto.` : 'Trabaja directamente sobre la rama actual del proyecto.'}
+            hint={
+              esTerminal
+                ? 'Abre la shell en la carpeta del proyecto.'
+                : actual?.branch
+                  ? `Trabaja directamente sobre la rama ${actual.branch} del proyecto.`
+                  : 'Trabaja directamente sobre la rama actual del proyecto.'
+            }
           />
           {admiteWorktree && (
             <>
-              <PlaceOption
-                radio={grupoLugar.radioProps({ value: 'new-worktree' })}
-                label="Worktree nuevo"
-                hint="Crea la rama y su worktree aislado con bin/worktree."
-              />
+              {!esTerminal && (
+                <PlaceOption
+                  radio={grupoLugar.radioProps({ value: 'new-worktree' })}
+                  label="Worktree nuevo"
+                  hint="Crea la rama y su worktree aislado con bin/worktree."
+                />
+              )}
               {lugarEfectivo === 'new-worktree' && (
                 <label className="prefixed">
                   <span className="prefixed__prefix">feat/</span>
@@ -211,7 +227,13 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
               <PlaceOption
                 radio={grupoLugar.radioProps({ value: 'existing-worktree', disabled: worktrees.length === 0 })}
                 label="Worktree existente"
-                hint={worktrees.length > 0 ? 'Retoma un worktree ya abierto de este proyecto.' : 'Este proyecto no tiene worktrees abiertos.'}
+                hint={
+                  worktrees.length > 0
+                    ? esTerminal
+                      ? 'Abre la shell en un worktree ya abierto de este proyecto.'
+                      : 'Retoma un worktree ya abierto de este proyecto.'
+                    : 'Este proyecto no tiene worktrees abiertos.'
+                }
               />
               {lugarEfectivo === 'existing-worktree' && worktrees.length > 0 && (
                 <select
@@ -234,21 +256,25 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
           )}
         </fieldset>
 
-        <div className="field">
-          <label htmlFor={idPrompt}>
-            Prompt inicial <span className="field__note">Opcional. Se pasa a la sesión como primer mensaje.</span>
-          </label>
-          <textarea
-            id={idPrompt}
-            className="input input--area"
-            rows={3}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-          />
-        </div>
+        {esTerminal ? (
+          <p className="hint">Terminal sin agente: una shell normal para lanzar comandos o servidores. No admite prompt inicial.</p>
+        ) : (
+          <div className="field">
+            <label htmlFor={idPrompt}>
+              Prompt inicial <span className="field__note">Opcional. Se pasa a la sesión como primer mensaje.</span>
+            </label>
+            <textarea
+              id={idPrompt}
+              className="input input--area"
+              rows={3}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+            />
+          </div>
+        )}
 
         <div className="field">
-          <span className="field__note">Se ejecutará en una sesión de tmux</span>
+          <span className="field__note">{esTerminal ? 'Se abrirá en una sesión de tmux' : 'Se ejecutará en una sesión de tmux'}</span>
           <div className={`command command--${preview.estado}`} aria-live="polite">
             {preview.estado === 'ok' && <code>{preview.comando}</code>}
             {preview.estado === 'pendiente' && <span className="command__msg">Calculando el comando…</span>}

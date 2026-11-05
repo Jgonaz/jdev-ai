@@ -9,7 +9,8 @@ export const ACCENTS = ['ambar', 'menta', 'lavanda', 'coral', 'cian'] as const;
 export const CURSORS = ['bloque', 'barra', 'subrayado'] as const;
 // 1, 2 y 4 son el número de terminales visibles; «last» recuerda la última usada.
 export const LAYOUTS = [1, 2, 4, 'last'] as const;
-export const AGENTS = ['claude', 'codex', 'copilot', 'opencode'] as const;
+// «shell» es la «Terminal (sin agente)»: una shell normal, sin bin/agent.
+export const AGENTS = ['claude', 'codex', 'copilot', 'opencode', 'shell'] as const;
 export const LOCATIONS = ['principal', 'worktree-nuevo'] as const;
 // Pantalla que muestra el panel al abrir su URL sin ruta.
 export const START_SCREENS = ['inicio', 'terminales'] as const;

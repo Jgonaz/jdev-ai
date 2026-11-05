@@ -75,6 +75,29 @@ describe('visualState', () => {
   it('un proceso muerto es terminada aunque el último estado fuera reposo', () => {
     expect(visualState(sesion({ alive: false, state: 'idle' }))).toBe('ended');
   });
+
+  it('una terminal sin agente es «terminal» mientras vive y «terminada» después, sin turnos ni cierre', () => {
+    const term = { agent: 'shell', tracked: false, state: 'alive' as const };
+    expect(visualState(sesion(term))).toBe('shell');
+    expect(visualState(sesion({ ...term, state: 'waiting' }))).toBe('shell');
+    expect(visualState(sesion({ ...term, closed: true }))).toBe('shell');
+    expect(visualState(sesion({ ...term, state: 'ended', alive: false }))).toBe('ended');
+    expect(visualState(sesion({ ...term, alive: false }))).toBe('ended');
+  });
+});
+
+describe('terminal sin agente', () => {
+  const term = sesion({ agent: 'shell', tracked: false, state: 'alive', worktree: 'f1', branch: 'feat/f1' });
+
+  it('su chip dice «Terminal» sin tiempo y su meta no muestra el id interno', () => {
+    expect(stateChip(term, '3 min')).toBe('Terminal');
+    expect(stateChip(sesion({ agent: 'shell', tracked: false, state: 'ended', alive: false }), '3 min')).toBe('Terminada');
+    expect(sessionMeta(term)).toBe('wt f1 · terminal');
+  });
+
+  it('no cuenta en «te espera»', () => {
+    expect(waitingCount([term, sesion({ agent: 'shell', state: 'waiting' })])).toBe(0);
+  });
 });
 
 describe('groupSessions', () => {

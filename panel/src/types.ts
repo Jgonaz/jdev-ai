@@ -84,7 +84,8 @@ export type ProjectInfo = {
   defaultColor: string;
 };
 
-export type AgentId = 'claude' | 'codex' | 'copilot' | 'opencode';
+/** `shell` es la «Terminal (sin agente)»: una shell normal en la carpeta del proyecto. */
+export type AgentId = 'claude' | 'codex' | 'copilot' | 'opencode' | 'shell';
 export type LocationId = 'main' | 'new-worktree' | 'existing-worktree';
 
 export type SessionRequest = {
@@ -117,8 +118,11 @@ export type RecentSession = {
 /** Lista de archivadas (PUT /api/archive): sesiones del panel por nombre y creación, y conversaciones por id. */
 export type ArchiveList = { sessions: { name: string; created: number }[]; conversations: string[] };
 
-/** Estado visual de una sesión: lo que se pinta en luces, chips y textos. */
-export type VisualState = 'waiting' | 'working' | 'idle' | 'closed' | 'alive' | 'ended';
+/**
+ * Estado visual de una sesión: lo que se pinta en luces, chips y textos. `shell` es
+ * una terminal sin agente viva: en lugar de luz lleva un icono de terminal.
+ */
+export type VisualState = 'waiting' | 'working' | 'idle' | 'closed' | 'alive' | 'ended' | 'shell';
 
 // ------------------------------------------------------------------ Backlog
 

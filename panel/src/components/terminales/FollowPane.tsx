@@ -143,7 +143,12 @@ export function FollowPane({ tabKey }: { tabKey: string }) {
         aria-label={esAgente ? 'Actividad del subagente' : 'Salida de la shell'}
         tabIndex={0}
         // Cualquier scroll que no termine abajo lo suelta (rueda, arrastre de la barra, táctil, teclado, scrollTo).
-        onScroll={(ev) => setSeguir((actual) => followAfterScroll(actual, atBottom(ev.currentTarget), performance.now() < programatico.current))}
+        onScroll={(ev) => {
+          // Se lee ya: React pone currentTarget a null al acabar el evento y el actualizador corre después.
+          const abajo = atBottom(ev.currentTarget);
+          const propio = performance.now() < programatico.current;
+          setSeguir((actual) => followAfterScroll(actual, abajo, propio));
+        }}
       >
         {sinDatos ? (
           <div className="fv__empty" role="status">

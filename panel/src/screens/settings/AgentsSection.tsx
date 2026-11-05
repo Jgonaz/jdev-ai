@@ -1,9 +1,10 @@
 import { SelectField } from '../../components/controls.tsx';
-import { AGENT_LABELS } from '../../lib/sessions.ts';
+import { AGENT_CHOICES } from '../../lib/sessions.ts';
+import { AGENTS } from '../../../shared/settings-schema.ts';
 import { useSettings } from '../../state/SettingsContext.tsx';
 import type { Settings } from '../../types.ts';
 
-const AGENTES = (['claude', 'codex', 'copilot', 'opencode'] as const).map((value) => ({ value, label: AGENT_LABELS[value]! }));
+const AGENTES = AGENTS.map((value) => ({ value, label: AGENT_CHOICES[value] }));
 const LUGARES = [
   { value: 'principal', label: 'Checkout principal' },
   { value: 'worktree-nuevo', label: 'Worktree nuevo' },

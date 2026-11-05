@@ -7,7 +7,9 @@ set -eu
 
 # Si bin/check se lanza desde una sesión abierta con bin/agent, hereda las
 # variables del panel y alteran la salida que se comprueba.
-unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING JDEV_MAIN_CHECKOUT JDEV_WORKTREE JDEV_PROJECT JDEV_SURFACE
+# TMUX y TMUX_PANE también: dentro de una terminal del panel (o de cualquier tmux)
+# session-state consultaría ese tmux y las pruebas dejarían de ser deterministas.
+unset JDEV_SESSION_AGENT JDEV_SESSION_ORCHESTRATOR JDEV_SESSION_IMPLEMENTER JDEV_SESSION_WARNING JDEV_MAIN_CHECKOUT JDEV_WORKTREE JDEV_PROJECT JDEV_SURFACE TMUX TMUX_PANE
 
 harness_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 work=$(mktemp -d)

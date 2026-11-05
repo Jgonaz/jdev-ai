@@ -58,6 +58,13 @@ describe('sessionTip', () => {
   it('el lugar de un worktree lleva su rama', () => {
     expect(sessionTip(sesion({ worktree: 'ts7', branch: 'feat/ts7' }), proyecto, AHORA).place).toBe('wt ts7 · feat/ts7');
     expect(sessionTip(sesion({ agent: 'codex', branch: null }), proyecto, AHORA)).toMatchObject({ place: 'principal', agent: 'Codex' });
+    // Una terminal sin agente: título, lugar y «Terminal», sin datos de statusline.
+    expect(sessionTip(sesion({ agent: 'shell', tracked: false, state: 'alive', title: 'Terminal' }), proyecto, AHORA)).toMatchObject({
+      title: 'Terminal',
+      place: 'main',
+      agent: 'Terminal',
+      live: null,
+    });
   });
 
   it('sesión viva de Claude con el contexto al 62 % y dos subagentes: modelo, esfuerzo, barra ámbar, tiempo y trabajo', () => {

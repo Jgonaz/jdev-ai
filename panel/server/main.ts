@@ -29,7 +29,7 @@ import type { Overview } from './overview.ts';
 import { listProjects, worktreeDetails } from './projects.ts';
 import type { Project } from './projects.ts';
 import { RecentIndex, SESSION_ID } from './recent.ts';
-import { SessionService } from './sessions.ts';
+import { SHELL_AGENT, SessionService } from './sessions.ts';
 import { DEFAULT_PORT, readSettings, updateSettings } from './settings.ts';
 import { checkSessionTitle } from '../shared/session-title.ts';
 import { TranscriptRejected } from './titles.ts';
@@ -292,7 +292,8 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         projects: visibles,
         allProjects: todos,
         // Las archivadas no cuentan en la actividad de Inicio, salvo las que esperan a la persona.
-        sessions: sesiones.list().filter((x) => !x.archived || x.state === 'waiting'),
+        // Las terminales sin agente tampoco: no son trabajo de un agente.
+        sessions: sesiones.list().filter((x) => x.agent !== SHELL_AGENT && (!x.archived || x.state === 'waiting')),
         backlog,
         history: historial,
         gitName: await nombreGit,

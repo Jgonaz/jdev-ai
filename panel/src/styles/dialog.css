@@ -79,6 +79,10 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
 }
+/* «Terminal (sin agente)» ocupa una fila propia: su texto es más largo que el nombre de un agente. */
+.choice--wide {
+  grid-column: 1 / -1;
+}
 .choice {
   height: 40px;
   border-radius: var(--radius);

@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { archivedEntries, notArchived } from '../../lib/archive.ts';
 import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, visibleRecent } from '../../lib/recent.ts';
 import type { RecentGroup } from '../../lib/recent.ts';
-import { groupSessions, sessionMeta, visualState } from '../../lib/sessions.ts';
+import { SHELL_AGENT, groupSessions, sessionMeta, visualState } from '../../lib/sessions.ts';
 import type { ProjectGroup } from '../../lib/sessions.ts';
 import { recentTip, sessionTip } from '../../lib/sidebarTip.ts';
 import { formatRelative } from '../../lib/time.ts';
@@ -11,7 +11,7 @@ import { useNow } from '../../lib/useNow.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { ProjectInfo, RecentSession, SessionInfo } from '../../types.ts';
-import { IconChevron, IconClock, IconFilter } from '../Icons.tsx';
+import { IconChevron, IconClock, IconFilter, IconPlus } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
 import { ArchivedSection } from './ArchivedSessions.tsx';
@@ -153,6 +153,17 @@ function mergeGroups(vivas: ProjectGroup[], anteriores: RecentGroup[]): SidebarG
   return [...porId.values()];
 }
 
+/** «+» de cada proyecto: abre «Nueva sesión» con ese proyecto y la terminal sin agente elegidos. */
+function NewTerminalButton({ project }: { project: ProjectInfo }) {
+  const { openDialog } = useWorkspace();
+  const etiqueta = `Nueva terminal en ${project.name}`;
+  return (
+    <button type="button" className="group__add" aria-label={etiqueta} title={etiqueta} onClick={() => openDialog({ project: project.id, agent: SHELL_AGENT })}>
+      <IconPlus size={13} />
+    </button>
+  );
+}
+
 function Group({ g, ahora, menu, conversationMenu }: { g: SidebarGroup; ahora: number; menu: MenuHandlers; conversationMenu: ConversationHandlers }) {
   const { visible, openSession } = useWorkspace();
   return (
@@ -160,6 +171,7 @@ function Group({ g, ahora, menu, conversationMenu }: { g: SidebarGroup; ahora: n
       <div className="group__head">
         <Monogram project={g.project} />
         <span className="group__name">{g.project.name}</span>
+        <NewTerminalButton project={g.project} />
         {g.sessions.length > 0 && (
           <span className="group__count" title="Sesiones en marcha en el panel">
             {g.sessions.length}

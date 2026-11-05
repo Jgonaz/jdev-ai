@@ -1,6 +1,6 @@
 import type { HistoryState, OverviewProject, ProjectInfo, SessionInfo } from '../types.ts';
 import { entryDay, entryTime, stateText } from './history.ts';
-import { visualState } from './sessions.ts';
+import { isShell, visualState } from './sessions.ts';
 import { formatRelative, greeting, shiftOf } from './time.ts';
 
 // Lógica pura de la pantalla Inicio: saludo, resumen, atención y orden de proyectos.
@@ -40,10 +40,11 @@ export function summaryLine(proyectos: number, sesiones: number, worktrees: numb
 /**
  * Sesiones que cuentan en Inicio (recuentos, chips y tarjetas de proyecto): las
  * archivadas no, salvo las que esperan a la persona, que siguen contando como en
- * la cabecera y el título de la pestaña.
+ * la cabecera y el título de la pestaña. Las terminales sin agente tampoco: no
+ * son trabajo de un agente.
  */
 export function countedSessions(sesiones: readonly SessionInfo[]): SessionInfo[] {
-  return sesiones.filter((s) => !s.archived || visualState(s) === 'waiting');
+  return sesiones.filter((s) => !isShell(s) && (!s.archived || visualState(s) === 'waiting'));
 }
 
 export type StateCounts = { waiting: number; working: number; resting: number };

@@ -59,9 +59,14 @@ function recorta(texto: string, max: number): string {
   return texto.length > max ? `${texto.slice(0, max - 1)}…` : texto;
 }
 
+/**
+ * Primera línea con contenido. Se saltan los encabezados Markdown sueltos («### Result»
+ * de las herramientas MCP) y las vallas de código, que no dicen nada del resultado.
+ */
 function primeraLinea(texto: string, max: number): string {
-  const linea = texto.split('\n').find((l) => l.trim() !== '') ?? '';
-  return recorta(linea.trim(), max);
+  const lineas = texto.split('\n').map((l) => l.trim()).filter((l) => l !== '');
+  const util = lineas.find((l) => !/^#{1,6}\s/.test(l) && !/^```/.test(l)) ?? lineas[0] ?? '';
+  return recorta(util, max);
 }
 
 function contarLineas(texto: string): number {
@@ -120,8 +125,12 @@ export function describeTool(nombre: string, entrada: Record<string, unknown> | 
       return { verb: 'Delego', target: cadena(e.description) ?? cadena(e.subagent_type) ?? '' };
     case 'WebFetch':
       return { verb: 'Consulto', target: cadena(e.url) ?? '' };
-    default:
+    default: {
+      // Herramientas MCP: «mcp__<servidor>__<herramienta>» se muestra como «Uso <servidor> · <herramienta>».
+      const mcp = /^mcp__(.+?)__(.+)$/.exec(nombre);
+      if (mcp) return { verb: 'Uso', target: `${mcp[1]} · ${mcp[2]}` };
       return { verb: nombre, target: '' };
+    }
   }
 }
 

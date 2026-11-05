@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../../api.ts';
-import { attachCommand } from '../../lib/sessions.ts';
+import { attachCommand, isShell } from '../../lib/sessions.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { SessionInfo } from '../../types.ts';
@@ -140,7 +140,7 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
           }
         >
           <p className="confirm-text">
-            Se cerrará la sesión de tmux «{session.title}» y el agente que se ejecuta en ella. No se puede deshacer.
+            Se cerrará la sesión de tmux «{session.title}» y {isShell(session) ? 'la shell y los procesos que se ejecutan en ella' : 'el agente que se ejecuta en ella'}. No se puede deshacer.
           </p>
           {errorTerminar && (
             <p className="form-error" role="alert">

@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { stateChip, visualState } from '../../lib/sessions.ts';
+import { isShell, stateChip, visualState } from '../../lib/sessions.ts';
 import { NARROW_BELOW_PX, hasWork, headerView, placeText, placeTitle, shortEffort } from '../../lib/statusline.ts';
 import { formatRelative } from '../../lib/time.ts';
 import { useElementWidth } from '../../lib/useElementWidth.ts';
@@ -89,17 +89,20 @@ export function PaneHeader({ session, project }: { session: SessionInfo; project
               <span className="pfact__strong">{lugar}</span>
             )}
           </span>
-          <span className="pfact">
-            {session.usage?.model && <IconSpark size={12} />}
-            {session.usage?.model ? (
-              <>
-                <span className="pfact__strong">{v.model}</span>
-                {v.effort && <> {narrow ? `· ${shortEffort(v.effort)}` : v.effort}</>}
-              </>
-            ) : (
-              v.model
-            )}
-          </span>
+          {/* Una terminal sin agente no tiene modelo: su chip ya dice «Terminal». */}
+          {!isShell(session) && (
+            <span className="pfact">
+              {session.usage?.model && <IconSpark size={12} />}
+              {session.usage?.model ? (
+                <>
+                  <span className="pfact__strong">{v.model}</span>
+                  {v.effort && <> {narrow ? `· ${shortEffort(v.effort)}` : v.effort}</>}
+                </>
+              ) : (
+                v.model
+              )}
+            </span>
+          )}
           {!narrow && (
             <span className="pfact" title="Tiempo desde que empezó la sesión">
               <IconClock size={12} />

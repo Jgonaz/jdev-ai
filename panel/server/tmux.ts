@@ -1,12 +1,15 @@
 import { execFile } from 'node:child_process';
 import type { ExecFileException } from 'node:child_process';
-import { join } from 'node:path';
+import { accessSync, constants, statSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import type { Project } from './projects.ts';
 
 // Todas las llamadas a tmux usan execFile (sin shell) contra un servidor propio
 // (`tmux -L <socket> -f panel/tmux.conf`), para no mezclarse con el tmux personal.
 
-export const AGENT_IDS = ['claude', 'codex', 'copilot', 'opencode'] as const;
+// «shell» no es un agente: es una terminal normal (la shell de login de la
+// persona) en la carpeta de un proyecto, sin bin/agent.
+export const AGENT_IDS = ['claude', 'codex', 'copilot', 'opencode', 'shell'] as const;
 export type AgentId = (typeof AGENT_IDS)[number];
 export const LOCATION_IDS = ['main', 'new-worktree', 'existing-worktree'] as const;
 export type LocationId = (typeof LOCATION_IDS)[number];
@@ -22,7 +25,7 @@ const RESUME_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 const SESSION_NAME = /^jdev-[a-z0-9_-]+-[0-9]+$/;
 const SOCKET_NAME = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 
-const AGENT_FLAGS: Record<AgentId, string | null> = {
+const AGENT_FLAGS: Record<Exclude<AgentId, 'shell'>, string | null> = {
   claude: null, // Claude es el agente por defecto de bin/agent
   codex: '--codex',
   copilot: '--copilot',
@@ -70,10 +73,16 @@ export type SessionPlan = {
   worktree: string;
   /** Id de la sesión de Claude que se retoma, si se pidió. */
   resume?: string;
-  /** Argumentos de bin/agent, como lista. */
+  /** Argumentos de bin/agent, como lista (vacía en una terminal sin agente). */
   agentArgs: string[];
-  /** Argv completo: ruta de bin/agent y sus argumentos. */
+  /** Argv completo: ruta de bin/agent y sus argumentos (la shell de login en una terminal sin agente). */
   argv: string[];
+  /**
+   * Carpeta de trabajo de la sesión de tmux. Con bin/agent es la del harness
+   * (bin/agent resuelve el proyecto); en una terminal sin agente, la del proyecto
+   * o la de su worktree. Si falta, la del harness.
+   */
+  cwd?: string;
   /** Comando legible equivalente, para mostrarlo en la interfaz. */
   command: string;
 };
@@ -165,7 +174,12 @@ export function shellQuote(arg: string): string {
 // Valida la petición contra la lista de proyectos y construye los argumentos de
 // bin/agent como lista. Lanza SessionInputError con un mensaje apto para
 // mostrar a la persona.
-export function planSession(entrada: unknown, projects: readonly Project[], harnessRoot: string): SessionPlan {
+export function planSession(
+  entrada: unknown,
+  projects: readonly Project[],
+  harnessRoot: string,
+  env: NodeJS.ProcessEnv = process.env,
+): SessionPlan {
   if (typeof entrada !== 'object' || entrada === null || Array.isArray(entrada)) {
     throw new SessionInputError('Se esperaba un objeto con la sesión a crear.');
   }
@@ -176,11 +190,16 @@ export function planSession(entrada: unknown, projects: readonly Project[], harn
   if (!project) throw new SessionInputError(`El proyecto «${e.project}» no existe.`);
 
   const agent = e.agent ?? 'claude';
-  if (!isAgent(agent)) throw new SessionInputError('Agente no válido: usa claude, codex, copilot u opencode.');
+  if (!isAgent(agent)) throw new SessionInputError('Agente no válido: usa claude, codex, copilot, opencode o shell.');
 
   const location = e.location ?? 'main';
   if (!isLocation(location)) {
     throw new SessionInputError('Ubicación no válida: usa main, new-worktree o existing-worktree.');
+  }
+
+  const esShell = agent === 'shell';
+  if (esShell && location === 'new-worktree') {
+    throw new SessionInputError('Una terminal sin agente no crea worktrees: usa el checkout principal o un worktree existente.');
   }
 
   let worktree = '';
@@ -198,6 +217,7 @@ export function planSession(entrada: unknown, projects: readonly Project[], harn
   let prompt = '';
   if (e.prompt !== undefined && e.prompt !== null) {
     if (typeof e.prompt !== 'string') throw new SessionInputError('El prompt debe ser un texto.');
+    if (esShell && e.prompt.trim() !== '') throw new SessionInputError('Una terminal sin agente no admite prompt inicial.');
     if (e.prompt.length > MAX_PROMPT_LENGTH) {
       throw new SessionInputError(`El prompt es demasiado largo (máximo ${MAX_PROMPT_LENGTH} caracteres).`);
     }
@@ -207,6 +227,7 @@ export function planSession(entrada: unknown, projects: readonly Project[], harn
 
   let resume = '';
   if (e.resume !== undefined && e.resume !== null) {
+    if (esShell) throw new SessionInputError('Una terminal sin agente no retoma sesiones.');
     if (typeof e.resume !== 'string' || !RESUME_ID.test(e.resume)) {
       throw new SessionInputError('El id de la sesión a retomar no es válido.');
     }
@@ -214,6 +235,8 @@ export function planSession(entrada: unknown, projects: readonly Project[], harn
     if (prompt) throw new SessionInputError('No se puede indicar un prompt al retomar una sesión.');
     resume = e.resume;
   }
+
+  if (esShell) return planShell(project, worktree, location, env);
 
   // bin/agent resuelve los proyectos dentro de projects/; el propio harness se
   // abre con «.» desde su carpeta (el cwd de la sesión de tmux).
@@ -234,6 +257,55 @@ export function planSession(entrada: unknown, projects: readonly Project[], harn
     agentArgs,
     argv: [agentPath, ...agentArgs],
     command: ['bin/agent', ...agentArgs].map(shellQuote).join(' '),
+  };
+}
+
+// Shell de login de la persona: `$SHELL` si es una ruta absoluta ejecutable
+// (tmux ejecuta el argv sin pasar por una shell, así que no se resuelve por
+// PATH) y, si no, bash.
+function loginShell(env: NodeJS.ProcessEnv): string {
+  const candidata = env.SHELL;
+  if (candidata && isAbsolute(candidata)) {
+    try {
+      if (statSync(candidata).isFile()) {
+        accessSync(candidata, constants.X_OK);
+        return candidata;
+      }
+    } catch {
+      // No existe o no es ejecutable: se usa bash.
+    }
+  }
+  return 'bash';
+}
+
+// Terminal sin agente: la shell de login, interactiva (sin «-c»), en la carpeta
+// del proyecto o de su worktree. Esa carpeta tiene que existir.
+function planShell(project: Project, worktree: string, location: LocationId, env: NodeJS.ProcessEnv): SessionPlan {
+  const carpeta = worktree ? project.worktrees.find((w) => w.name === worktree)?.path : project.path;
+  let esDirectorio = false;
+  try {
+    esDirectorio = carpeta !== undefined && carpeta !== '' && statSync(carpeta).isDirectory();
+  } catch {
+    // No existe: se rechaza abajo.
+  }
+  if (!carpeta || !esDirectorio) {
+    throw new SessionInputError(
+      worktree
+        ? `La carpeta del worktree «${worktree}» no existe en ${project.id}.`
+        : `La carpeta del proyecto «${project.id}» no existe.`,
+    );
+  }
+  const shell = loginShell(env);
+  const argv = [shell, '-l'];
+  return {
+    project: project.id,
+    agent: 'shell',
+    location,
+    worktree,
+    agentArgs: [],
+    argv,
+    cwd: carpeta,
+    command: `cd ${shellQuote(carpeta)} && ${argv.map(shellQuote).join(' ')}`,
   };
 }
 
@@ -543,7 +615,8 @@ export async function createSession(
   opciones: CreateOptions = {},
 ): Promise<CreatedSession> {
   const historial = Math.min(100000, Math.max(100, Math.trunc(opciones.historyLimit ?? 5000)));
-  const argv = cfg.launcher ? cfg.launcher(plan.agentArgs) : plan.argv;
+  // El lanzador de pruebas sustituye a bin/agent, no a la shell de una terminal sin agente.
+  const argv = cfg.launcher && plan.agent !== 'shell' ? cfg.launcher(plan.agentArgs) : plan.argv;
   if (argv.length === 0) throw new Error('el lanzador no devolvió ningún comando');
   const base = sanitizeProject(plan.project);
   const entorno = [
@@ -562,6 +635,8 @@ export async function createSession(
     // es virtual y no expone dónde está. Los demás agentes lo ignoran.
     '-e',
     'CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1',
+    // En una terminal sin agente, $SHELL es la shell que se lanza (un servidor tmux longevo podría tener otra).
+    ...(plan.agent === 'shell' && isAbsolute(argv[0]!) ? ['-e', arg(`SHELL=${argv[0]}`)] : []),
   ];
 
   for (let intento = 0; intento < 5; intento++) {
@@ -571,7 +646,7 @@ export async function createSession(
       await runTmux(cfg, [
         // history-limit global antes de crear: solo afecta a los paneles nuevos.
         'set-option', '-g', 'history-limit', String(historial),
-        ';', 'new-session', '-d', '-s', name, '-c', cfg.harnessRoot, ...entorno, '--', ...argv.map(arg),
+        ';', 'new-session', '-d', '-s', name, '-c', plan.cwd ?? cfg.harnessRoot, ...entorno, '--', ...argv.map(arg),
         ...meta('@jdev_project', plan.project),
         ...meta('@jdev_agent', plan.agent),
         ...meta('@jdev_worktree', plan.worktree),

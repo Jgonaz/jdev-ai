@@ -183,6 +183,13 @@ describe('sesiones archivadas en Inicio', () => {
     expect(waitingCount(lista)).toBe(1);
   });
 
+  it('las terminales sin agente no cuentan ni salen en las tarjetas', () => {
+    const term = sesion('t', { agent: 'shell', tracked: false, state: 'alive', updatedAt: 99 });
+    const lista = [sesion('n', { state: 'working', updatedAt: 5 }), term, sesion('t-arch', { agent: 'shell', tracked: false, state: 'alive', archived: true })];
+    expect(countedSessions(lista).map((s) => s.name)).toEqual(['n']);
+    expect(stateCounts(countedSessions(lista))).toEqual({ waiting: 0, working: 1, resting: 0 });
+  });
+
   it('las tarjetas de proyecto no ven las archivadas que no esperan', () => {
     const lista = [sesion('n', { updatedAt: 5 }), sesion('arch', { archived: true, updatedAt: 99 })];
     const tarjetas = projectCards([proyecto('a')], [{ id: 'a', branch: 'main', backlog: { backlog: 0, todo: 0, inProgress: 0 }, worktrees: 0, lastActivity: 1, lastEntry: null }], countedSessions(lista));

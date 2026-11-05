@@ -63,6 +63,28 @@
   font-size: var(--text-xs);
   color: var(--fg-muted);
 }
+.group__add {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-faint);
+  cursor: pointer;
+}
+/* Pegado al nombre del proyecto; el contador sigue a la derecha. */
+.group__add {
+  margin-left: -4px;
+}
+.group__add:hover,
+.group__add:focus-visible {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
 .srow {
   display: flex;
   align-items: flex-start;
@@ -86,7 +108,8 @@
   margin-top: 5px;
 }
 .srow > .light--working,
-.srow > .light--idle {
+.srow > .light--idle,
+.srow > .light--shell {
   margin-top: 4px;
 }
 .srow > .light--closed {
@@ -1092,6 +1115,8 @@
 }
 /* Las luces miden 8 o 10 px: se centran en un hueco de 10 para alinear los títulos. */
 .lrow > .light--waiting,
+.lrow > .light--shell,
+.slrow > .light--shell,
 .lrow > .light--alive,
 .lrow > .light--ended,
 .slrow > .light--waiting,
@@ -2043,4 +2068,22 @@
 }
 .fv__stale {
   color: var(--waiting-text);
+}
+
+/* Pestaña que ha fallado al pintarse: el error queda en su hueco. */
+.pane--error {
+  display: grid;
+  place-items: center;
+}
+.pane__crash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 80%;
+  text-align: center;
+  color: var(--fg-muted);
+}
+.pane__crash strong {
+  color: var(--fg);
 }

@@ -1,5 +1,5 @@
 import { AGENTS } from '../../shared/settings-schema.ts';
-import { AGENT_PRODUCTS } from '../lib/sessions.ts';
+import { AGENT_CHOICES, AGENT_PRODUCTS } from '../lib/sessions.ts';
 import { useSettings } from '../state/SettingsContext.tsx';
 import { Disclosure } from './Disclosure.tsx';
 import { IconChevron, IconTerminal } from './Icons.tsx';
@@ -41,7 +41,7 @@ export function HeaderAgent() {
               cerrar();
             }}
           >
-            <span className="menu__state">{AGENT_PRODUCTS[a]}</span>
+            <span className="menu__state">{a === 'shell' ? AGENT_CHOICES[a] : AGENT_PRODUCTS[a]}</span>
             {a === actual && (
               <span aria-hidden="true" className="hdrmenu__check">
                 ✓

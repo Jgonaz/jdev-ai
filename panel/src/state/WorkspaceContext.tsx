@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import type { AgentId } from '../types.ts';
 import type { ReactNode } from 'react';
 import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import { followKey, isFollowKey } from '../lib/follow.ts';
@@ -64,6 +65,8 @@ export type NewSessionInit = {
   location?: LocationId;
   /** Nombre del worktree existente (con location «existing-worktree»). */
   worktree?: string;
+  /** Agente preseleccionado (p. ej. «Nueva terminal» de la barra lateral abre con la terminal sin agente). */
+  agent?: AgentId;
 };
 
 /** Debajo de este ancho el panel de contexto no cabe junto a las terminales. */

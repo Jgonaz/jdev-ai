@@ -14,6 +14,7 @@ import { ContextPanel } from '../components/terminales/ContextPanel.tsx';
 import { EmptyState } from '../components/terminales/EmptyState.tsx';
 import { IconPlus } from '../components/Icons.tsx';
 import { FollowPane } from '../components/terminales/FollowPane.tsx';
+import { PaneErrorBoundary } from '../components/PaneErrorBoundary.tsx';
 import { Pane } from '../components/terminales/Pane.tsx';
 import { Sidebar } from '../components/terminales/Sidebar.tsx';
 import { StatusBar } from '../components/terminales/StatusBar.tsx';
@@ -88,9 +89,13 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
             <div className={`canvas canvas--l${workspace.layout}`}>
               {abiertas.map((p) =>
                 p.seguimiento ? (
-                  <FollowPane key={p.clave} tabKey={p.clave} />
+                  <PaneErrorBoundary key={p.clave} label={p.clave}>
+                    <FollowPane tabKey={p.clave} />
+                  </PaneErrorBoundary>
                 ) : (
-                  <Pane key={p.clave} session={p.session} suspended={dialogOpen || hidden} />
+                  <PaneErrorBoundary key={p.clave} label={p.clave}>
+                    <Pane session={p.session} suspended={dialogOpen || hidden} />
+                  </PaneErrorBoundary>
                 ),
               )}
               {Array.from({ length: Math.max(0, huecos) }, (_, i) => (

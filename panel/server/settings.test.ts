@@ -30,6 +30,11 @@ describe('ajustes', () => {
     expect(s.newSession).toEqual({ agent: 'claude', location: 'principal' });
   });
 
+  it('acepta «shell» (Terminal sin agente) como agente por defecto y rechaza otros', () => {
+    expect(mergeSettings(DEFAULT_SETTINGS, { newSession: { agent: 'shell' } }).newSession.agent).toBe('shell');
+    expect(mergeSettings(DEFAULT_SETTINGS, { newSession: { agent: 'bash' } }).newSession.agent).toBe('claude');
+  });
+
   it('fusión profunda: un archivo antiguo recibe las claves nuevas', () => {
     updateSettings({ theme: { accent: 'menta' } });
     const s = readSettings();

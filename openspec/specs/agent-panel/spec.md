@@ -43,7 +43,7 @@ Cada terminal del panel SHALL corresponder a una sesión de tmux con un nombre r
 
 ### Requirement: Nueva sesión mediante el lanzador
 
-El diálogo Nueva sesión SHALL permitir elegir proyecto (incluido el propio harness), agente (Claude, Codex, Copilot u OpenCode), dónde trabaja (checkout principal, worktree nuevo con nombre de feature o worktree existente) y un prompt inicial opcional. El panel SHALL ejecutar `bin/agent` con las opciones equivalentes dentro de una sesión de tmux nueva y SHALL mostrar el comando antes de ejecutarlo. Las opciones que `bin/agent` no admite, como un worktree sobre el harness, SHALL no ofrecerse.
+El diálogo Nueva sesión SHALL permitir elegir proyecto (incluido el propio harness), agente (Claude, Codex, Copilot u OpenCode, o «Terminal (sin agente)», que tiene su propio requisito), dónde trabaja (checkout principal, worktree nuevo con nombre de feature o worktree existente) y un prompt inicial opcional. Con un agente, el panel SHALL ejecutar `bin/agent` con las opciones equivalentes dentro de una sesión de tmux nueva y SHALL mostrar el comando antes de ejecutarlo. Las opciones que `bin/agent` no admite, como un worktree sobre el harness, SHALL no ofrecerse.
 
 #### Scenario: Sesión en worktree nuevo
 
@@ -710,3 +710,41 @@ El panel SHALL hacerlo solo para sesiones del panel. Lo que no encuentre SHALL e
 - **WHEN** el transcript o la salida no existen o están fuera de las carpetas permitidas
 - **THEN** la pestaña explica que no hay datos que mostrar, sin servir el archivo
 
+
+### Requirement: Terminal sin agente
+
+El diálogo Nueva sesión, el menú del agente por defecto de la cabecera y el ajuste del agente por defecto SHALL ofrecer «Terminal (sin agente)» como una opción más. Elegirla SHALL abrir una sesión de tmux del panel con una shell normal de la persona, para lanzar comandos o servidores, en la carpeta del proyecto (el propio harness incluido) o en la de un worktree existente. La sesión SHALL crearse como las demás (nombre, proyecto, worktree, fecha y superficie `panel`) y SHALL lanzar la shell de login interactiva de la persona (`$SHELL -l`, o `bash -l` si no hay `SHELL`) en lugar de `bin/agent`. El diálogo SHALL mostrar el comando antes de ejecutarlo y SHALL NOT ofrecer worktree nuevo ni prompt inicial. El servidor SHALL rechazar con un error 400 un worktree nuevo, un prompt, retomar una sesión o una carpeta que no exista.
+
+Una terminal sin agente SHALL llevar un icono de terminal en lugar de la luz de estado, en la barra lateral, las pestañas, «En segundo plano», «Archivadas» y el tooltip, y su título por defecto SHALL ser «Terminal». SHALL NOT tener statusline, seguimiento ni estado de turnos, aunque se lance un agente dentro de ella. SHALL NOT contar en los avisos (cabecera, título de la pestaña, notificaciones y sonidos) ni en los recuentos y las tarjetas de Inicio. Si la shell termina, la sesión SHALL mostrarse como terminada igual que las demás.
+
+Una terminal sin agente SHALL funcionar con pestañas, distribuciones, scroll, renombrado, copia del comando para adjuntar, archivado y terminar sesión. «Retomar» y «Anteriores» SHALL NOT aplicarse.
+
+#### Scenario: Abrir una terminal en un proyecto
+
+- **WHEN** la persona elige balanz.io, «Terminal (sin agente)», checkout principal y confirma
+- **THEN** se abre una terminal nueva con su shell de login interactiva en la carpeta de balanz.io, llamada «Terminal», con un icono de terminal en lugar de la luz
+
+#### Scenario: Terminal en un worktree existente
+
+- **WHEN** la persona elige «Terminal (sin agente)» y el worktree existente `typescript-7`
+- **THEN** la shell arranca en la carpeta de ese worktree
+
+#### Scenario: Opciones que no aplican
+
+- **WHEN** la persona elige «Terminal (sin agente)» en el diálogo
+- **THEN** el diálogo no ofrece worktree nuevo ni prompt inicial, y una petición que los incluya recibe un error 400
+
+#### Scenario: Una terminal no avisa
+
+- **WHEN** hay una terminal sin agente abierta
+- **THEN** no cuenta en «N sesiones te esperan», ni en el título de la pestaña, ni en las notificaciones o sonidos, ni en «trabajando», «en reposo» o las tarjetas de Inicio
+
+#### Scenario: La shell termina
+
+- **WHEN** la persona escribe `exit` en la terminal
+- **THEN** la sesión se muestra como terminada, como cualquier otra, hasta que se termina de forma explícita
+
+#### Scenario: Agente lanzado dentro de la terminal
+
+- **WHEN** la persona ejecuta `claude` dentro de una terminal sin agente
+- **THEN** la terminal sigue sin luz de estado, sin statusline y sin avisos

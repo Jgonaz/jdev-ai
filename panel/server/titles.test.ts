@@ -145,5 +145,7 @@ describe('parseTitle y defaultTitle', () => {
     expect(t).toMatch(/^balanz\.io · Claude · 0?9:05$/);
     expect(defaultTitle('x', 'opencode', 0)).toContain('OpenCode');
     expect(defaultTitle('', '', 0)).toContain('sesión');
+    // Una terminal sin agente se llama «Terminal»: el proyecto ya se ve en el lugar.
+    expect(defaultTitle('balanz.io', 'shell', 0)).toBe('Terminal');
   });
 });

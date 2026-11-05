@@ -1,5 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -607,6 +607,101 @@ describe('API de sesiones y terminal', () => {
       expect((await renombrar(nombre, 'Pronto')).status).toBe(200);
       expect((await lista()).find((s) => s.name === nombre)?.title).toBe('Pronto');
       expect(existsSync(join(proyectosClaude(), `${idClaude}.jsonl`))).toBe(false);
+    });
+  });
+
+  describe('terminal sin agente', () => {
+    const creadas: string[] = [];
+    const lista = async () => ((await (await api('GET', '/api/sessions')).json()) as { sessions: Sesion[] }).sessions;
+    const pedir = (cuerpo: unknown) => api('POST', '/api/sessions', cuerpo);
+    const proyecto = () => join(tmp, 'harness', 'projects', 'foo');
+
+    beforeAll(() => {
+      vi.stubEnv('SHELL', '/bin/sh');
+    });
+
+    afterAll(async () => {
+      vi.unstubAllEnvs();
+      for (const n of creadas) await api('DELETE', `/api/sessions/${n}`, undefined, { 'X-Jdev-Confirm': 'yes' });
+      rmSync(join(tmp, 'state', 'term.json'), { force: true });
+    });
+
+    it('muestra el comando equivalente sin ejecutar nada', async () => {
+      const r = await pedir({ project: 'foo', agent: 'shell', dryRun: true });
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ dryRun: true, command: `cd ${proyecto()} && /bin/sh -l`, args: [] });
+    });
+
+    it('rechaza worktree nuevo, prompt y retomar con 400', async () => {
+      const malo = async (cuerpo: unknown) => {
+        const r = await pedir({ project: 'foo', agent: 'shell', ...(cuerpo as object) });
+        expect(r.status).toBe(400);
+        return ((await r.json()) as { error: string }).error;
+      };
+      expect(await malo({ location: 'new-worktree', feature: 'x' })).toMatch(/no crea worktrees/);
+      expect(await malo({ prompt: 'hola' })).toMatch(/no admite prompt/);
+      expect(await malo({ resume: '0a1b2c3d-1111-4222-8333-444455556666' })).toMatch(/no retoma/);
+      expect(await malo({ location: 'existing-worktree', feature: 'no-existe' })).toMatch(/no existe/);
+      expect((await lista()).length).toBe(0);
+    });
+
+    it('abre una shell en la carpeta del proyecto, sin estado, y en la del worktree', async () => {
+      const r = await pedir({ project: 'foo', agent: 'shell' });
+      expect(r.status).toBe(201);
+      const { session } = (await r.json()) as { session: Sesion };
+      creadas.push(session.name);
+      expect(session).toMatchObject({ project: 'foo', agent: 'shell', worktree: '', title: 'Terminal', state: 'alive', tracked: false, alive: true });
+      const datos = (await tmuxCli('display-message', '-p', '-t', `=${session.name}:`, '#{pane_current_path}|#{@jdev_agent}|#{pane_current_command}')).stdout.trim();
+      expect(datos).toBe(`${realpathSync(proyecto())}|shell|sh`);
+      expect((await tmuxCli('show-environment', '-t', `=${session.name}`, 'JDEV_SURFACE')).stdout.trim()).toBe('JDEV_SURFACE=panel');
+
+      const wt = await pedir({ project: 'foo', agent: 'shell', location: 'existing-worktree', feature: 'mi-feature' });
+      expect(wt.status).toBe(201);
+      const { session: enWt } = (await wt.json()) as { session: Sesion };
+      creadas.push(enWt.name);
+      expect(enWt.worktree).toBe('mi-feature');
+      expect((await tmuxCli('display-message', '-p', '-t', `=${enWt.name}:`, '#{pane_current_path}')).stdout.trim()).toBe(
+        realpathSync(join(tmp, 'harness', 'projects', 'foo.worktrees', 'mi-feature')),
+      );
+    });
+
+    it('ignora un estado de hooks atribuido a la sesión y se puede renombrar', async () => {
+      const nombre = creadas[0]!;
+      mkdirSync(join(tmp, 'state'), { recursive: true });
+      writeFileSync(
+        join(tmp, 'state', 'term.json'),
+        JSON.stringify({
+          session_id: 'term',
+          state: 'waiting',
+          event: 'Notification',
+          updated_at: new Date(Date.now() + 2000).toISOString(),
+          project: 'foo',
+          agent: 'claude',
+          worktree: '',
+          transcript_path: '',
+          cwd: tmp,
+          tmux_session: nombre,
+          message: 'permiso',
+        }),
+      );
+      await new Promise((ok) => setTimeout(ok, 700));
+      expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ state: 'alive', tracked: false, notice: '', usage: null, activity: null });
+
+      expect((await api('PUT', `/api/sessions/${nombre}/title`, { title: 'Servidor dev' })).status).toBe(200);
+      expect((await lista()).find((s) => s.name === nombre)?.title).toBe('Servidor dev');
+    });
+
+    it('no cuenta en la actividad de Inicio', async () => {
+      const resumen = (await (await api('GET', '/api/overview')).json()) as { projects: { id: string; lastActivity: number }[] };
+      const foo = resumen.projects.find((p) => p.id === 'foo')!;
+      const creada = Math.max(...(await lista()).filter((s) => s.agent === 'shell').map((s) => s.updatedAt));
+      expect(foo.lastActivity).toBeLessThan(creada);
+    });
+
+    it('termina como las demás sesiones cuando la shell acaba', async () => {
+      const nombre = creadas[1]!;
+      await tmuxCli('send-keys', '-t', `=${nombre}:`, 'exit', 'Enter');
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ alive: false, state: 'ended' }));
     });
   });
 });

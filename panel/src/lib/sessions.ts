@@ -1,19 +1,35 @@
-import type { ProjectInfo, ProjectOverride, SessionInfo, VisualState } from '../types.ts';
+import type { AgentId, ProjectInfo, ProjectOverride, SessionInfo, VisualState } from '../types.ts';
 
 export const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude',
   codex: 'Codex',
   copilot: 'Copilot',
   opencode: 'OpenCode',
+  shell: 'Terminal',
 };
 
 /** Nombre del producto de cada agente, como se muestra en la cabecera global. */
-export const AGENT_PRODUCTS: Record<'claude' | 'codex' | 'copilot' | 'opencode', string> = {
+export const AGENT_PRODUCTS: Record<AgentId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   copilot: 'Copilot',
   opencode: 'OpenCode',
+  shell: 'Terminal',
 };
+
+/** Opciones de agente (diálogo Nueva sesión, menú de la cabecera y Ajustes). */
+export const AGENT_CHOICES: Record<AgentId, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  copilot: 'Copilot',
+  opencode: 'OpenCode',
+  shell: 'Terminal (sin agente)',
+};
+
+/** Agente «Terminal (sin agente)»: una shell normal, sin estado de turnos ni avisos. */
+export const SHELL_AGENT = 'shell';
+
+export const isShell = (s: Pick<SessionInfo, 'agent'>): boolean => s.agent === SHELL_AGENT;
 
 export const STATE_LABELS: Record<VisualState, string> = {
   waiting: 'Te espera',
@@ -22,14 +38,17 @@ export const STATE_LABELS: Record<VisualState, string> = {
   closed: 'Cerrada',
   alive: 'Viva',
   ended: 'Terminada',
+  shell: 'Terminal',
 };
 
 /**
  * Estado visual de una sesión. Una sesión que te espera o trabaja manda sobre la
  * marca «cerrada»; las que no informan de turnos (tracked=false) solo pueden
- * estar vivas o terminadas.
+ * estar vivas o terminadas. Una terminal sin agente no tiene turnos ni marca
+ * «cerrada»: o está viva (`shell`, con su icono) o terminó.
  */
-export function visualState(s: Pick<SessionInfo, 'state' | 'closed' | 'alive' | 'tracked'>): VisualState {
+export function visualState(s: Pick<SessionInfo, 'state' | 'closed' | 'alive' | 'tracked'> & { agent?: string }): VisualState {
+  if (s.agent === SHELL_AGENT) return s.alive && s.state !== 'ended' ? 'shell' : 'ended';
   if (s.tracked) {
     if (s.state === 'waiting') return 'waiting';
     if (s.state === 'working') return 'working';
@@ -99,7 +118,7 @@ export function groupSessions(
 /** Línea de metadatos: «wt zona-segura-ios · claude», «main · codex». */
 export function sessionMeta(s: Pick<SessionInfo, 'worktree' | 'branch' | 'agent'>): string {
   const lugar = s.worktree ? `wt ${s.worktree}` : (s.branch ?? 'principal');
-  return `${lugar} · ${s.agent}`;
+  return `${lugar} · ${s.agent === SHELL_AGENT ? 'terminal' : s.agent}`;
 }
 
 /** Dónde trabaja la sesión, para la cabecera de la terminal. */
@@ -120,7 +139,7 @@ export function waitingLabel(n: number): string {
 export function stateChip(s: SessionInfo, relativo: string): string {
   const v = visualState(s);
   const base = STATE_LABELS[v];
-  return v === 'closed' || v === 'alive' || v === 'ended' ? base : `${base} · ${relativo}`;
+  return v === 'closed' || v === 'alive' || v === 'ended' || v === 'shell' ? base : `${base} · ${relativo}`;
 }
 
 /** Comando para abrir la misma sesión desde otra terminal (`socket` es el que usa el servidor). */

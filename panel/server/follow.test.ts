@@ -77,7 +77,8 @@ describe('parseAgentLines', () => {
     expect(describeTool('Glob', { pattern: '**/*.ts' }, cwd)).toEqual({ verb: 'Busco', target: '**/*.ts' });
     expect(describeTool('Agent', { description: 'Revisar', subagent_type: 'qa' }, cwd)).toEqual({ verb: 'Delego', target: 'Revisar' });
     expect(describeTool('WebFetch', { url: 'https://x.dev' }, cwd)).toEqual({ verb: 'Consulto', target: 'https://x.dev' });
-    expect(describeTool('mcp__x__y', { a: 1 }, cwd)).toEqual({ verb: 'mcp__x__y', target: '' });
+    expect(describeTool('mcp__playwright__browser_click', { a: 1 }, cwd)).toEqual({ verb: 'Uso', target: 'playwright · browser_click' });
+    expect(describeTool('Desconocida', { a: 1 }, cwd)).toEqual({ verb: 'Desconocida', target: '' });
     expect(describeTool('Read', null, cwd)).toEqual({ verb: 'Leo', target: '' });
   });
 });
@@ -438,5 +439,14 @@ describe('Follower', () => {
       expect(await buscarSalida(t, 'beifl810b', uid)).toEqual({ path: '/tmp/claude-1/s/tasks/beifl810b.output', startedAt: expect.any(Number) });
       expect(await buscarSalida(t, 'zzz', uid)).toBeNull();
     });
+  });
+
+  it('el resumen se salta los encabezados Markdown sueltos de las herramientas MCP', () => {
+    const lineas = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'mcp__playwright__browser_click', input: {} }] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: '### Result\n\nClicked «Enviar»' }] } }),
+    ].join('\n') + '\n';
+    const ev = parseAgentLines(lineas, { primero: false, cwd: null });
+    expect(ev.find((e) => e.type === 'result')).toMatchObject({ summary: 'Clicked «Enviar»' });
   });
 });

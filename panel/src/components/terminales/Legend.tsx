@@ -4,10 +4,10 @@ import { StatusLight } from '../StatusLight.tsx';
 
 const BASE: VisualState[] = ['waiting', 'working', 'idle', 'closed'];
 
-// «Viva» y «terminada» solo aparecen si hay sesiones sin estado de turno (Codex, Copilot, OpenCode).
+// «Viva», «terminada» y «terminal» solo aparecen si hay sesiones sin estado de turno (Codex, Copilot, OpenCode) o terminales sin agente.
 export function Legend({ sessions }: { sessions: readonly SessionInfo[] }) {
   const presentes = new Set(sessions.map(visualState));
-  const estados = [...BASE, ...(['alive', 'ended'] as VisualState[]).filter((e) => presentes.has(e))];
+  const estados = [...BASE, ...(['alive', 'shell', 'ended'] as VisualState[]).filter((e) => presentes.has(e))];
   return (
     <div className="legend">
       <span className="legend__title">luces piloto</span>

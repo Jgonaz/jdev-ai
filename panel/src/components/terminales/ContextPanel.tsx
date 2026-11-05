@@ -57,7 +57,7 @@ export function ContextPanel({ style }: { style?: CSSProperties }) {
               <dt>Worktree</dt>
               <dd className="mono-text">{sesion.worktree || 'checkout principal'}</dd>
               <dt>Agente</dt>
-              <dd>{sesion.agent}</dd>
+              <dd>{sesion.agent === 'shell' ? 'Terminal (sin agente)' : sesion.agent}</dd>
               {proyecto.path && (
                 <>
                   <dt>Ruta</dt>

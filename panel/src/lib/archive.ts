@@ -12,7 +12,7 @@ export type ArchivedEntry =
   | { kind: 'conversation'; recent: RecentSession; project: ProjectInfo };
 
 // Te espera primero, como en «En segundo plano»; las terminadas al final.
-const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, closed: 3, ended: 4 };
+const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, shell: 2, closed: 3, ended: 4 };
 
 /**
  * Filas de «Archivadas»: primero las sesiones (por estado y actividad reciente) y

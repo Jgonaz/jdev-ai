@@ -246,6 +246,8 @@ const AGENT_NAMES: Record<string, string> = {
 
 // Título legible cuando la sesión no tiene ninguno: proyecto, agente y hora.
 export function defaultTitle(project: string, agent: string, created: number): string {
+  // Una terminal sin agente no tiene qué distinguir: el proyecto ya se ve junto al título.
+  if (agent === 'shell') return 'Terminal';
   const hora = new Date(created).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   return `${project || 'sesión'} · ${AGENT_NAMES[agent] ?? (agent || 'agente')} · ${hora}`;
 }

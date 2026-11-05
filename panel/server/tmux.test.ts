@@ -137,6 +137,62 @@ describe('validación y comando de bin/agent', () => {
     expect(plan({ project: 'fitnessia', prompt: 'haz `ls`' }).agentArgs).toEqual(['fitnessia', '--', 'haz `ls`']);
   });
 
+  describe('terminal sin agente (shell)', () => {
+    let raiz: string;
+    let proy: Project;
+    const planShell = (entrada: object, env: NodeJS.ProcessEnv = { SHELL: '/bin/sh' }) =>
+      planSession({ agent: 'shell', ...entrada }, [proy, proyecto('jdev-ai', { harness: true, path: raiz })], HARNESS, env);
+    const rechazaShell = (entrada: object, env?: NodeJS.ProcessEnv) => {
+      try {
+        planShell(entrada, env);
+      } catch (e) {
+        expect(e).toBeInstanceOf(SessionInputError);
+        return (e as Error).message;
+      }
+      throw new Error('debía rechazarse');
+    };
+
+    beforeAll(() => {
+      raiz = mkdtempSync(join(tmpdir(), 'jdev-shell-'));
+      mkdirSync(join(raiz, 'wt'), { recursive: true });
+      proy = proyecto('app', { path: raiz, worktrees: [{ name: 'f1', path: join(raiz, 'wt'), branch: 'feat/f1' }] });
+    });
+    afterAll(() => rmSync(raiz, { recursive: true, force: true }));
+
+    it('lanza la shell de login interactiva en la carpeta del proyecto, sin bin/agent', () => {
+      const p = planShell({ project: 'app' });
+      expect(p).toMatchObject({ agent: 'shell', location: 'main', worktree: '', agentArgs: [], argv: ['/bin/sh', '-l'], cwd: raiz });
+      // Interactiva: sin «-c» ni argumentos que la hagan ejecutar nada.
+      expect(p.argv).not.toContain('-c');
+      expect(p.command).toBe(`cd ${shellQuote(raiz)} && /bin/sh -l`);
+      expect(planShell({ project: 'app', prompt: '   ' }).agentArgs).toEqual([]);
+    });
+
+    it('usa la carpeta del worktree existente y la del propio harness', () => {
+      const wt = planShell({ project: 'app', location: 'existing-worktree', feature: 'f1' });
+      expect(wt).toMatchObject({ worktree: 'f1', location: 'existing-worktree', cwd: join(raiz, 'wt') });
+      expect(planShell({ project: 'jdev-ai' }).cwd).toBe(raiz);
+    });
+
+    it('cae a bash si SHELL falta, no es absoluta o no es ejecutable', () => {
+      for (const env of [{}, { SHELL: '' }, { SHELL: 'zsh' }, { SHELL: '/no/existe/zsh' }, { SHELL: raiz }]) {
+        expect(planShell({ project: 'app' }, env).argv, JSON.stringify(env)).toEqual(['bash', '-l']);
+      }
+    });
+
+    it('rechaza worktree nuevo, prompt, retomar y carpetas inexistentes', () => {
+      expect(rechazaShell({ project: 'app', location: 'new-worktree', feature: 'x' })).toMatch(/no crea worktrees/);
+      expect(rechazaShell({ project: 'app', prompt: 'hola' })).toMatch(/no admite prompt/);
+      expect(rechazaShell({ project: 'app', resume: '0a1b2c3d-1111-4222-8333-444455556666' })).toMatch(/no retoma/);
+      expect(rechazaShell({ project: 'app', location: 'existing-worktree', feature: 'otro' })).toMatch(/no existe en app/);
+      expect(rechazaShell({ project: 'jdev-ai', location: 'existing-worktree', feature: 'x' })).toMatch(/harness no admite worktrees/);
+      // Un proyecto cuya ruta ya no existe (PROYECTOS usa rutas ficticias).
+      expect(() => planSession({ project: 'fitnessia', agent: 'shell' }, PROYECTOS, HARNESS)).toThrow(/carpeta del proyecto/);
+      const sinWt = proyecto('app', { path: raiz, worktrees: [{ name: 'f1', path: join(raiz, 'borrado'), branch: null }] });
+      expect(() => planSession({ project: 'app', agent: 'shell', location: 'existing-worktree', feature: 'f1' }, [sinWt], HARNESS)).toThrow(/carpeta del worktree/);
+    });
+  });
+
   it('reconoce solo nombres de sesión del panel', () => {
     expect(isPanelSessionName('jdev-balanz-io-1')).toBe(true);
     for (const n of ['otra', 'jdev-', 'jdev-x', 'jdev-x-a', 'jdev-x-1; kill-server', '=jdev-x-1', '']) {
@@ -252,6 +308,23 @@ describe('tmux con un socket aislado', () => {
       if (previo === undefined) delete process.env.JDEV_SURFACE;
       else process.env.JDEV_SURFACE = previo;
     }
+  });
+
+  it('abre una terminal sin agente: shell interactiva en la carpeta del proyecto con sus metadatos', async () => {
+    const carpeta = realpathSync(mkdtempSync(join(tmp, 'term-')));
+    const proy = proyecto('fitnessia', { path: carpeta });
+    const p = planSession({ project: 'fitnessia', agent: 'shell' }, [proy], HARNESS, { SHELL: '/bin/sh' });
+    // El lanzador de pruebas sustituye a bin/agent, no a la shell: aquí no se usa.
+    const s = await createSession(cfg, p);
+    const fila = (await listSessions(cfg)).find((x) => x.name === s.name)!;
+    expect(fila).toMatchObject({ project: 'fitnessia', agent: 'shell', worktree: '', alive: true });
+    await vi.waitFor(async () => expect(await paneCurrentPath(cfg, s.name)).toBe(carpeta));
+    expect(tmux('show-environment', '-t', `=${s.name}`, 'JDEV_SURFACE').trim()).toBe('JDEV_SURFACE=panel');
+    expect(tmux('show-environment', '-t', `=${s.name}`, 'SHELL').trim()).toBe('SHELL=/bin/sh');
+    // Interactiva: acepta órdenes y su $- incluye «i».
+    tmux('send-keys', '-t', `=${s.name}:`, 'echo "flags=$-" "dir=$PWD"', 'Enter');
+    await vi.waitFor(() => expect(tmux('capture-pane', '-p', '-t', `=${s.name}:`)).toMatch(new RegExp(`flags=\\w*i\\w* dir=${carpeta}`)));
+    await killSession(cfg, s.name);
   });
 
   it('obtiene el directorio actual del panel de una sesión y su cambio', async () => {
