@@ -514,6 +514,26 @@ export class Follower {
    * transcript de la sesión el `tool_result` cuyo `toolUseResult.backgroundTaskId`
    * es el id. Se cachea por sesión e id (los fallos, unos segundos).
    */
+  /** Busca la salida de la shell `id` en los transcripts de los subagentes conocidos de la sesión. */
+  private async buscarEnSubagentes(ctx: FollowContext, transcript: string, id: string): Promise<ShellLocation | null> {
+    if (!SESSION_FILE.test(ctx.sessionId)) return null;
+    const base = await this.projectsReal();
+    const carpetaReal = await dentroDe(join(dirname(transcript), ctx.sessionId, 'subagents'), base);
+    if (!carpetaReal) return null;
+    const ids = [...ctx.targets.subagents.entries()]
+      .sort((a, b) => (b[1].since ?? 0) - (a[1].since ?? 0))
+      .map(([agente]) => agente)
+      .filter((agente) => FOLLOW_ID.test(agente))
+      .slice(0, MAX_SUBAGENT_SEARCH);
+    for (const agente of ids) {
+      const real = await dentroDe(join(carpetaReal, `agent-${agente}.jsonl`), carpetaReal);
+      if (!real) continue;
+      const hallada = await buscarSalida(real, id, this.uid);
+      if (hallada) return hallada;
+    }
+    return null;
+  }
+
   private async locateShell(ctx: FollowContext, id: string): Promise<ShellLocation> {
     const clave = `${ctx.sessionId}/${id}`;
     const previa = this.found.get(clave);
@@ -522,7 +542,9 @@ export class Follower {
     if (fallo !== undefined && Date.now() - fallo < NEGATIVE_TTL_MS) throw noHayDatos('Claude no anunció dónde guarda la salida de esta shell.');
 
     const transcript = await this.transcript(ctx);
-    const encontrada = await buscarSalida(transcript, id, this.uid);
+    let encontrada = await buscarSalida(transcript, id, this.uid);
+    // Una shell lanzada por un subagente se anuncia en el transcript de ese subagente.
+    if (!encontrada) encontrada = await this.buscarEnSubagentes(ctx, transcript, id);
     if (!encontrada) {
       if (this.missing.size >= MAX_CACHE) this.missing.clear();
       this.missing.set(clave, Date.now());
@@ -534,6 +556,9 @@ export class Follower {
     return encontrada;
   }
 }
+
+/** Ids de subagente seguibles cuyos transcripts pueden haber lanzado una shell (los más recientes primero). */
+const MAX_SUBAGENT_SEARCH = 30;
 
 /**
  * Recorre el transcript por trozos buscando la línea que lanzó la tarea `id` en

@@ -109,7 +109,7 @@ describe('GET /api/sessions/:name/follow/:kind/:id', () => {
       join(actividad, `${sid}.jsonl`),
       [
         { jdev_at: ahora, hook_event_name: 'SubagentStart', agent_id: agente, agent_type: 'implementer' },
-        { jdev_at: ahora, hook_event_name: 'Stop', background_tasks: [{ id: shell, type: 'shell', status: 'running', command: 'pnpm dev' }] },
+        { jdev_at: ahora, hook_event_name: 'Stop', background_tasks: [{ id: agente, type: 'subagent', status: 'running', agent_type: 'implementer' }, { id: shell, type: 'shell', status: 'running', command: 'pnpm dev' }] },
       ]
         .map((l) => JSON.stringify({ session_id: sid, ...l }))
         .join('\n') + '\n',

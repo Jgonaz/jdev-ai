@@ -136,6 +136,30 @@ describe('parseActivityLog / deriveActivity', () => {
     expect(deriveActivity(parseActivityLog(log))?.subagents).toEqual([{ id: 'a1', type: 'qa', since: ms('10:00:00') }]);
   });
 
+  it('un subagente que acaba su turno pero espera a sus tareas sigue en marcha hasta el Stop de la sesión', () => {
+    const tareas = (lista: unknown[]) => lista;
+    const finConTareas = (id: string, hms: string, lista: unknown[]) =>
+      linea({ hook_event_name: 'SubagentStop', agent_id: id, agent_type: 'implementer', background_tasks: tareas(lista) }, t(hms));
+    const stopSesion = (hms: string, lista: unknown[]) => linea({ hook_event_name: 'Stop', background_tasks: lista }, t(hms));
+    const vivo = { id: 'a9', type: 'subagent', status: 'running', agent_type: 'implementer', description: 'Arreglos' };
+    const shell = { id: 'bshell01', type: 'shell', status: 'running', command: 'pnpm test' };
+    const base = [inicio('a9', 'implementer', '10:00:00'), finConTareas('a9', '10:30:00', [vivo, shell])];
+    // Esperando a sus propias tareas: sigue en marcha, con su hora de inicio y la shell que lanzó.
+    let act = deriveActivity(parseActivityLog(base.join('\n')));
+    expect(act?.subagents).toEqual([{ id: 'a9', type: 'implementer', since: ms('10:00:00') }]);
+    expect(act?.shells).toEqual([{ label: 'pnpm test', id: 'bshell01' }]);
+    expect(followTargets(parseActivityLog(base.join('\n'))).subagents.get('a9')?.stopped).toBe(false);
+    // El Stop de la sesión que ya no lo lista lo da por terminado.
+    const despues = [...base, stopSesion('10:31:00', [])].join('\n');
+    act = deriveActivity(parseActivityLog(despues));
+    expect(act?.subagents ?? []).toEqual([]);
+    expect(followTargets(parseActivityLog(despues)).subagents.get('a9')?.stopped).toBe(true);
+    // Retomado más tarde: vuelve a estar en marcha y conserva su primer inicio.
+    const retomado = [despues, inicio('a9', 'implementer', '11:00:00')].join('\n');
+    expect(deriveActivity(parseActivityLog(retomado))?.subagents).toEqual([{ id: 'a9', type: 'implementer', since: ms('10:00:00') }]);
+    expect(followTargets(parseActivityLog(retomado)).subagents.get('a9')?.stopped).toBe(false);
+  });
+
   it('las shells son las tareas shell y monitor en marcha del último Stop', () => {
     const stop = (tareas: unknown[], hms: string) =>
       linea({ hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'hecho', background_tasks: tareas }, t(hms));
@@ -177,8 +201,9 @@ describe('parseActivityLog / deriveActivity', () => {
       inicio('a1', 'qa', '10:00:00'),
       inicio('a2', 'implementer', '10:00:05'),
       fin('a2', '10:01:00'),
-      stop([{ id: 'b1', type: 'shell', status: 'running', command: 'pnpm dev' }, { id: 'MAL ID', type: 'shell', status: 'running', command: 'x' }], '10:02:00'),
-      stop([{ id: 'b2', type: 'shell', status: 'running', command: 'tail -f x' }], '10:03:00'),
+      // Los subagentes en segundo plano salen en la lista de tareas del Stop de la sesión.
+      stop([{ id: 'a1', type: 'subagent', status: 'running', agent_type: 'qa' }, { id: 'b1', type: 'shell', status: 'running', command: 'pnpm dev' }, { id: 'MAL ID', type: 'shell', status: 'running', command: 'x' }], '10:02:00'),
+      stop([{ id: 'a1', type: 'subagent', status: 'running', agent_type: 'qa' }, { id: 'b2', type: 'shell', status: 'running', command: 'tail -f x' }], '10:03:00'),
     ].join('\n');
     const r = followTargets(parseActivityLog(log));
     expect([...r.subagents]).toEqual([
@@ -189,8 +214,8 @@ describe('parseActivityLog / deriveActivity', () => {
       ['b1', { label: 'pnpm dev', running: false }],
       ['b2', { label: 'tail -f x', running: true }],
     ]);
-    // Lo anterior a un SessionStart posterior no cuenta.
-    expect(followTargets(parseActivityLog(log), ms('10:02:30')).subagents.size).toBe(0);
+    // Lo anterior a un SessionStart posterior no cuenta: solo queda el subagente que la lista de las 10:03 da en marcha.
+    expect([...followTargets(parseActivityLog(log), ms('10:02:30')).subagents.keys()]).toEqual(['a1']);
   });
 
   const artifact = (respuesta: unknown, entrada: Record<string, unknown>, hms: string) =>

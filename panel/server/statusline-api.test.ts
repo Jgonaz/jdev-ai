@@ -150,7 +150,7 @@ describe('statusline y actividad de las sesiones de Claude', () => {
       { jdev_at: new Date().toISOString(), hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'qa' },
       { jdev_at: new Date().toISOString(), hook_event_name: 'SubagentStart', agent_id: 'a2', agent_type: 'Explore' },
       { jdev_at: new Date().toISOString(), hook_event_name: 'SubagentStop', agent_id: 'a2', agent_type: 'Explore' },
-      { jdev_at: new Date().toISOString(), hook_event_name: 'Stop', background_tasks: [{ id: 'b1', type: 'shell', status: 'running', command: 'pnpm dev' }] },
+      { jdev_at: new Date().toISOString(), hook_event_name: 'Stop', background_tasks: [{ id: 'a1', type: 'subagent', status: 'running', agent_type: 'qa' }, { id: 'b1', type: 'shell', status: 'running', command: 'pnpm dev' }] },
       {
         jdev_at: new Date().toISOString(),
         hook_event_name: 'PostToolUse',

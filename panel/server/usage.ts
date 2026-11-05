@@ -220,7 +220,12 @@ export function isArtifactUrl(url: string): boolean {
 export type ActivityEvent =
   | { kind: 'subagent-start'; at: number | null; id: string; type: string }
   | { kind: 'subagent-stop'; at: number | null; id: string }
-  | { kind: 'stop'; at: number | null; shells: ShellTask[] }
+  /**
+   * Foto de las tareas en segundo plano de la sesión (`background_tasks`). La traen el
+   * Stop y también el SubagentStop: un subagente que acaba su turno pero sigue esperando
+   * a sus propias tareas aparece en ella como subagente en marcha.
+   */
+  | { kind: 'stop'; at: number | null; shells: ShellTask[]; subagents: { id: string; type: string }[]; source: 'session' | 'subagent' }
   | { kind: 'artifact'; at: number | null; urls: string[]; title: string | null };
 
 export type ActiveSubagent = { id: string; type: string; since: number | null };
@@ -244,6 +249,25 @@ function tareaEnMarcha(valor: unknown): ShellTask | null {
   const monitor = servidor && herramienta ? `${servidor}/${herramienta}` : null;
   const label = texto(t.command, 300) ?? texto(t.description, 300) ?? monitor ?? texto(t.id, 100) ?? tipo;
   return { id: typeof t.id === 'string' && FOLLOW_ID.test(t.id) ? t.id : null, label };
+}
+
+/** Subagente en marcha de una foto de `background_tasks`. */
+function subagenteEnMarcha(valor: unknown): { id: string; type: string } | null {
+  const t = objeto(valor);
+  if (!t) return null;
+  const tipo = typeof t.type === 'string' ? t.type.toLowerCase() : '';
+  const estado = typeof t.status === 'string' ? t.status.toLowerCase() : '';
+  if ((tipo !== 'subagent' && tipo !== 'local_agent') || !ESTADOS_EN_MARCHA.has(estado)) return null;
+  const id = texto(t.id, 200);
+  return id ? { id, type: texto(t.agent_type, 60) ?? 'subagente' } : null;
+}
+
+function foto(tareas: unknown): { shells: ShellTask[]; subagents: { id: string; type: string }[] } {
+  const lista = Array.isArray(tareas) ? tareas : [];
+  return {
+    shells: lista.map(tareaEnMarcha).filter((t): t is ShellTask => t !== null),
+    subagents: lista.map(subagenteEnMarcha).filter((t): t is { id: string; type: string } => t !== null),
+  };
 }
 
 function urlsDe(valor: unknown): string[] {
@@ -277,9 +301,9 @@ export function parseActivityLog(contenido: string): ActivityEvent[] {
       eventos.push({ kind: 'subagent-start', at, id: agente, type: texto(o.agent_type, 60) ?? 'subagente' });
     } else if (evento === 'SubagentStop' && agente) {
       eventos.push({ kind: 'subagent-stop', at, id: agente });
+      if (Array.isArray(o.background_tasks)) eventos.push({ kind: 'stop', at, source: 'subagent', ...foto(o.background_tasks) });
     } else if (evento === 'Stop') {
-      const tareas = Array.isArray(o.background_tasks) ? o.background_tasks : [];
-      eventos.push({ kind: 'stop', at, shells: tareas.map(tareaEnMarcha).filter((t): t is ShellTask => t !== null) });
+      eventos.push({ kind: 'stop', at, source: 'session', ...foto(o.background_tasks) });
     } else if (evento === 'PostToolUse' && o.tool_name === 'Artifact') {
       const entrada = objeto(o.tool_input);
       let urls = urlsDe(o.tool_response);
@@ -297,16 +321,25 @@ export function parseActivityLog(contenido: string): ActivityEvent[] {
  */
 export function deriveActivity(eventos: readonly ActivityEvent[], notBefore = 0): SessionActivity | null {
   const subagentes = new Map<string, ActiveSubagent>();
+  // Primer inicio de cada subagente: al retomarlo o al volver por una foto conserva su «desde».
+  const inicios = new Map<string, number | null>();
   let shells: ShellTask[] = [];
   const artifacts = new Map<string, string | null>();
   for (const e of eventos) {
     if (e.at !== null && e.at < notBefore) continue;
     if (e.kind === 'subagent-start') {
-      if (!subagentes.has(e.id)) subagentes.set(e.id, { id: e.id, type: e.type, since: e.at });
+      if (!inicios.has(e.id)) inicios.set(e.id, e.at);
+      if (!subagentes.has(e.id)) subagentes.set(e.id, { id: e.id, type: e.type, since: inicios.get(e.id) ?? e.at });
     } else if (e.kind === 'subagent-stop') {
       subagentes.delete(e.id);
     } else if (e.kind === 'stop') {
       shells = e.shells;
+      // Los subagentes que la foto da en marcha siguen vivos aunque hayan acabado su turno
+      // (esperan a sus propias tareas). La foto del Stop de la sesión manda: un subagente que
+      // no sale en ella ya no está en marcha (en ese momento ninguno trabaja en primer plano).
+      const vivos = new Map(e.subagents.map((t) => [t.id, t.type]));
+      if (e.source === 'session') for (const id of [...subagentes.keys()]) if (!vivos.has(id)) subagentes.delete(id);
+      for (const [id, type] of vivos) if (!subagentes.has(id)) subagentes.set(id, { id, type, since: inicios.get(id) ?? e.at });
     } else {
       // El título es del primer enlace de la respuesta, que es el que se publicó.
       e.urls.forEach((url, i) => {
@@ -341,11 +374,23 @@ export function followTargets(eventos: readonly ActivityEvent[], notBefore = 0):
   for (const e of eventos) {
     if (e.at !== null && e.at < notBefore) continue;
     if (e.kind === 'subagent-start') {
-      if (!subagents.has(e.id)) subagents.set(e.id, { type: e.type, since: e.at, stopped: false });
+      const previo = subagents.get(e.id);
+      // Retomado: vuelve a estar en marcha y conserva su primer «desde».
+      if (previo) previo.stopped = false;
+      else subagents.set(e.id, { type: e.type, since: e.at, stopped: false });
     } else if (e.kind === 'subagent-stop') {
       const s = subagents.get(e.id);
       if (s) s.stopped = true;
     } else if (e.kind === 'stop') {
+      for (const t of e.subagents) {
+        const s = subagents.get(t.id);
+        if (s) s.stopped = false;
+        else subagents.set(t.id, { type: t.type, since: e.at, stopped: false });
+      }
+      if (e.source === 'session') {
+        const vivos = new Set(e.subagents.map((t) => t.id));
+        for (const [id, s] of subagents) if (!vivos.has(id)) s.stopped = true;
+      }
       enMarcha = new Set();
       for (const t of e.shells) {
         if (t.id === null) continue;
