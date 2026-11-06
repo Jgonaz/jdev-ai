@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SESSION_TITLE_MAX, checkSessionTitle } from '../shared/session-title.ts';
+import { SESSION_TITLE_MAX, checkSessionTitle, startsWithClosedMark } from '../shared/session-title.ts';
 
 describe('checkSessionTitle', () => {
   it('recorta los extremos y acepta texto normal, acentos y emojis', () => {
@@ -18,8 +18,11 @@ describe('checkSessionTitle', () => {
     }
   });
 
-  it('rechaza la marca «[Closed]», que gestiona el panel', () => {
-    expect(checkSessionTitle('[Closed] Algo').ok).toBe(false);
-    expect(checkSessionTitle('Algo [Closed]').ok).toBe(true);
+  it('acepta «[Closed]» como texto, aunque el panel lo lea como marca antigua', () => {
+    expect(checkSessionTitle('[Closed] Algo')).toEqual({ ok: true, title: '[Closed] Algo' });
+    expect(startsWithClosedMark('[Closed] Algo')).toBe(true);
+    expect(startsWithClosedMark('  [Closed] Algo')).toBe(true);
+    expect(startsWithClosedMark('[Closed]Algo')).toBe(false);
+    expect(startsWithClosedMark('Algo [Closed]')).toBe(false);
   });
 });

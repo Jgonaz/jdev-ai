@@ -22,6 +22,11 @@ function Svg({ size = 16, children, ...resto }: Props) {
   );
 }
 
+export const IconCheck = (p: Props) => (
+  <Svg {...p}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </Svg>
+);
 export const IconPlus = (p: Props) => (
   <Svg strokeWidth={2.5} {...p}>
     <path d="M12 5v14M5 12h14" />

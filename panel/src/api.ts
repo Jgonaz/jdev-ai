@@ -5,6 +5,7 @@ import type {
   BacklogList,
   BacklogState,
   CommitPreview,
+  Done,
   Guide,
   GuideContent,
   HistoryDetail,
@@ -83,6 +84,12 @@ export const api = {
   /** Archiva o desarchiva una sesión del panel (por su nombre de tmux) o una conversación de «Anteriores» (por su id). */
   setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) =>
     request<ArchiveList>('/api/archive', { method: 'PUT', body: JSON.stringify({ kind, id, archived }) }),
+  /** Marca una conversación como hecha (con nota opcional) o la reabre. `clave` es la `conversationKey` de la sesión o el id de la conversación. */
+  setConversationState: (clave: string, state: 'done' | 'open', note?: string) =>
+    request<{ key: string; state: 'done' | 'open'; done: Done | null }>(`/api/conversations/${encodeURIComponent(clave)}/state`, {
+      method: 'PUT',
+      body: JSON.stringify(note ? { state, note } : { state }),
+    }),
   account: () => request<{ account: AccountLimits | null }>('/api/account').then((r) => r.account),
   killSession: (nombre: string) =>
     request<{ deleted: boolean }>(`/api/sessions/${encodeURIComponent(nombre)}`, {

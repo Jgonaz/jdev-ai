@@ -10,18 +10,17 @@ export type RecentGroup = { project: ProjectInfo; items: RecentSession[] };
 
 /**
  * Agrupa las recientes por proyecto en el orden de la lista de proyectos.
- * Respeta los proyectos ocultos y, con `hideClosed`, las sesiones con la marca
- * [Closed]. Las de proyectos que ya no están en la lista no se pueden retomar y se omiten.
+ * Respeta los proyectos ocultos y, con `hideDone`, las conversaciones hechas. Las de proyectos que ya no están en la lista no se pueden retomar y se omiten.
  */
 export function groupRecent(
   recent: readonly RecentSession[],
   projects: readonly ProjectInfo[],
-  opciones: { hideClosed?: boolean } = {},
+  opciones: { hideDone?: boolean } = {},
 ): RecentGroup[] {
   const grupos: RecentGroup[] = [];
   for (const project of projects) {
     if (!project.visible) continue;
-    const items = recent.filter((r) => r.project === project.id && !(opciones.hideClosed && r.closed));
+    const items = recent.filter((r) => r.project === project.id && !(opciones.hideDone && r.done !== null));
     if (items.length > 0) grupos.push({ project, items });
   }
   return grupos;

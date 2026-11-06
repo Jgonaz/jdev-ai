@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { IconPlus } from '../components/Icons.tsx';
+import { TerminateDialog } from '../components/terminales/TerminateDialog.tsx';
 import { Monogram } from '../components/Monogram.tsx';
 import { StatusLight } from '../components/StatusLight.tsx';
+import { doneLine } from '../lib/done.ts';
 import { rememberHistoryFilters, stateClass, stateText } from '../lib/history.ts';
 import {
   activityWhen,
@@ -124,6 +126,7 @@ type Acciones = {
 };
 
 function AttentionRow({ item, proyecto, ahora, acciones }: { item: AttentionItem; proyecto: (id: string) => ProjectInfo; ahora: number; acciones: Acciones }) {
+  const [terminando, setTerminando] = useState(false);
   if (item.kind === 'pending') {
     const irAlHistorial = () => {
       // El filtro recordado de Historial es el que se aplica al abrirlo: solo
@@ -148,10 +151,11 @@ function AttentionRow({ item, proyecto, ahora, acciones }: { item: AttentionItem
   const s = item.session;
   const p = proyecto(s.project);
   const espera = item.kind === 'waiting';
+  const hecha = item.kind === 'done' ? s.done : null;
   const oculto = item.kind === 'waiting' && item.hidden;
   const archivada = item.kind === 'waiting' && item.archived;
   return (
-    <li className={`att ${espera ? 'att--waiting' : 'att--closed'}`}>
+    <li className={`att ${espera ? 'att--waiting' : 'att--done'}`}>
       <StatusLight state={visualState(s)} />
       <span className="att__body">
         <span className="att__title">{s.title}</span>
@@ -167,7 +171,11 @@ function AttentionRow({ item, proyecto, ahora, acciones }: { item: AttentionItem
             <span className="att__text">Te espera en su terminal.</span>
           )
         ) : (
-          <span className="att__text">Marcada como cerrada y sigue abierta en el panel. Revísala y ciérrala si ya no la necesitas.</span>
+          <span className="att__text">
+            {hecha && <span>{doneLine(hecha, ahora)}. </span>}
+            {hecha?.note && <span className="att__note">Nota: «{hecha.note}». </span>}
+            <span>Sigue abierta en el panel: revísala y termínala si ya no la necesitas.</span>
+          </span>
         )}
       </span>
       <span className="att__meta">
@@ -194,6 +202,12 @@ function AttentionRow({ item, proyecto, ahora, acciones }: { item: AttentionItem
       >
         {espera ? 'Responder' : 'Revisar'}
       </button>
+      {!espera && (
+        <button type="button" className="att__btn att__btn--ghost att__btn--danger" onClick={() => setTerminando(true)} aria-label={`Terminar: ${s.title} (${p.name})`}>
+          Terminar
+        </button>
+      )}
+      {terminando && <TerminateDialog session={s} onClose={() => setTerminando(false)} />}
     </li>
   );
 }
@@ -272,7 +286,7 @@ function ProjectCardView({ card, ahora, acciones }: { card: ProjectCard; ahora: 
   );
 }
 
-/** Pantalla Inicio: qué te necesita y dónde está el trabajo de todos los proyectos. Solo lee. */
+/** Pantalla Inicio: qué te necesita y dónde está el trabajo de todos los proyectos. Lee, y permite terminar una sesión ya hecha. */
 export function InicioScreen({ onGoToTerminal }: { onGoToTerminal: () => void }) {
   const { sessions: todas, projects, loaded } = useSessions();
   const { settings } = useSettings();
@@ -370,17 +384,40 @@ export function InicioScreen({ onGoToTerminal }: { onGoToTerminal: () => void })
                 necesita tu atención
               </h2>
               {atencion.length > 0 ? (
-                <ul className="inicio__att">
-                  {atencion.map((it) => (
-                    <AttentionRow
-                      key={it.kind === 'pending' ? 'pending' : it.session.name}
-                      item={it}
-                      proyecto={proyecto}
-                      ahora={ahora}
-                      acciones={acciones}
-                    />
-                  ))}
-                </ul>
+                <>
+                  {atencion.some((it) => it.kind === 'waiting') && (
+                    <ul className="inicio__att">
+                      {atencion
+                        .filter((it) => it.kind === 'waiting')
+                        .map((it) => (
+                          <AttentionRow key={it.session.name} item={it} proyecto={proyecto} ahora={ahora} acciones={acciones} />
+                        ))}
+                    </ul>
+                  )}
+                  {atencion.some((it) => it.kind === 'done') && (
+                    <>
+                      <h3 id="h-hechas" className="inicio__h3">
+                        Hechas que siguen abiertas
+                      </h3>
+                      <ul className="inicio__att" aria-labelledby="h-hechas">
+                        {atencion
+                          .filter((it) => it.kind === 'done')
+                          .map((it) => (
+                            <AttentionRow key={it.session.name} item={it} proyecto={proyecto} ahora={ahora} acciones={acciones} />
+                          ))}
+                      </ul>
+                    </>
+                  )}
+                  {atencion.some((it) => it.kind === 'pending') && (
+                    <ul className="inicio__att">
+                      {atencion
+                        .filter((it) => it.kind === 'pending')
+                        .map((it) => (
+                          <AttentionRow key="pending" item={it} proyecto={proyecto} ahora={ahora} acciones={acciones} />
+                        ))}
+                    </ul>
+                  )}
+                </>
               ) : (
                 <p className="inicio__calm">
                   {loaded && overview ? 'Nada que atender: ninguna sesión te espera y no quedan pendientes en el historial.' : 'Cargando…'}

@@ -1,0 +1,113 @@
+#!/bin/sh
+
+# Estado de la conversación de Claude Code: abierta o hecha. Vive fuera del
+# título, en un archivo por conversación, para que el panel gráfico (bin/panel)
+# y el agente compartan el mismo dato sin tocar el transcript:
+#
+#   ${XDG_STATE_HOME:-$HOME/.local/state}/jdev-ai/conversations/<id>.json
+#   {"state":"done"|"open","at":"<ISO UTC>","by":"user"|"agent","note":"…"}
+#
+# <id> es CLAUDE_CODE_SESSION_ID (el de los transcripts). La nota es opcional.
+#
+#   session-done                    marca la conversación como hecha.
+#   session-done --note "<texto>"   la marca con una nota (hasta 500 caracteres).
+#   session-done --open             la reabre (y quita «[Closed] » del título
+#                                   guardado si lo llevaba, como hacía antes).
+#
+# Quien ejecuta este script es el agente: siempre escribe «by: agent». Marcar
+# como hecha no termina ni archiva la sesión.
+#
+# Fuera de Claude Code (sin CLAUDE_CODE_SESSION_ID) no hace nada y lo avisa.
+
+set -u
+
+usage() {
+    printf 'Uso: session-done [--open] [--note "<texto>"]\n' >&2
+    exit 2
+}
+
+state=done
+note=
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --open) state=open; shift ;;
+        --note) [ $# -ge 2 ] || usage; note=$2; shift 2 ;;
+        *) usage ;;
+    esac
+done
+
+# Sin saltos de línea ni caracteres de control (C0, DEL, C1 y los separadores de
+# línea y párrafo U+2028 y U+2029, como valida el panel), y recortada de
+# espacios. Se trabaja por bytes (LC_ALL=C) para no depender de la locale.
+note=$(printf '%s' "$note" | tr '\n\r\t' '   ' | LC_ALL=C awk '{
+    gsub(/[\001-\037\177]/, " ")
+    gsub(/\302[\200-\237]/, " ")
+    gsub(/\342\200[\250\251]/, " ")
+    print
+}' | sed 's/^ *//; s/ *$//')
+[ "$state" = done ] || [ -z "$note" ] || usage
+# Caracteres, no bytes: se descartan los bytes de continuación de UTF-8 (y así
+# cuenta igual con cualquier locale).
+if [ "$(printf '%s' "$note" | LC_ALL=C awk '{ s = s $0 } END { gsub(/[\200-\277]/, "", s); print length(s) }')" -gt 500 ]; then
+    printf 'session-done: la nota no puede pasar de 500 caracteres.\n' >&2
+    exit 2
+fi
+
+conversation_id=${CLAUDE_CODE_SESSION_ID:-}
+if [ -z "$conversation_id" ]; then
+    printf 'session-done: no es una sesión de Claude Code; el estado no cambia.\n' >&2
+    exit 0
+fi
+# Mismo formato que valida el panel: el id va en el nombre del archivo.
+if [ "${#conversation_id}" -ne 36 ]; then
+    printf 'session-done: identificador de sesión no válido: %s\n' "$conversation_id" >&2
+    exit 1
+fi
+case "$conversation_id" in
+    *[!0-9a-f-]*) printf 'session-done: identificador de sesión no válido: %s\n' "$conversation_id" >&2; exit 1 ;;
+esac
+
+# Según XDG, una ruta relativa en XDG_STATE_HOME se ignora (como hace el panel).
+case "${XDG_STATE_HOME:-}" in
+    /*) state_root=$XDG_STATE_HOME ;;
+    *) state_root=${HOME:-}/.local/state ;;
+esac
+if [ "$state_root" = "/.local/state" ]; then
+    printf 'session-done: no se encuentra el directorio de estado (define HOME o XDG_STATE_HOME).\n' >&2
+    exit 1
+fi
+dir="$state_root/jdev-ai/conversations"
+mkdir -p -- "$dir" || { printf 'session-done: no se puede crear %s\n' "$dir" >&2; exit 1; }
+
+json_string() {
+    printf '%s' "$1" | awk '
+        BEGIN { ORS = ""; print "\"" }
+        {
+            gsub(/\\/, "\\\\")
+            gsub(/"/, "\\\"")
+            if (NR > 1) print " "
+            print
+        }
+        END { print "\"" }
+    '
+}
+
+# El temporal vive en el mismo directorio para que mv sea una renombración
+# atómica; el punto inicial evita que se lea como una conversación.
+tmp=$(mktemp "$dir/.$conversation_id.XXXXXX") || exit 1
+trap 'rm -f "$tmp"' EXIT HUP INT TERM
+{
+    printf '{"state":"%s","at":"%s","by":"agent"' "$state" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    [ -z "$note" ] || printf ',"note":%s' "$(json_string "$note")"
+    printf '}\n'
+} > "$tmp" || exit 1
+mv -f -- "$tmp" "$dir/$conversation_id.json" || exit 1
+
+if [ "$state" = open ]; then
+    # Las conversaciones marcadas con el título antiguo dejan de llevarlo.
+    script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+    [ ! -x "$script_dir/session-title" ] || "$script_dir/session-title" --strip-closed
+    printf 'Conversación reabierta.\n'
+else
+    printf 'Conversación marcada como hecha.\n'
+fi

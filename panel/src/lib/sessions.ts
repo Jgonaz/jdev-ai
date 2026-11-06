@@ -35,25 +35,25 @@ export const STATE_LABELS: Record<VisualState, string> = {
   waiting: 'Te espera',
   working: 'Trabajando',
   idle: 'En reposo',
-  closed: 'Cerrada',
+  done: 'Hecha',
   alive: 'Viva',
   ended: 'Terminada',
   shell: 'Terminal',
 };
 
 /**
- * Estado visual de una sesión. Una sesión que te espera o trabaja manda sobre la
- * marca «cerrada»; las que no informan de turnos (tracked=false) solo pueden
- * estar vivas o terminadas. Una terminal sin agente no tiene turnos ni marca
- * «cerrada»: o está viva (`shell`, con su icono) o terminó.
+ * Estado visual de una sesión. Una sesión que te espera o trabaja manda sobre el
+ * estado «hecha»; las que no informan de turnos (tracked=false) solo pueden
+ * estar vivas o terminadas. Una terminal sin agente no tiene turnos ni estado
+ * «hecha»: o está viva (`shell`, con su icono) o terminó.
  */
-export function visualState(s: Pick<SessionInfo, 'state' | 'closed' | 'alive' | 'tracked'> & { agent?: string }): VisualState {
+export function visualState(s: Pick<SessionInfo, 'state' | 'done' | 'alive' | 'tracked'> & { agent?: string }): VisualState {
   if (s.agent === SHELL_AGENT) return s.alive && s.state !== 'ended' ? 'shell' : 'ended';
   if (s.tracked) {
     if (s.state === 'waiting') return 'waiting';
     if (s.state === 'working') return 'working';
   }
-  if (s.closed) return 'closed';
+  if (s.done !== null) return 'done';
   if (!s.alive || s.state === 'ended') return 'ended';
   if (!s.tracked) return 'alive';
   return 'idle';
@@ -96,9 +96,9 @@ export type ProjectGroup = { project: ProjectInfo; sessions: SessionInfo[] };
 export function groupSessions(
   sessions: readonly SessionInfo[],
   projects: readonly ProjectInfo[],
-  opciones: { hideClosed?: boolean } = {},
+  opciones: { hideDone?: boolean } = {},
 ): ProjectGroup[] {
-  const visibles = opciones.hideClosed ? sessions.filter((s) => visualState(s) !== 'closed') : sessions;
+  const visibles = opciones.hideDone ? sessions.filter((s) => visualState(s) !== 'done') : sessions;
   const grupos: ProjectGroup[] = [];
   const conocidos = new Set(projects.map((p) => p.id));
   for (const project of projects) {
@@ -139,7 +139,7 @@ export function waitingLabel(n: number): string {
 export function stateChip(s: SessionInfo, relativo: string): string {
   const v = visualState(s);
   const base = STATE_LABELS[v];
-  return v === 'closed' || v === 'alive' || v === 'ended' || v === 'shell' ? base : `${base} · ${relativo}`;
+  return v === 'done' || v === 'alive' || v === 'ended' || v === 'shell' ? base : `${base} · ${relativo}`;
 }
 
 /** Comando para abrir la misma sesión desde otra terminal (`socket` es el que usa el servidor). */

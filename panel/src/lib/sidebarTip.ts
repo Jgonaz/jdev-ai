@@ -1,4 +1,6 @@
 import type { ProjectInfo, RecentSession, SessionInfo } from '../types.ts';
+import type { Done } from '../types.ts';
+import { doneLine } from './done.ts';
 import { activityAgo } from './recent.ts';
 import { AGENT_LABELS } from './sessions.ts';
 import { artifactsLabel, hasWork, headerView, placeText, shellsLabel, subagentsLabel } from './statusline.ts';
@@ -37,6 +39,8 @@ export type TipView = {
   live: TipLive | null;
   /** «Actividad hace 2 min» (solo en «Anteriores»). */
   activity: string | null;
+  /** Conversación hecha: «Hecha el 5 nov a las 15:20 · por ti» y su nota, si la tiene; null si está abierta. */
+  done: { line: string; note: string | null } | null;
 };
 
 /** «2 subagentes · 1 shell · 3 artifacts»; '' sin trabajo en curso. */
@@ -48,6 +52,8 @@ export function workSummary(c: WorkCounts): string {
   if (c.artifacts > 0) partes.push(artifactsLabel(c.artifacts));
   return partes.join(' · ');
 }
+
+const doneView = (done: Done | null, ahora: number): TipView['done'] => (done ? { line: doneLine(done, ahora), note: done.note } : null);
 
 const agentLabel = (agent: string): string => AGENT_LABELS[agent] ?? agent;
 
@@ -73,6 +79,7 @@ export function sessionTip(session: SessionInfo, project: Pick<ProjectInfo, 'nam
         }
       : null,
     activity: null,
+    done: doneView(session.done, ahora),
   };
 }
 
@@ -88,5 +95,6 @@ export function recentTip(r: RecentSession, project: Pick<ProjectInfo, 'name' | 
     agent: agentLabel('claude'),
     live: null,
     activity: activityAgo(r, ahora),
+    done: doneView(r.done, ahora),
   };
 }

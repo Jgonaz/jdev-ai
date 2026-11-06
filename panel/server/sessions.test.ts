@@ -1,5 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -27,7 +27,8 @@ type Sesion = {
   state: string;
   tracked: boolean;
   title: string;
-  closed: boolean;
+  done: { at: string | null; by: string; note: string | null } | null;
+  conversationKey: string;
   alive: boolean;
   updatedAt: number;
   notice: string;
@@ -177,7 +178,7 @@ describe('API de sesiones y terminal', () => {
         worktree: 'mi-feature',
         state: 'alive',
         tracked: false,
-        closed: false,
+        done: null,
         alive: true,
         command: 'bin/agent foo --codex --wt mi-feature',
       });
@@ -208,13 +209,13 @@ describe('API de sesiones y terminal', () => {
       mkdirSync(join(tmp, 'state'), { recursive: true });
       writeFileSync(join(tmp, 'state', 's1.json'), JSON.stringify(estado));
       await vi.waitFor(() => {
-        expect(eventos.at(-1)?.sessions?.[0]).toMatchObject({ state: 'waiting', tracked: true, title: 'Revisar login', closed: true });
+        expect(eventos.at(-1)?.sessions?.[0]).toMatchObject({ state: 'waiting', tracked: true, title: 'Revisar login', done: { at: null, by: 'agent', note: null } });
       });
       const lista = ((await (await api('GET', '/api/sessions')).json()) as { sessions: Sesion[] }).sessions;
       expect(lista[0]).toMatchObject({
         state: 'waiting',
         title: 'Revisar login',
-        closed: true,
+        done: { at: null, by: 'agent', note: null },
         alive: true,
         notice: 'Claude needs your permission to use Bash',
       });
@@ -329,7 +330,7 @@ describe('API de sesiones y terminal', () => {
     const enWorktree = '22222222-aaaa-4bbb-8ccc-000000000002';
     const vacia = '33333333-aaaa-4bbb-8ccc-000000000003';
     const mensajes2 = '{"type":"user","message":{"content":"hola"}}\n';
-    type Reciente = { id: string; project: string; worktree: string; title: string; closed: boolean; possiblyOpen: boolean };
+    type Reciente = { id: string; project: string; worktree: string; title: string; done: { at: string | null; by: string; note: string | null } | null; possiblyOpen: boolean };
     const recientes = async () => ((await (await api('GET', '/api/recent')).json()) as { recent: Reciente[] }).recent;
     const dir = (...partes: string[]) => join(tmp, 'claude', 'projects', projectSlug(join(tmp, 'harness', 'projects', ...partes)));
     const pedir = (cuerpo: unknown) => api('POST', '/api/sessions', cuerpo);
@@ -354,10 +355,10 @@ describe('API de sesiones y terminal', () => {
       expect((await fetch(`${base}/api/recent`)).status).toBe(401);
       expect((await api('POST', '/api/recent', {})).status).toBe(405);
       const r = await recientes();
-      expect(r.map((s) => [s.id, s.project, s.worktree, s.title, s.closed, s.possiblyOpen]).sort()).toEqual(
+      expect(r.map((s) => [s.id, s.project, s.worktree, s.title, s.done, s.possiblyOpen]).sort()).toEqual(
         [
-          [principal, 'foo', '', 'Título de IA', false, true],
-          [enWorktree, 'foo', 'mi-feature', 'Del worktree', true, true],
+          [principal, 'foo', '', 'Título de IA', null, true],
+          [enWorktree, 'foo', 'mi-feature', 'Del worktree', { at: null, by: 'agent', note: null }, true],
         ].sort(),
       );
     });
@@ -479,7 +480,7 @@ describe('API de sesiones y terminal', () => {
       expect((await titulo(nombre)).status).toBe(400);
       const mala = await fetch(`${base}${ruta}`, { method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' }, body: '{' });
       expect(mala.status).toBe(400);
-      for (const malo of [undefined, 3, '', '   ', 'a'.repeat(81), 'con\nsalto', 'con\ttab', 'nulo\0', 'sep ador', '[Closed] x']) {
+      for (const malo of [undefined, 3, '', '   ', 'a'.repeat(81), 'con\nsalto', 'con\ttab', 'nulo\0', 'sep ador']) {
         const r = await renombrar(nombre, malo);
         expect(r.status, JSON.stringify(malo)).toBe(400);
         expect(((await r.json()) as { error: string }).error).toMatch(/título|Escribe/i);
@@ -501,7 +502,7 @@ describe('API de sesiones y terminal', () => {
         expect(r.status).toBe(200);
         expect(await r.json()).toEqual({ renamed: true, name: nombre, title: nuevo });
         expect((await tmuxCli('show-options', '-v', '-t', `=${nombre}:`, '@jdev_title')).stdout.trimEnd()).toBe(nuevo);
-        expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: nuevo, closed: false });
+        expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: nuevo, done: null });
         await vi.waitFor(() => expect(eventos.at(-1)?.sessions?.find((s) => s.name === nombre)?.title).toBe(nuevo));
         // El título propio también se impone al generado por Claude cuando aún no hay custom-title.
         const transcript = join(proyectosClaude(), `${idClaude}.jsonl`);
@@ -515,24 +516,29 @@ describe('API de sesiones y terminal', () => {
       }
     });
 
-    it('con transcript de Claude añade una línea custom-title con el formato de bin/session-title y conserva «[Closed] »', async () => {
+    it('con transcript de Claude añade una línea custom-title con el formato de bin/session-title y ya no conserva «[Closed] »', async () => {
       const nombre = await crear('claude');
       const transcript = join(proyectosClaude(), `${idClaude}.jsonl`);
       mkdirSync(proyectosClaude(), { recursive: true });
       writeFileSync(transcript, '{"type":"user"}\n{"type":"custom-title","customTitle":"[Closed] Viejo","sessionId":"x"}\n');
       estado(nombre, transcript);
-      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ tracked: true, title: 'Viejo', closed: true }));
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ tracked: true, title: 'Viejo', done: { at: null, by: 'agent', note: null } }));
 
       const nuevo = 'Título "nuevo" con \\ y ñ — ok';
       expect((await renombrar(nombre, nuevo)).status).toBe(200);
-      expect(ultimaLinea(transcript)).toBe(JSON.stringify({ type: 'custom-title', customTitle: `[Closed] ${nuevo}`, sessionId: idClaude }));
-      expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: nuevo, closed: true });
+      expect(ultimaLinea(transcript)).toBe(JSON.stringify({ type: 'custom-title', customTitle: nuevo, sessionId: idClaude }));
+      // El título nuevo ya no lleva la marca antigua, así que la conversación deja de contar como hecha.
+      expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: nuevo, done: null });
       // No se toca la opción de tmux cuando hay transcript.
       expect((await tmuxCli('show-options', '-v', '-t', `=${nombre}:`, '@jdev_title').catch(() => ({ stdout: '' }))).stdout.trim()).toBe('');
 
+      // Un título que empieza por «[Closed]» se escribe tal cual: es texto.
+      expect((await renombrar(nombre, '[Closed] Texto')).status).toBe(200);
+      expect(ultimaLinea(transcript)).toBe(JSON.stringify({ type: 'custom-title', customTitle: '[Closed] Texto', sessionId: idClaude }));
+
       // Sin la marca, se escribe tal cual.
       writeFileSync(transcript, '{"type":"user"}\n{"type":"custom-title","customTitle":"Abierta","sessionId":"x"}\n');
-      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: 'Abierta', closed: false }));
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === nombre)).toMatchObject({ title: 'Abierta', done: null }));
       expect((await renombrar(nombre, 'Otra')).status).toBe(200);
       expect(ultimaLinea(transcript)).toBe(JSON.stringify({ type: 'custom-title', customTitle: 'Otra', sessionId: idClaude }));
       expect((await lista()).find((s) => s.name === nombre)?.title).toBe('Otra');
@@ -607,6 +613,173 @@ describe('API de sesiones y terminal', () => {
       expect((await renombrar(nombre, 'Pronto')).status).toBe(200);
       expect((await lista()).find((s) => s.name === nombre)?.title).toBe('Pronto');
       expect(existsSync(join(proyectosClaude(), `${idClaude}.jsonl`))).toBe(false);
+    });
+  });
+
+  describe('estado de conversación (hecha o abierta)', () => {
+    const idPanel = '55555555-aaaa-4bbb-8ccc-000000000005';
+    const idAnterior = '66666666-aaaa-4bbb-8ccc-000000000006';
+    const creadas: string[] = [];
+    const lista = async () => ((await (await api('GET', '/api/sessions')).json()) as { sessions: (Sesion & { created: number })[] }).sessions;
+    const crear = async (agent: 'claude' | 'codex' | 'shell' = 'codex') => {
+      const r = await api('POST', '/api/sessions', { project: 'foo', agent });
+      expect(r.status).toBe(201);
+      const { session } = (await r.json()) as { session: Sesion };
+      creadas.push(session.name);
+      return session;
+    };
+    const poner = (clave: string, cuerpo: unknown, headers: Record<string, string> = {}) =>
+      api('PUT', `/api/conversations/${encodeURIComponent(clave)}/state`, cuerpo, headers);
+    const carpeta = () => join(tmp, 'conversations');
+    const dirClaude = () => join(tmp, 'claude', 'projects', projectSlug(join(tmp, 'harness', 'projects', 'foo')));
+    const ultimaLinea = (ruta: string) => readFileSync(ruta, 'utf8').trimEnd().split('\n').at(-1);
+    type Reciente = { id: string; title: string; done: { at: string | null; by: string; note: string | null } | null };
+    const recientes = async () => ((await (await api('GET', '/api/recent')).json()) as { recent: Reciente[] }).recent;
+
+    afterAll(async () => {
+      for (const n of creadas) await api('DELETE', `/api/sessions/${n}`, undefined, { 'X-Jdev-Confirm': 'yes' });
+      rmSync(join(tmp, 'state', `${idPanel}.json`), { force: true });
+      rmSync(carpeta(), { recursive: true, force: true });
+      rmSync(dirClaude(), { recursive: true, force: true });
+    });
+
+    it('exige token, Origin propio y PUT, y valida la clave y el cuerpo', async () => {
+      const clave = 'tmux-jdev-foo-1-1730000000';
+      const ruta = `/api/conversations/${clave}/state`;
+      expect((await fetch(`${base}${ruta}`, { method: 'PUT', body: '{"state":"done"}' })).status).toBe(401);
+      expect((await poner(clave, { state: 'done' }, { Origin: 'http://evil.example' })).status).toBe(403);
+      expect((await api('GET', ruta)).status).toBe(405);
+      expect((await api('POST', ruta, { state: 'done' })).status).toBe(405);
+      for (const mala of ['nada', 'jdev-foo-1', '../x', 'tmux-otra-1-1', idPanel.toUpperCase(), 'tmux-jdev-foo-1']) {
+        expect((await poner(mala, { state: 'done' })).status, mala).toBe(400);
+      }
+      // Claves bien formadas pero que el panel no conoce.
+      expect((await poner(idPanel, { state: 'done' })).status).toBe(404);
+      expect((await poner(clave, { state: 'done' })).status).toBe(404);
+      const sesion = await crear();
+      for (const malo of [{}, { state: 'hecha' }, { state: 3 }, { state: 'open', note: 'x' }, { state: 'done', note: 3 }, { state: 'done', note: 'a\nb' }, { state: 'done', note: 'a'.repeat(501) }]) {
+        expect((await poner(sesion.conversationKey, malo)).status, JSON.stringify(malo)).toBe(400);
+      }
+      expect((await poner(sesion.conversationKey, [])).status).toBe(400);
+      const mala = await fetch(`${base}/api/conversations/${sesion.conversationKey}/state`, { method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' }, body: '{' });
+      expect(mala.status).toBe(400);
+      expect(existsSync(carpeta())).toBe(false);
+    });
+
+    it('marca y reabre una sesión sin conversación de Claude, con clave de tmux, y lo emite', async () => {
+      const sesion = await crear();
+      const creada = (await lista()).find((s) => s.name === sesion.name)!.created;
+      expect(sesion.conversationKey).toBe(`tmux-${sesion.name}-${creada}`);
+      expect(sesion.done).toBeNull();
+      const eventos: { type: string; sessions?: Sesion[] }[] = [];
+      const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws/events`, { headers: wsHeaders() });
+      ws.on('message', (d) => eventos.push(JSON.parse(String(d))));
+      await vi.waitFor(() => expect(eventos.some((e) => e.type === 'sessions')).toBe(true));
+      try {
+        const antes = Date.now();
+        const r = await poner(sesion.conversationKey, { state: 'done', note: '  Integrada en main  ' });
+        expect(r.status).toBe(200);
+        const cuerpo = (await r.json()) as { key: string; state: string; done: { at: string; by: string; note: string } };
+        expect(cuerpo).toMatchObject({ key: sesion.conversationKey, state: 'done', done: { by: 'user', note: 'Integrada en main' } });
+        expect(Date.parse(cuerpo.done.at)).toBeGreaterThanOrEqual(antes - 1000);
+        // Es lo que lee bin/session-title --hook: JSON compacto con state, at, by y note.
+        const archivo = join(carpeta(), `${sesion.conversationKey}.json`);
+        expect(JSON.parse(readFileSync(archivo, 'utf8'))).toEqual({ state: 'done', at: cuerpo.done.at, by: 'user', note: 'Integrada en main' });
+        expect(readFileSync(archivo, 'utf8')).toContain('"state":"done"');
+        expect((await lista()).find((s) => s.name === sesion.name)?.done).toEqual(cuerpo.done);
+        await vi.waitFor(() => expect(eventos.at(-1)?.sessions?.find((s) => s.name === sesion.name)?.done?.note).toBe('Integrada en main'));
+        // Ni se termina ni se archiva.
+        expect((await lista()).find((s) => s.name === sesion.name)).toMatchObject({ alive: true, archived: false });
+        // Sin temporales olvidados.
+        expect(readdirSync(carpeta()).filter((n) => n.startsWith('.'))).toEqual([]);
+
+        const o = await poner(sesion.conversationKey, { state: 'open' });
+        expect(o.status).toBe(200);
+        expect(await o.json()).toEqual({ key: sesion.conversationKey, state: 'open', done: null });
+        expect(JSON.parse(readFileSync(archivo, 'utf8'))).toMatchObject({ state: 'open', by: 'user' });
+        expect((await lista()).find((s) => s.name === sesion.name)?.done).toBeNull();
+        await vi.waitFor(() => expect(eventos.at(-1)?.sessions?.find((s) => s.name === sesion.name)?.done).toBeNull());
+      } finally {
+        ws.close();
+      }
+    });
+
+    it('lee el estado guardado con la clave de tmux en segundos (formato anterior) hasta que haya uno más nuevo', async () => {
+      const sesion = await crear();
+      const creada = (await lista()).find((s) => s.name === sesion.name)!.created;
+      mkdirSync(carpeta(), { recursive: true });
+      const antigua = join(carpeta(), `tmux-${sesion.name}-${Math.floor(creada / 1000)}.json`);
+      writeFileSync(antigua, '{"state":"done","at":"2026-11-05T15:20:00Z","by":"agent"}\n');
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === sesion.name)?.done).toMatchObject({ by: 'agent' }));
+      // El estado con la clave nueva manda sobre el antiguo.
+      expect((await poner(sesion.conversationKey, { state: 'open' })).status).toBe(200);
+      expect((await lista()).find((s) => s.name === sesion.name)?.done).toBeNull();
+      rmSync(antigua, { force: true });
+    });
+
+    it('rechaza una terminal sin agente', async () => {
+      vi.stubEnv('SHELL', '/bin/sh');
+      try {
+        const sesion = await crear('shell');
+        expect((await poner(sesion.conversationKey, { state: 'done' })).status).toBe(400);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it('usa el id de Claude como clave en una sesión con conversación y reabre quitando la marca antigua', async () => {
+      const sesion = await crear('claude');
+      mkdirSync(dirClaude(), { recursive: true });
+      const transcript = join(dirClaude(), `${idPanel}.jsonl`);
+      writeFileSync(transcript, '{"type":"user"}\n{"type":"custom-title","customTitle":"[Closed] Con marca","sessionId":"x"}\n');
+      mkdirSync(join(tmp, 'state'), { recursive: true });
+      writeFileSync(
+        join(tmp, 'state', `${idPanel}.json`),
+        JSON.stringify({ session_id: idPanel, state: 'idle', event: 'Stop', updated_at: new Date(Date.now() + 2000).toISOString(), project: 'foo', agent: 'claude', worktree: '', transcript_path: transcript, cwd: tmp, tmux_session: sesion.name }),
+      );
+      await vi.waitFor(async () => expect((await lista()).find((s) => s.name === sesion.name)).toMatchObject({ tracked: true, conversationKey: idPanel, title: 'Con marca', done: { at: null, by: 'agent', note: null } }));
+
+      expect((await poner(idPanel, { state: 'open' })).status).toBe(200);
+      expect(JSON.parse(ultimaLinea(transcript)!)).toEqual({ type: 'custom-title', customTitle: 'Con marca', sessionId: idPanel });
+      expect((await lista()).find((s) => s.name === sesion.name)).toMatchObject({ title: 'Con marca', done: null });
+      // Con el título ya limpio no se añade nada más.
+      const lineas = readFileSync(transcript, 'utf8').split('\n').length;
+      expect((await poner(idPanel, { state: 'open' })).status).toBe(200);
+      expect(readFileSync(transcript, 'utf8').split('\n').length).toBe(lineas);
+
+      expect((await poner(idPanel, { state: 'done', note: 'Revisada' })).status).toBe(200);
+      expect((await lista()).find((s) => s.name === sesion.name)?.done).toMatchObject({ by: 'user', note: 'Revisada' });
+    });
+
+    it('marca y reabre una conversación de «Anteriores», y refleja lo que escribe otro proceso', async () => {
+      mkdirSync(dirClaude(), { recursive: true });
+      const transcript = join(dirClaude(), `${idAnterior}.jsonl`);
+      writeFileSync(transcript, '{"type":"user","message":{"content":"hola"}}\n{"type":"custom-title","customTitle":"[Closed] Vieja","sessionId":"x"}\n');
+      expect((await recientes()).find((r) => r.id === idAnterior)).toMatchObject({ title: 'Vieja', done: { at: null, by: 'agent', note: null } });
+
+      const eventos: { type: string }[] = [];
+      const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws/events`, { headers: wsHeaders() });
+      ws.on('message', (d) => eventos.push(JSON.parse(String(d))));
+      await vi.waitFor(() => expect(eventos.length).toBeGreaterThan(0));
+      try {
+        expect((await poner(idAnterior, { state: 'open' })).status).toBe(200);
+        expect(JSON.parse(ultimaLinea(transcript)!)).toEqual({ type: 'custom-title', customTitle: 'Vieja', sessionId: idAnterior });
+        expect((await recientes()).find((r) => r.id === idAnterior)).toMatchObject({ title: 'Vieja', done: null });
+        await vi.waitFor(() => expect(eventos.some((e) => e.type === 'conversations')).toBe(true));
+
+        // El agente (bin/session-done) escribe el archivo sin pasar por el servidor.
+        eventos.length = 0;
+        writeFileSync(join(carpeta(), `${idAnterior}.json`), '{"state":"done","at":"2026-11-05T15:20:00Z","by":"agent","note":"Integrada"}\n');
+        await vi.waitFor(() => expect(eventos.some((e) => e.type === 'conversations')).toBe(true));
+        expect((await recientes()).find((r) => r.id === idAnterior)?.done).toEqual({ at: '2026-11-05T15:20:00.000Z', by: 'agent', note: 'Integrada' });
+
+        // Un archivo mal formado o con otro nombre se ignora.
+        writeFileSync(join(carpeta(), `${idAnterior}.json`), '{"state":"hecha"}');
+        writeFileSync(join(carpeta(), 'otra-cosa.json'), '{"state":"done","at":"2026-11-05T15:20:00Z","by":"agent"}');
+        await vi.waitFor(async () => expect((await recientes()).find((r) => r.id === idAnterior)?.done).toBeNull());
+      } finally {
+        ws.close();
+      }
     });
   });
 

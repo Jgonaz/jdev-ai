@@ -1,6 +1,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { openRegularFile } from './safefile.ts';
+import type { Done } from './conversations.ts';
 import type { Project } from './projects.ts';
 import { TitleReader, bestTitle, parseTitle } from './titles.ts';
 
@@ -38,7 +39,8 @@ export type RecentSession = {
   /** Nombre del worktree ('' en el checkout principal). */
   worktree: string;
   title: string;
-  closed: boolean;
+  /** Hecha según su estado de conversación o, si no tiene, la marca antigua del título; null si está abierta. */
+  done: Done | null;
   /** mtime del transcript, en milisegundos desde la época. */
   lastActivity: number;
   /** Actividad en los últimos POSSIBLY_OPEN_MS: podría seguir abierta en otra ventana. */
@@ -62,18 +64,25 @@ export type RecentIndexOptions = {
   projectsDir: string;
   titles?: TitleReader;
   now?: () => number;
+  /**
+   * «Hecha» de una conversación a partir de su id y de si su título lleva la marca
+   * antigua `[Closed] `. Sin ella, solo cuenta la marca (con `at` desconocido).
+   */
+  doneOf?: (id: string, legacyClosed: boolean) => Done | null;
 };
 
 export class RecentIndex {
   private readonly projectsDir: string;
   private readonly titles: TitleReader;
   private readonly now: () => number;
+  private readonly doneOf: (id: string, legacyClosed: boolean) => Done | null;
   private readonly probes = new Map<string, MessageProbe>();
 
   constructor(opts: RecentIndexOptions) {
     this.projectsDir = opts.projectsDir;
     this.titles = opts.titles ?? new TitleReader();
     this.now = opts.now ?? Date.now;
+    this.doneOf = opts.doneOf ?? ((_id, legacy) => (legacy ? { at: null, by: 'agent', note: null } : null));
   }
 
   // Una carpeta de transcripts por checkout principal y por worktree existente;
@@ -175,7 +184,7 @@ export class RecentIndex {
           project: c.location.project,
           worktree: c.location.worktree,
           title: parsed && parsed.title !== '' ? parsed.title : `Sin título · ${c.id.slice(0, 8)}`,
-          closed: parsed?.closed ?? false,
+          done: this.doneOf(c.id, parsed?.closed ?? false),
           lastActivity: Math.round(c.mtimeMs),
           possiblyOpen: ahora - c.mtimeMs < POSSIBLY_OPEN_MS,
           sizeBytes: c.size,
@@ -186,6 +195,20 @@ export class RecentIndex {
     }
     salida.sort((a, b) => b.lastActivity - a.lastActivity || a.id.localeCompare(b.id));
     return salida;
+  }
+
+  /** Ruta del transcript de una conversación en los proyectos dados, o null si no existe. */
+  async transcriptPath(projects: readonly Project[], id: string): Promise<string | null> {
+    if (!SESSION_ID.test(id)) return null;
+    for (const l of this.locations(projects)) {
+      const ruta = join(l.dir, `${id}.jsonl`);
+      try {
+        if ((await stat(ruta)).isFile()) return ruta;
+      } catch {
+        // No está en esta carpeta.
+      }
+    }
+    return null;
   }
 
   /**

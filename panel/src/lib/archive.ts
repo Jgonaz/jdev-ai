@@ -12,13 +12,13 @@ export type ArchivedEntry =
   | { kind: 'conversation'; recent: RecentSession; project: ProjectInfo };
 
 // Te espera primero, como en «En segundo plano»; las terminadas al final.
-const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, shell: 2, closed: 3, ended: 4 };
+const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, shell: 2, done: 3, ended: 4 };
 
 /**
  * Filas de «Archivadas»: primero las sesiones (por estado y actividad reciente) y
  * después las conversaciones (las más recientes primero). Con las mismas reglas
  * que el resto de la barra: los proyectos ocultos no cuentan, salvo las sesiones
- * que esperan (siempre se avisan), y `hideClosed` omite lo marcado [Closed].
+ * que esperan (siempre se avisan), y `hideDone` omite lo hecho.
  * Una sesión de un proyecto desconocido se muestra con uno genérico; una
  * conversación de un proyecto que ya no está no se puede retomar y se omite.
  */
@@ -26,14 +26,14 @@ export function archivedEntries(
   sessions: readonly SessionInfo[],
   recent: readonly RecentSession[],
   projects: readonly ProjectInfo[],
-  opciones: { hideClosed?: boolean } = {},
+  opciones: { hideDone?: boolean } = {},
 ): ArchivedEntry[] {
   const porId = new Map(projects.map((p) => [p.id, p]));
   const vivas: Extract<ArchivedEntry, { kind: 'session' }>[] = [];
   for (const session of sessions) {
     if (!session.archived) continue;
     const state = visualState(session);
-    if (opciones.hideClosed && state === 'closed') continue;
+    if (opciones.hideDone && state === 'done') continue;
     const project = porId.get(session.project) ?? fallbackProject(session.project);
     const hiddenProject = !project.visible;
     if (hiddenProject && state !== 'waiting') continue;
@@ -44,7 +44,7 @@ export function archivedEntries(
   );
   const conversaciones: Extract<ArchivedEntry, { kind: 'conversation' }>[] = [];
   for (const r of recent) {
-    if (!r.archived || (opciones.hideClosed && r.closed)) continue;
+    if (!r.archived || (opciones.hideDone && r.done !== null)) continue;
     const project = porId.get(r.project);
     if (!project?.visible) continue;
     conversaciones.push({ kind: 'conversation', recent: r, project });

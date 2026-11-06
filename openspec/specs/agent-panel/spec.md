@@ -57,7 +57,7 @@ El diálogo Nueva sesión SHALL permitir elegir proyecto (incluido el propio har
 
 ### Requirement: La barra lateral muestra sesiones con título y estado
 
-La barra lateral SHALL agrupar las sesiones por proyecto y SHALL mostrar de cada una su título, agente, rama o worktree, tiempo desde el último cambio y estado. Los estados SHALL ser: te espera (el agente necesita una respuesta o un permiso), trabajando, en reposo y cerrada (título con la marca `[Closed]`). Los estados SHALL distinguirse por forma y texto además de por color. Para agentes que no informan del estado, el panel SHALL mostrar solo si la sesión está viva.
+La barra lateral SHALL agrupar las sesiones por proyecto y SHALL mostrar de cada una su título, agente, rama o worktree, tiempo desde el último cambio y estado. Los estados SHALL ser: te espera (el agente necesita una respuesta o un permiso), trabajando, en reposo y hecha (la conversación está marcada como hecha en su estado de conversación o, por compatibilidad, su título lleva la marca antigua `[Closed]`). Los estados SHALL distinguirse por forma y texto además de por color; una conversación hecha SHALL mostrarse con un check y el texto «Hecha», sin tachar el título. Para agentes que no informan del estado, el panel SHALL mostrar solo si la sesión está viva.
 
 #### Scenario: Agente pide permiso
 
@@ -79,9 +79,14 @@ La barra lateral SHALL agrupar las sesiones por proyecto y SHALL mostrar de cada
 - **WHEN** una sesión ejecuta Copilot u OpenCode
 - **THEN** el panel muestra la sesión como viva o terminada, sin estados de turno
 
+#### Scenario: Conversación marcada como hecha con la marca antigua
+
+- **WHEN** una conversación tiene el título `[Closed] Alternativas de ejercicios` y no tiene estado de conversación
+- **THEN** el panel la muestra como «Hecha» con el título `Alternativas de ejercicios`
+
 ### Requirement: Renombrar sesiones desde el panel
 
-El panel SHALL permitir renombrar una sesión desde un menú contextual (clic derecho o teclado) de la barra lateral y de las pestañas, con un título de hasta 80 caracteres sin caracteres de control. Para una sesión de Claude con transcript dentro del directorio de proyectos de Claude, el panel SHALL añadir al transcript una línea `custom-title` con el mismo formato que `bin/session-title`, conservando la marca `[Closed]` si la tenía, y SHALL rechazar un transcript fuera de ese directorio. Para el resto, el panel SHALL guardar el título en la propia sesión de tmux. El título nuevo SHALL mostrarse sin recargar.
+El panel SHALL permitir renombrar una sesión desde un menú contextual (clic derecho o teclado) de la barra lateral y de las pestañas, con un título de hasta 80 caracteres sin caracteres de control. Para una sesión de Claude con transcript dentro del directorio de proyectos de Claude, el panel SHALL añadir al transcript una línea `custom-title` con el mismo formato que `bin/session-title`, sin añadir ni conservar la marca `[Closed]`, y SHALL rechazar un transcript fuera de ese directorio. Para el resto, el panel SHALL guardar el título en la propia sesión de tmux. El título nuevo SHALL mostrarse sin recargar. El panel SHALL NOT prohibir un título que empiece por `[Closed]`: lo guardará como texto y el diálogo SHALL avisar de que el panel seguirá leyéndolo como marca antigua de «hecha».
 
 #### Scenario: Renombrar una sesión de Claude
 
@@ -92,6 +97,16 @@ El panel SHALL permitir renombrar una sesión desde un menú contextual (clic de
 
 - **WHEN** la persona renombra una sesión de Codex
 - **THEN** el panel guarda el título en la sesión de tmux y lo muestra en lugar del título por defecto
+
+#### Scenario: Renombrar una conversación hecha con la marca antigua
+
+- **WHEN** la persona renombra una conversación cuyo título es `[Closed] Revisar login` y que no tiene estado de conversación
+- **THEN** el transcript recibe el título nuevo sin la marca, la conversación deja de contar como hecha y el diálogo lo advierte antes de guardar
+
+#### Scenario: Título que empieza por la marca antigua
+
+- **WHEN** la persona guarda el título `[Closed] Notas`
+- **THEN** el panel lo guarda como texto y el diálogo avisa de que el panel lo leerá como conversación hecha
 
 ### Requirement: El estado de sesión se registra fuera del panel
 
@@ -430,10 +445,10 @@ La pantalla SHALL actualizarse sola con los cambios de sesiones, backlog e histo
 La sección SHALL listar, en este orden:
 
 1. Las sesiones que esperan a la persona, con su título, proyecto, tiempo desde el aviso y, si se conoce, el texto de lo que piden, y la acción «Responder», que abre esa terminal en Terminales.
-2. Las sesiones con la marca `[Closed]` que siguen abiertas en el panel, con la acción «Revisar», que abre su terminal.
+2. En un apartado «Hechas que siguen abiertas», las sesiones marcadas como hechas que siguen abiertas en el panel, con cuándo y quién las marcó y su nota si la tienen, con la acción «Revisar», que abre su terminal, y la acción «Terminar», que pide confirmación y termina la sesión.
 3. Un resumen de los pendientes vigentes del historial, los sin marcar de la última entrada de cada proyecto visible («N pendientes de ti», con el subtítulo «En la última entrada del historial de cada proyecto»), que lleva a Historial con «Solo con Pendiente de ti» activado y «Incluir pendientes antiguos» desactivado. Los pendientes de entradas anteriores SHALL NOT contar.
 
-Las sesiones que esperan SHALL aparecer y contar aunque su proyecto esté oculto en Ajustes, con una nota «proyecto oculto», con el mismo criterio en la cabecera, el título de la pestaña y el recuento «te espera» de Inicio. Las cerradas que siguen abiertas SHALL ser solo las de proyectos visibles.
+Las sesiones que esperan SHALL aparecer y contar aunque su proyecto esté oculto en Ajustes, con una nota «proyecto oculto», con el mismo criterio en la cabecera, el título de la pestaña y el recuento «te espera» de Inicio. Las hechas que siguen abiertas SHALL ser solo las de proyectos visibles y no archivadas.
 
 Si no hay nada, SHALL mostrar un estado tranquilo.
 
@@ -452,9 +467,24 @@ Si no hay nada, SHALL mostrar un estado tranquilo.
 - **WHEN** una entrada antigua conserva pendientes sin marcar y la última entrada del proyecto no tiene ninguno
 - **THEN** Inicio no los cuenta
 
+#### Scenario: Hecha que sigue abierta
+
+- **WHEN** una sesión de un proyecto visible está marcada como hecha y sigue viva en el panel
+- **THEN** Inicio la muestra en «Hechas que siguen abiertas» con «Revisar» y «Terminar», y «Revisar» abre su terminal
+
+#### Scenario: Terminar una hecha
+
+- **WHEN** la persona pulsa «Terminar» en una conversación hecha y confirma
+- **THEN** el panel termina su sesión de tmux y la fila desaparece de «Hechas que siguen abiertas»
+
+#### Scenario: Cancelar el cierre
+
+- **WHEN** la persona pulsa «Terminar» y cancela el diálogo
+- **THEN** la sesión sigue viva y en la lista
+
 #### Scenario: Nada pendiente
 
-- **WHEN** no hay sesiones que esperen, ni cerradas abiertas, ni pendientes del historial
+- **WHEN** no hay sesiones que esperen, ni hechas abiertas, ni pendientes del historial
 - **THEN** la sección muestra que no hay nada que atender
 
 ### Requirement: Tarjetas de proyecto por actividad
@@ -710,7 +740,6 @@ El panel SHALL hacerlo solo para sesiones del panel. Lo que no encuentre SHALL e
 - **WHEN** el transcript o la salida no existen o están fuera de las carpetas permitidas
 - **THEN** la pestaña explica que no hay datos que mostrar, sin servir el archivo
 
-
 ### Requirement: Terminal sin agente
 
 El diálogo Nueva sesión, el menú del agente por defecto de la cabecera y el ajuste del agente por defecto SHALL ofrecer «Terminal (sin agente)» como una opción más. Elegirla SHALL abrir una sesión de tmux del panel con una shell normal de la persona, para lanzar comandos o servidores, en la carpeta del proyecto (el propio harness incluido) o en la de un worktree existente. La sesión SHALL crearse como las demás (nombre, proyecto, worktree, fecha y superficie `panel`) y SHALL lanzar la shell de login interactiva de la persona (`$SHELL -l`, o `bash -l` si no hay `SHELL`) en lugar de `bin/agent`. El diálogo SHALL mostrar el comando antes de ejecutarlo y SHALL NOT ofrecer worktree nuevo ni prompt inicial. El servidor SHALL rechazar con un error 400 un worktree nuevo, un prompt, retomar una sesión o una carpeta que no exista.
@@ -748,3 +777,42 @@ Una terminal sin agente SHALL funcionar con pestañas, distribuciones, scroll, r
 
 - **WHEN** la persona ejecuta `claude` dentro de una terminal sin agente
 - **THEN** la terminal sigue sin luz de estado, sin statusline y sin avisos
+
+### Requirement: Estado de conversación hecha o abierta
+
+El harness SHALL guardar, fuera del título, si cada conversación está abierta o hecha, con la fecha, quién la marcó (la persona o el agente) y una nota opcional, en el directorio de estado local del usuario.
+
+El agente SHALL marcarla con `bin/session-done` (o reabrirla con `--open`) en lugar de renombrarla. Cuando la persona vuelva a escribir en una conversación hecha abierta con `bin/agent`, un hook SHALL reabrirla.
+
+El panel SHALL ofrecer «Marcar como hecha» y «Reabrir» en el menú contextual de las sesiones del panel, de sus pestañas y de las conversaciones de «Anteriores». El tooltip de una conversación hecha SHALL indicar cuándo y quién la marcó y su nota. Marcar como hecha SHALL NOT terminar ni archivar la sesión.
+
+#### Scenario: La persona marca una conversación como hecha
+
+- **WHEN** la persona elige «Marcar como hecha» en el menú de una sesión del panel
+- **THEN** la sesión se muestra con el check «Hecha», su título no cambia y el tooltip dice «por ti»
+
+#### Scenario: El agente cierra tras integrar
+
+- **WHEN** el agente ejecuta `bin/session-done` al integrar una feature
+- **THEN** el panel muestra la conversación como hecha «por el agente» y el título en `/resume` no lleva `[Closed]`
+
+#### Scenario: Reabrir escribiendo
+
+- **WHEN** la persona escribe en una conversación hecha abierta con `bin/agent`
+- **THEN** la conversación vuelve a estar abierta
+
+#### Scenario: Reabrir una marcada con la marca antigua
+
+- **WHEN** la persona elige «Reabrir» en una conversación cuyo título empieza por `[Closed] `
+- **THEN** queda abierta y su título guardado deja de llevar la marca
+
+#### Scenario: Ocultar hechas
+
+- **WHEN** la persona activa «Ocultar hechas» en la barra lateral
+- **THEN** dejan de verse las sesiones y conversaciones hechas, salvo las que esperan a la persona
+
+#### Scenario: Preferencia anterior «Ocultar cerradas»
+
+- **WHEN** el navegador guardaba la preferencia «Ocultar cerradas» activada de una versión anterior
+- **THEN** «Ocultar hechas» aparece activada, sin que la persona tenga que volver a elegirla
+

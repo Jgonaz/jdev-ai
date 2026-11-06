@@ -151,11 +151,14 @@ kbd {
   border: 2px solid var(--fg-faint);
   box-sizing: content-box;
 }
-.light--closed {
+/* Hecha: un check (forma) además del texto «Hecha»; en el color atenuado, no el del trabajo en curso. */
+.light--done {
+  display: inline-grid;
+  place-items: center;
   width: 10px;
-  height: 2px;
+  height: 10px;
   border-radius: 0;
-  background: var(--fg-faint);
+  color: var(--fg-muted);
 }
 .light--alive {
   width: 8px;

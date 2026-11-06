@@ -333,7 +333,7 @@ if [ "$agent_command" = "claude" ]; then
     [ -x "$session_title" ] || fail "no se encuentra el script de títulos de sesión: $session_title"
     [ -x "$session_state" ] || fail "no se encuentra el script de estado de sesión: $session_state"
     # PreToolUse sobre Agent avisa de cada delegación con su subagente y modelo.
-    # UserPromptSubmit quita la marca [Closed] del título al retomar la sesión.
+    # UserPromptSubmit reabre la conversación hecha cuando la persona vuelve a escribir.
     # session-state registra el estado de la sesión para el panel gráfico: va en
     # un SessionStart propio, sin matcher, para cubrir también resume y compact,
     # y se añade a los hooks de UserPromptSubmit sin tocar los anteriores.

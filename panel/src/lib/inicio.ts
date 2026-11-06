@@ -53,7 +53,7 @@ export type StateCounts = { waiting: number; working: number; resting: number };
  * Sesiones que esperan, que trabajan y en reposo. Las que esperan cuentan
  * siempre, también las de proyectos ocultos (el mismo criterio que la cabecera
  * y el título de la pestaña); las que trabajan y reposan, solo las de
- * `visibles` (todas si no se indica). En reposo son las inactivas, cerradas o
+ * `visibles` (todas si no se indica). En reposo son las inactivas, hechas o
  * no, cuyo proceso sigue vivo; no cuentan las terminadas ni las que no
  * informan de turnos.
  */
@@ -67,7 +67,7 @@ export function stateCounts(sesiones: readonly SessionInfo[], visibles?: Readonl
     }
     if (visibles && !visibles.has(s.project)) continue;
     if (v === 'working') c.working++;
-    else if (v === 'idle' || (v === 'closed' && s.alive && s.state !== 'ended')) c.resting++;
+    else if (v === 'idle' || (v === 'done' && s.alive && s.state !== 'ended')) c.resting++;
   }
   return c;
 }
@@ -85,14 +85,14 @@ export function relativeText(desde: number, ahora: number): string {
 export type AttentionItem =
   /** `hidden`: la sesión es de un proyecto oculto en Ajustes; `archived`: la persona la archivó. */
   | { kind: 'waiting'; session: SessionInfo; hidden: boolean; archived: boolean }
-  | { kind: 'closed'; session: SessionInfo }
+  | { kind: 'done'; session: SessionInfo }
   | { kind: 'pending'; openPending: number; entries: number };
 
 /**
  * «Necesita tu atención», en orden: las sesiones que te esperan (la que lleva
- * más tiempo esperando, primero), las marcadas como cerradas que siguen
+ * más tiempo esperando, primero), las marcadas como hechas que siguen
  * abiertas (no las archivadas, que la persona ya apartó) y el resumen de pendientes del historial. Las que esperan salen
- * todas, marcadas si su proyecto está en `ocultos` o si están archivadas; las cerradas, solo las de
+ * todas, marcadas si su proyecto está en `ocultos` o si están archivadas; las hechas, solo las de
  * proyectos `visibles`.
  */
 export function attentionItems(
@@ -108,9 +108,9 @@ export function attentionItems(
       .sort(porAntiguedad)
       .map((session) => ({ kind: 'waiting' as const, session, hidden: ocultos.has(session.project), archived: session.archived })),
     ...sesiones
-      .filter((s) => visibles.has(s.project) && !s.archived && visualState(s) === 'closed' && s.alive)
+      .filter((s) => visibles.has(s.project) && !s.archived && visualState(s) === 'done' && s.alive)
       .sort(porAntiguedad)
-      .map((session) => ({ kind: 'closed' as const, session })),
+      .map((session) => ({ kind: 'done' as const, session })),
   ];
   if (historial && historial.openPending > 0) {
     items.push({ kind: 'pending', openPending: historial.openPending, entries: historial.entriesWithPending });

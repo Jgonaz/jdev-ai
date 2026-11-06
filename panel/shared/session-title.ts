@@ -3,7 +3,11 @@
 
 /** Longitud máxima del título, en caracteres (puntos de código, no unidades UTF-16). */
 export const SESSION_TITLE_MAX = 80;
-/** Marca con la que bin/session-title señala una sesión cerrada; la gestiona el panel, no el título. */
+/**
+ * Marca antigua con la que bin/session-title señalaba una sesión cerrada. Ya no
+ * se escribe (el estado es el de la conversación), pero las que la llevan siguen
+ * contando como hechas y el panel la quita del título que muestra.
+ */
 export const CLOSED_MARK = '[Closed] ';
 
 // Caracteres de control (tabuladores y saltos incluidos) y separadores de línea o párrafo.
@@ -20,8 +24,10 @@ export function checkSessionTitle(valor: unknown): TitleCheck {
     return { ok: false, error: `El título es demasiado largo (máximo ${SESSION_TITLE_MAX} caracteres).` };
   }
   if (PROHIBIDO.test(title)) return { ok: false, error: 'El título no puede contener caracteres de control ni saltos de línea.' };
-  if (title.startsWith(CLOSED_MARK.trim())) {
-    return { ok: false, error: `El título no puede empezar por «${CLOSED_MARK.trim()}»: esa marca la gestiona el panel.` };
-  }
   return { ok: true, title };
+}
+
+/** true si el texto empieza por la marca antigua: se guarda como texto, pero el panel lo leería como «hecha». */
+export function startsWithClosedMark(titulo: string): boolean {
+  return titulo.trimStart().startsWith(CLOSED_MARK);
 }

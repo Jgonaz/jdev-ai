@@ -36,7 +36,7 @@ const reciente = (id: string, project: string, extra: Partial<RecentSession> = {
   project,
   worktree: '',
   title: `Sesión ${id}`,
-  closed: false,
+  done: null,
   lastActivity: AHORA - 60 * MIN,
   possiblyOpen: false,
   sizeBytes: 100,
@@ -49,7 +49,7 @@ describe('groupRecent', () => {
   const lista = [
     reciente('1', 'b'),
     reciente('2', 'a'),
-    reciente('3', 'a', { closed: true }),
+    reciente('3', 'a', { done: { at: null, by: 'agent', note: null } }),
     reciente('4', 'oculto'),
     reciente('5', 'desconocido'),
   ];
@@ -62,8 +62,8 @@ describe('groupRecent', () => {
     ]);
   });
 
-  it('con «Ocultar sesiones cerradas» omite las marcadas [Closed] y los grupos que se quedan vacíos', () => {
-    const g = groupRecent([...lista, reciente('6', 'vacio', { closed: true })], proyectos, { hideClosed: true });
+  it('con «Ocultar hechas» omite las conversaciones hechas y los grupos que se quedan vacíos', () => {
+    const g = groupRecent([...lista, reciente('6', 'vacio', { done: { at: null, by: 'agent', note: null } })], proyectos, { hideDone: true });
     expect(g.map((x) => [x.project.id, x.items.map((r) => r.id)])).toEqual([
       ['a', ['2']],
       ['b', ['1']],

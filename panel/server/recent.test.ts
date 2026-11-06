@@ -85,10 +85,10 @@ describe('RecentIndex', () => {
     transcript(balanz, 'feat-x', uuid(2), mensajes + custom('[Closed] Migración'), 30 * MIN);
     transcript(fit, '', uuid(3), mensajes + ai('Título generado'), 5 * DIA);
     const r = await idx.list([balanz, fit]);
-    expect(r.map((s) => [s.id, s.project, s.worktree, s.title, s.closed])).toEqual([
-      [uuid(2), 'balanz.io', 'feat-x', 'Migración', true],
-      [uuid(1), 'balanz.io', '', 'Arreglar login', false],
-      [uuid(3), 'fitnessia', '', 'Título generado', false],
+    expect(r.map((s) => [s.id, s.project, s.worktree, s.title, s.done])).toEqual([
+      [uuid(2), 'balanz.io', 'feat-x', 'Migración', { at: null, by: 'agent', note: null }],
+      [uuid(1), 'balanz.io', '', 'Arreglar login', null],
+      [uuid(3), 'fitnessia', '', 'Título generado', null],
     ]);
     expect(r[0]).toMatchObject({ lastActivity: AHORA - 30 * MIN, possiblyOpen: false });
     expect(r[0]!.sizeBytes).toBeGreaterThan(0);
@@ -211,7 +211,7 @@ describe('RecentIndex', () => {
     const t = new Date(AHORA - 2 * MIN);
     utimesSync(ruta, t, t);
     const r = await idx.list([balanz]);
-    expect(r[0]).toMatchObject({ title: 'Dos', closed: true, possiblyOpen: true });
+    expect(r[0]).toMatchObject({ title: 'Dos', done: { at: null, by: 'agent', note: null }, possiblyOpen: true });
     // Una sesión vacía que recibe mensajes pasa a listarse.
     const vacia = transcript(balanz, '', uuid(2), '', 20 * MIN);
     expect((await idx.list([balanz])).map((s) => s.id)).not.toContain(uuid(2));
@@ -228,5 +228,29 @@ describe('RecentIndex', () => {
     expect(await idx.locate([balanz, fit], uuid(2))).toEqual({ project: 'fitnessia', worktree: '' });
     expect(await idx.locate([balanz, fit], uuid(3))).toBeNull();
     expect(await idx.locate([balanz, fit], '../../etc/passwd')).toBeNull();
+  });
+
+  it('transcriptPath da la ruta del transcript o null', async () => {
+    const ruta = transcript(balanz, 'feat-x', uuid(1), mensajes, 90 * DIA);
+    expect(await idx.transcriptPath([balanz, fit], uuid(1))).toBe(ruta);
+    expect(await idx.transcriptPath([balanz, fit], uuid(3))).toBeNull();
+    expect(await idx.transcriptPath([balanz, fit], '../../etc/passwd')).toBeNull();
+  });
+
+  it('doneOf decide si la conversación está hecha a partir de su id y de la marca antigua', async () => {
+    transcript(balanz, '', uuid(1), mensajes + custom('[Closed] Con marca'), 10 * MIN);
+    transcript(balanz, '', uuid(2), mensajes + custom('Sin marca'), 20 * MIN);
+    const hecha = { at: '2026-11-01T10:00:00.000Z', by: 'user', note: 'Revisada' } as const;
+    const propio = new RecentIndex({
+      projectsDir,
+      now: () => AHORA,
+      // El estado propio manda: reabierta aunque el título lleve la marca, y hecha aunque no.
+      doneOf: (id) => (id === uuid(2) ? hecha : null),
+    });
+    const r = await propio.list([balanz]);
+    expect(r.map((s) => [s.id, s.title, s.done])).toEqual([
+      [uuid(1), 'Con marca', null],
+      [uuid(2), 'Sin marca', hecha],
+    ]);
   });
 });

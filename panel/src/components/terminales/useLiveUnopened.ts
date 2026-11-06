@@ -9,7 +9,7 @@ export function useLiveUnopened(): LiveItem[] {
   const { sessions, projects } = useSessions();
   const { workspace, prefs } = useWorkspace();
   return useMemo(
-    () => liveUnopened(sessions, projects, workspace.tabs, { hideClosed: prefs.hideClosed }),
-    [sessions, projects, workspace.tabs, prefs.hideClosed],
+    () => liveUnopened(sessions, projects, workspace.tabs, { hideDone: prefs.hideDone }),
+    [sessions, projects, workspace.tabs, prefs.hideDone],
   );
 }

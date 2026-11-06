@@ -97,8 +97,8 @@ confirmación:
    locales que chocan), informa a la persona en lugar de forzarlo.
 5. Ejecuta `<harness>/bin/worktree remove <feature>`. No fuerza nada: falla si
    hay cambios sin confirmar y solo borra la rama local si ya está integrada.
-6. Si la PR o el merge local se integró, marca la sesión como cerrada según
-   [`session-title.md`](session-title.md).
+6. Si la PR o el merge local se integró, marca la conversación como hecha con
+   `bin/session-done` según [`session-done.md`](session-done.md).
 
 Si el proyecto no tiene remoto `origin`, `bin/worktree merge` integra en local
 con `merge --no-ff` y lo avisa. Si lo tiene pero falta `gh` o no hay sesión

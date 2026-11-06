@@ -12,7 +12,8 @@ function s(name: string, state: SessionInfo['state'], parche: Partial<SessionInf
     state,
     tracked: true,
     title: name,
-    closed: false,
+    done: null,
+    conversationKey: 'tmux-jdev-x-1-1',
     alive: true,
     updatedAt: 0,
     created: 0,
@@ -37,7 +38,7 @@ describe('detectAlerts', () => {
 
   it('avisa de terminar (trabajando → reposo) y no de otras transiciones', () => {
     const antes = stateMap([s('a', 'working'), s('b', 'idle'), s('c', 'working')]);
-    const ahora = [s('a', 'idle'), s('b', 'working'), s('c', 'idle', { closed: true })];
+    const ahora = [s('a', 'idle'), s('b', 'working'), s('c', 'idle', { done: { at: null, by: 'agent', note: null } })];
     expect(detectAlerts(antes, ahora)).toEqual([{ name: 'a', kind: 'finished' }]);
   });
 

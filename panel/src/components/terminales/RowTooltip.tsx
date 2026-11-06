@@ -5,7 +5,7 @@ import { clampMenu } from '../../lib/menuPosition.ts';
 import { TIP_DELAY_MS } from '../../lib/sidebarTip.ts';
 import type { TipView } from '../../lib/sidebarTip.ts';
 import { useNow } from '../../lib/useNow.ts';
-import { IconBranch, IconClock, IconSpark } from '../Icons.tsx';
+import { IconBranch, IconCheck, IconClock, IconSpark } from '../Icons.tsx';
 import { ContextBar } from './PaneHeader.tsx';
 
 /** Separación entre la fila y el tooltip. */
@@ -138,6 +138,15 @@ export function RowTooltip({ anchor, id, build }: { anchor: HTMLElement; id: str
         <span className="pfact">{vista.agent}</span>
       </div>
       {vista.activity && <div className="rowtip__line">{vista.activity}</div>}
+      {vista.done && (
+        <div className="rowtip__done">
+          <span className="rowtip__done-line">
+            <IconCheck size={12} strokeWidth={2.4} />
+            {vista.done.line}
+          </span>
+          {vista.done.note && <span className="rowtip__done-note">{vista.done.note}</span>}
+        </div>
+      )}
       {live && (
         <div className="rowtip__live">
           {live.model && (

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react';
+import { MARK_DONE_LABEL, REOPEN_LABEL } from '../../lib/done.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { RecentSession } from '../../types.ts';
 import { ContextMenu } from '../ContextMenu.tsx';
 import type { MenuAction } from '../ContextMenu.tsx';
-import { IconArchive, IconClock } from '../Icons.tsx';
+import { IconArchive, IconCheck, IconClock, IconRestore } from '../Icons.tsx';
 
 type Target = { id: number; recent: RecentSession; x: number; y: number; origin: HTMLElement | null };
 
@@ -16,8 +17,8 @@ const ERROR_MS = 4000;
 
 /**
  * Menú contextual de las conversaciones de «Anteriores» y de «Archivadas»
- * (clic derecho, tecla ContextMenu o Mayús+F10): Retomar y Archivar o
- * Desarchivar. Como el de las sesiones, el llamador pasa `onContextMenu` y
+ * (clic derecho, tecla ContextMenu o Mayús+F10): Retomar, Marcar como hecha o
+ * Reabrir, y Archivar o Desarchivar. Como el de las sesiones, el llamador pasa `onContextMenu` y
  * `onKeyDown` a cada fila y coloca `menu` una sola vez; `open` indica si hay un
  * menú abierto.
  */
@@ -69,9 +70,11 @@ export function useConversationMenu() {
 function Host({ target, onDone }: { target: Target; onDone: (id: number) => void }) {
   const { recent, x, y, origin, id } = target;
   const { openResume } = useWorkspace();
-  const { setArchived } = useSessions();
+  const { setArchived, setDone } = useSessions();
   const [menuAbierto, setMenuAbierto] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Mientras una acción de red sigue en curso el anfitrión no se retira: así un fallo se avisa.
+  const [busy, setBusy] = useState(false);
   const devolverFoco = useRef(false);
 
   // Un fallo se avisa unos segundos y se retira.
@@ -82,22 +85,31 @@ function Host({ target, onDone }: { target: Target; onDone: (id: number) => void
   }, [error]);
 
   useEffect(() => {
-    if (menuAbierto || error) return;
+    if (menuAbierto || busy || error) return;
     if (devolverFoco.current && origin?.isConnected) origin.focus();
     onDone(id);
-  }, [menuAbierto, error, origin, id, onDone]);
+  }, [menuAbierto, busy, error, origin, id, onDone]);
+
+  const conAviso = (accion: Promise<unknown>, fallo: string) => {
+    setBusy(true);
+    accion
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : fallo))
+      .finally(() => setBusy(false));
+  };
 
   const actions: MenuAction[] = [
     { id: 'retomar', label: 'Retomar en el panel…', icon: <IconClock size={14} />, onSelect: () => openResume(recent) },
     {
+      id: 'hecha',
+      label: recent.done ? REOPEN_LABEL : MARK_DONE_LABEL,
+      icon: recent.done ? <IconRestore size={14} /> : <IconCheck size={14} />,
+      onSelect: () => conAviso(setDone(recent.id, recent.done ? 'open' : 'done'), 'No se pudo cambiar el estado de la conversación.'),
+    },
+    {
       id: 'archivar',
       label: recent.archived ? 'Desarchivar' : 'Archivar',
       icon: <IconArchive size={14} />,
-      onSelect: () => {
-        setArchived('conversation', recent.id, !recent.archived).catch((e: unknown) =>
-          setError(e instanceof Error ? e.message : 'No se pudo archivar la conversación.'),
-        );
-      },
+      onSelect: () => conAviso(setArchived('conversation', recent.id, !recent.archived), 'No se pudo archivar la conversación.'),
     },
   ];
 
@@ -114,7 +126,8 @@ function Host({ target, onDone }: { target: Target; onDone: (id: number) => void
             setMenuAbierto(false);
           }}
           onPick={(a) => {
-            if (a.restoreFocus) devolverFoco.current = true;
+            // Tras marcar o archivar, el foco vuelve a la fila de origen (si sigue ahí); «Retomar» abre un diálogo propio.
+            if (a.restoreFocus || a.id !== 'retomar') devolverFoco.current = true;
             setMenuAbierto(false);
             a.onSelect();
           }}

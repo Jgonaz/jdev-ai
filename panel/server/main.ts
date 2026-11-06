@@ -20,6 +20,7 @@ import {
 import { ArchiveStore } from './archive.ts';
 import { BacklogError, BacklogStore, BacklogWatcher, ITEM_ID_RE, pendingChanges, toListItem } from './backlog.ts';
 import { commitBacklog, commitPreview, validateCommitRequest } from './backlog-commit.ts';
+import { checkNote, isConversationId, isConversationKey, resolveDone } from './conversations.ts';
 import { GuideError, listGuides, readGuide } from './guides.ts';
 import { HistoryError, HistoryStore, historyDirs, historySignature, isHistoryState, toListEntry } from './history.ts';
 import { ImageError, MAX_IMAGE_BYTES, SVG_CSP, defaultImageDirs, openImage } from './images.ts';
@@ -32,7 +33,7 @@ import { RecentIndex, SESSION_ID } from './recent.ts';
 import { SHELL_AGENT, SessionService } from './sessions.ts';
 import { DEFAULT_PORT, readSettings, updateSettings } from './settings.ts';
 import { checkSessionTitle } from '../shared/session-title.ts';
-import { TranscriptRejected } from './titles.ts';
+import { TitleReader, TranscriptRejected, resolveTranscript, stripClosedMark } from './titles.ts';
 import {
   SessionInputError,
   TmuxError,
@@ -94,6 +95,8 @@ export type ServerOptions = {
   tmux?: TmuxConfig;
   /** Directorio de estado de sesiones; por defecto, el de XDG_STATE_HOME. */
   stateDir?: string;
+  /** Estado de las conversaciones (hecha o abierta); por defecto, `conversations/` junto a stateDir. */
+  conversationsDir?: string;
   /** Statusline y actividad de las sesiones de Claude; por defecto, `statusline/` y `activity/` junto a stateDir. */
   statuslineDir?: string;
   activityDir?: string;
@@ -237,6 +240,9 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     tmux,
     archive: archivo,
     stateDir: opts.stateDir ?? sessionStateDir(),
+    conversationsDir: opts.conversationsDir,
+    // Cambia el estado de alguna conversación: las de «Anteriores» no viajan en la lista de sesiones.
+    onConversations: () => broadcast({ type: 'conversations' }),
     statuslineDir: opts.statuslineDir,
     activityDir: opts.activityDir,
     claudeProjectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects'),
@@ -268,7 +274,12 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     dirs: historyDirs,
   });
 
-  const recientes = new RecentIndex({ projectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects') });
+  const projectsDirClaude = join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects');
+  const recientes = new RecentIndex({
+    projectsDir: projectsDirClaude,
+    doneOf: (id, legacyClosed) => resolveDone(sesiones.conversationStates().get(id), legacyClosed),
+  });
+  const titulosReabrir = new TitleReader();
 
   // Resumen de Inicio: se calcula al pedirlo y se reutiliza hasta el siguiente
   // aviso de sesiones, backlog o historial (o 10 s, por los cambios de rama y
@@ -310,7 +321,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
 
   function broadcast(mensaje: unknown): void {
     const tipo = (mensaje as { type?: unknown } | null)?.type;
-    if (tipo === 'sessions' || tipo === 'backlog' || tipo === 'history') invalidarResumen();
+    if (tipo === 'sessions' || tipo === 'conversations' || tipo === 'backlog' || tipo === 'history') invalidarResumen();
     const texto = JSON.stringify(mensaje);
     for (const c of clientes) if (c.readyState === WebSocket.OPEN) c.send(texto);
   }
@@ -945,6 +956,86 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     sendJson(res, 200, archivo.snapshot());
   }
 
+  // PUT /api/conversations/:clave/state {state: 'done' | 'open', note?}: marca una
+  // conversación como hecha o la reabre, como la persona. La clave es el id de una
+  // conversación de Claude conocida (de una sesión del panel o de «Anteriores») o
+  // `tmux-…` de una sesión del panel sin conversación de Claude. Al reabrir, si el
+  // título guardado lleva la marca antigua «[Closed] » se quita. No toca la sesión.
+  async function conversationApi(req: IncomingMessage, res: ServerResponse, pathname: string, metodo: string): Promise<void> {
+    const m = /^\/api\/conversations\/([^/]+)\/state$/.exec(pathname);
+    if (!m) {
+      sendJson(res, 404, { error: 'no encontrado' });
+      return;
+    }
+    if (metodo !== 'PUT') {
+      res.setHeader('Allow', 'PUT');
+      sendJson(res, 405, { error: 'método no permitido' });
+      return;
+    }
+    let clave: string;
+    try {
+      clave = decodeURIComponent(m[1]!);
+    } catch {
+      sendJson(res, 400, { error: 'clave de conversación no válida' });
+      return;
+    }
+    if (!isConversationKey(clave)) {
+      sendJson(res, 400, { error: 'clave de conversación no válida: se esperaba el id de una conversación o el de una sesión del panel sin conversación' });
+      return;
+    }
+    const cuerpo = await parseJsonBody(req, res);
+    if (!cuerpo) return;
+    const { state } = cuerpo;
+    if (state !== 'done' && state !== 'open') {
+      sendJson(res, 400, { error: 'state debe ser «done» u «open»' });
+      return;
+    }
+    if (state === 'open' && cuerpo.note !== undefined) {
+      sendJson(res, 400, { error: 'la nota solo se admite al marcar como hecha' });
+      return;
+    }
+    const nota = checkNote(cuerpo.note);
+    if (!nota.ok) {
+      sendJson(res, 400, { error: nota.error });
+      return;
+    }
+    // Solo conversaciones que el panel conoce: las de sus sesiones o las de «Anteriores».
+    await sesiones.refresh();
+    const proyectos = await sesiones.projectList();
+    const sesion = sesiones.list().find((s) => s.conversationKey === clave);
+    let transcript: string | null = null;
+    if (isConversationId(clave)) {
+      transcript = sesiones.transcriptOf(clave);
+      if (transcript === null) transcript = await recientes.transcriptPath(proyectos, clave);
+    }
+    if (!sesion && transcript === null) {
+      sendJson(res, 404, { error: 'la conversación no existe' });
+      return;
+    }
+    if (sesion?.agent === SHELL_AGENT) {
+      sendJson(res, 400, { error: 'una terminal sin agente no tiene conversación' });
+      return;
+    }
+    let entrada;
+    try {
+      entrada = await sesiones.setConversation(clave, state, state === 'done' ? nota.note : null);
+    } catch (e) {
+      console.error('Error guardando el estado de la conversación:', e);
+      sendJson(res, 500, { error: 'No se pudo guardar el estado de la conversación.' });
+      return;
+    }
+    if (state === 'open' && transcript !== null) {
+      // Con el estado ya guardado, la marca antigua es solo ruido: si no se puede quitar, no se falla.
+      try {
+        const real = await resolveTranscript(transcript, projectsDirClaude);
+        if (real && (await stripClosedMark(titulosReabrir, real, clave))) await sesiones.refresh();
+      } catch (e) {
+        console.error('No se pudo quitar la marca «[Closed]» del título:', e instanceof Error ? e.message : e);
+      }
+    }
+    sendJson(res, 200, { key: clave, state: entrada.state, done: resolveDone(entrada, false) });
+  }
+
   async function api(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
     const metodo = req.method ?? 'GET';
     // Una cookie SameSite=Strict ya frena el CSRF; además, si el navegador
@@ -997,6 +1088,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     }
     if (pathname === '/api/history' || pathname.startsWith('/api/history/')) {
       await historyApi(req, res, pathname, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
+      return;
+    }
+    if (pathname.startsWith('/api/conversations/')) {
+      await conversationApi(req, res, pathname, metodo);
       return;
     }
     if (pathname === '/api/archive') {

@@ -5,7 +5,7 @@ import { applyArchive } from '../lib/archive.ts';
 import { sessionNamesKey } from '../lib/recent.ts';
 import { effectiveProject } from '../lib/sessions.ts';
 import { parseAccount } from '../lib/statusline.ts';
-import type { AccountLimits, CommitPhase, ProjectInfo, RecentSession, SessionInfo } from '../types.ts';
+import type { AccountLimits, CommitPhase, Done, ProjectInfo, RecentSession, SessionInfo } from '../types.ts';
 import { useSettings } from './SettingsContext.tsx';
 
 type SessionsValue = {
@@ -29,6 +29,8 @@ type SessionsValue = {
   reloadRecent: () => void;
   /** Archiva o desarchiva una sesión del panel (por su nombre) o una conversación de «Anteriores» (por su id); lanza si el servidor la rechaza. */
   setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) => Promise<void>;
+  /** Marca una conversación como hecha (con nota opcional) o la reabre; lanza si el servidor lo rechaza. */
+  setDone: (clave: string, state: 'done' | 'open', note?: string) => Promise<void>;
   /** Suscribe a los avisos `{type:'backlog', project}` de /ws/events; devuelve la baja. */
   onBacklogChange: (cb: (project: string) => void) => () => void;
   /** Suscribe a los avisos `{type:'history', project}` de /ws/events; devuelve la baja. */
@@ -146,6 +148,9 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
           } else if (msg.type === 'archive') {
             // Otra ventana archivó o desarchivó algo: las sesiones llegan solas, las conversaciones se recargan.
             reloadRecent();
+          } else if (msg.type === 'conversations') {
+            // Cambió el estado de alguna conversación (otra ventana, el agente...): las sesiones llegan solas.
+            reloadRecent();
           } else if (msg.type === 'account') {
             setAccount(parseAccount(msg.account));
           } else if (msg.type === 'backlog' && typeof msg.project === 'string') {
@@ -239,9 +244,17 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     setRecent((r) => applyArchive(r, lista));
   }, []);
 
+  // La respuesta se aplica al momento, sin esperar al evento ni a la recarga.
+  const setDone = useCallback(async (clave: string, state: 'done' | 'open', note?: string) => {
+    const r = await api.setConversationState(clave, state, note);
+    const done: Done | null = r.done;
+    setSessions((s) => s.map((x) => (x.conversationKey === clave ? { ...x, done } : x)));
+    setRecent((s) => s.map((x) => (x.id === clave ? { ...x, done } : x)));
+  }, []);
+
   const valor = useMemo<SessionsValue>(
-    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, onBacklogChange, onHistoryChange, onBacklogCommitPhase }),
-    [sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, onBacklogChange, onHistoryChange, onBacklogCommitPhase],
+    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, setDone, onBacklogChange, onHistoryChange, onBacklogCommitPhase }),
+    [sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, setDone, onBacklogChange, onHistoryChange, onBacklogCommitPhase],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

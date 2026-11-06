@@ -17,6 +17,14 @@ export function sessionStateDir(env: NodeJS.ProcessEnv = process.env): string {
   return join(base, 'jdev-ai', 'sessions');
 }
 
+// Directorio donde bin/session-done y el panel dejan si cada conversación está
+// hecha o abierta: ${XDG_STATE_HOME:-~/.local/state}/jdev-ai/conversations.
+export function conversationStateDir(env: NodeJS.ProcessEnv = process.env): string {
+  const xdg = env.XDG_STATE_HOME;
+  const base = xdg && isAbsolute(xdg) ? xdg : join(homedir(), '.local', 'state');
+  return join(base, 'jdev-ai', 'conversations');
+}
+
 // Directorio de configuración de Claude Code: CLAUDE_CONFIG_DIR si es una ruta
 // absoluta, y si no ~/.claude. Los transcripts están en <dir>/projects/<slug>/.
 export function claudeConfigDir(env: NodeJS.ProcessEnv = process.env): string {

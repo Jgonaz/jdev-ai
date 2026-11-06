@@ -140,6 +140,13 @@
 .inicio__h2-mark {
   color: var(--accent-text);
 }
+.inicio__h3 {
+  margin: 4px 0 0;
+  font-family: var(--font-title);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg-muted);
+}
 .inicio__note {
   font-size: var(--text-sm);
   color: var(--fg-muted);
@@ -178,8 +185,8 @@
   width: 10px;
   height: 10px;
 }
-.att--closed > .light {
-  background: var(--working);
+.att--done > .light {
+  color: var(--fg-soft);
 }
 .att__mark {
   flex: 0 0 10px;
@@ -204,6 +211,9 @@
   font-size: var(--text-md);
   color: var(--fg-soft);
   overflow-wrap: anywhere;
+}
+.att__note {
+  font-style: italic;
 }
 .att__notice {
   font-family: var(--font-term);
@@ -241,6 +251,10 @@
 }
 .att__btn--ghost:hover {
   background: var(--bg-raised);
+}
+.att__btn--danger:hover {
+  border-color: var(--danger);
+  color: var(--danger-text);
 }
 
 /* Tarjetas de proyecto */

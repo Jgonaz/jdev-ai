@@ -21,14 +21,7 @@ script avisa y no hace nada, así que no lo uses fuera de Claude Code.
   sustituyas salvo que el trabajo cambie por completo.
 - Solo lo cambia el orquestador; los subagentes no ejecutan el script.
 
-## Marcar la sesión como cerrada
+## El estado no va en el título
 
-Cuando una feature se integra en la rama principal (tras `bin/worktree merge`
-correcto o tras integrar una Pull Request en `main`), ejecuta
-`<harness>/bin/session-title --closed`. Antepone `[Closed] ` al título actual
-y no lo duplica si ya estaba.
-
-En las sesiones abiertas con `agent`, un hook `UserPromptSubmit` quita la marca
-en cuanto la persona escribe de nuevo en esa terminal. Si la sesión no se abrió
-con `agent` y retomas trabajo en una sesión cerrada, quita tú la marca con
-`<harness>/bin/session-title --open` y actualiza el título si el foco es otro.
+El título no lleva prefijos de estado: que la conversación esté hecha se marca
+con `<harness>/bin/session-done`, según [`session-done.md`](session-done.md).

@@ -5,7 +5,7 @@ import { recentPlace } from '../../lib/recent.ts';
 import { STATE_LABELS } from '../../lib/sessions.ts';
 import { recentTip, sessionTip } from '../../lib/sidebarTip.ts';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
-import { IconArchive, IconChevron, IconClock } from '../Icons.tsx';
+import { IconArchive, IconCheck, IconChevron, IconClock } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
 import type { useConversationMenu } from './ConversationMenu.tsx';
@@ -44,14 +44,14 @@ function ArchivedRow({ entry, session, conversation }: { entry: ArchivedEntry; s
     <li>
       <button
         type="button"
-        className={`slrow slrow--conv${r.closed ? ' slrow--closed' : ''}`}
-        aria-label={`Retomar en el panel: ${r.title}, ${project.name}, ${recentPlace(r)}, archivada`}
+        className={`slrow slrow--conv${r.done ? ' slrow--done' : ''}`}
+        aria-label={`Retomar en el panel: ${r.title}, ${project.name}, ${recentPlace(r)}${r.done ? ', hecha' : ''}, archivada`}
         {...tip.props}
         onClick={() => openResume(r)}
         onContextMenu={(e) => conversation.onContextMenu(e, r)}
         onKeyDown={(e) => conversation.onKeyDown(e, r)}
       >
-        <IconClock size={13} className="rrow__icon slrow__icon" />
+        {r.done ? <IconCheck size={13} strokeWidth={2.4} className="rrow__icon slrow__icon" /> : <IconClock size={13} className="rrow__icon slrow__icon" />}
         <span className="slrow__title">{r.title}</span>
         <ArchivedAction />
         <Monogram project={project} size="sm" />

@@ -22,7 +22,8 @@ function sesion(parche: Partial<SessionInfo> = {}): SessionInfo {
     state: 'idle',
     tracked: true,
     title: 'Título',
-    closed: false,
+    done: null,
+    conversationKey: 'tmux-jdev-x-1-1',
     alive: true,
     updatedAt: 0,
     created: 0,
@@ -59,10 +60,10 @@ describe('visualState', () => {
     expect(visualState(sesion({ state: 'ended', alive: false }))).toBe('ended');
   });
 
-  it('cerrada prevalece sobre reposo, pero no sobre «te espera» ni «trabajando»', () => {
-    expect(visualState(sesion({ closed: true }))).toBe('closed');
-    expect(visualState(sesion({ closed: true, state: 'waiting' }))).toBe('waiting');
-    expect(visualState(sesion({ closed: true, state: 'working' }))).toBe('working');
+  it('hecha prevalece sobre reposo, pero no sobre «te espera» ni «trabajando»', () => {
+    expect(visualState(sesion({ done: { at: null, by: 'agent', note: null } }))).toBe('done');
+    expect(visualState(sesion({ done: { at: null, by: 'agent', note: null }, state: 'waiting' }))).toBe('waiting');
+    expect(visualState(sesion({ done: { at: null, by: 'agent', note: null }, state: 'working' }))).toBe('working');
   });
 
   it('sin seguimiento de turnos solo hay viva o terminada', () => {
@@ -80,7 +81,7 @@ describe('visualState', () => {
     const term = { agent: 'shell', tracked: false, state: 'alive' as const };
     expect(visualState(sesion(term))).toBe('shell');
     expect(visualState(sesion({ ...term, state: 'waiting' }))).toBe('shell');
-    expect(visualState(sesion({ ...term, closed: true }))).toBe('shell');
+    expect(visualState(sesion({ ...term, done: { at: null, by: 'agent', note: null } }))).toBe('shell');
     expect(visualState(sesion({ ...term, state: 'ended', alive: false }))).toBe('ended');
     expect(visualState(sesion({ ...term, alive: false }))).toBe('ended');
   });
@@ -123,8 +124,8 @@ describe('groupSessions', () => {
     expect(grupos[1]!.project.mono).toBe('BO');
   });
 
-  it('puede ocultar las cerradas', () => {
-    const grupos = groupSessions([sesion({ name: 'a', closed: true }), sesion({ name: 'b' })], proyectos, { hideClosed: true });
+  it('puede ocultar las hechas', () => {
+    const grupos = groupSessions([sesion({ name: 'a', done: { at: null, by: 'agent', note: null } }), sesion({ name: 'b' })], proyectos, { hideDone: true });
     expect(grupos[0]!.sessions.map((s) => s.name)).toEqual(['b']);
   });
 });
@@ -148,7 +149,7 @@ describe('textos de sesión', () => {
   it('chip de estado con y sin tiempo', () => {
     expect(stateChip(sesion({ state: 'working' }), '3 min')).toBe('Trabajando · 3 min');
     expect(stateChip(sesion({ state: 'waiting' }), '1 min')).toBe('Te espera · 1 min');
-    expect(stateChip(sesion({ closed: true }), '2 d')).toBe('Cerrada');
+    expect(stateChip(sesion({ done: { at: null, by: 'agent', note: null } }), '2 d')).toBe('Hecha');
     expect(stateChip(sesion({ tracked: false, state: 'alive' }), '1 h')).toBe('Viva');
   });
 

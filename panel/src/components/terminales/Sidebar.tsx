@@ -11,7 +11,7 @@ import { useNow } from '../../lib/useNow.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { ProjectInfo, RecentSession, SessionInfo } from '../../types.ts';
-import { IconChevron, IconClock, IconFilter, IconPlus } from '../Icons.tsx';
+import { IconCheck, IconChevron, IconClock, IconFilter, IconPlus } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
 import { ArchivedSection } from './ArchivedSessions.tsx';
@@ -83,14 +83,15 @@ function RecentRow({
     <>
       <button
         type="button"
-        className={`rrow${r.closed ? ' rrow--closed' : ''}`}
-        aria-label={`Retomar en el panel: ${r.title}, ${recentPlace(r)}, ${agoLabel(r.lastActivity, ahora)}`}
+        className={`rrow${r.done ? ' rrow--done' : ''}`}
+        aria-label={`Retomar en el panel: ${r.title}, ${recentPlace(r)}, ${agoLabel(r.lastActivity, ahora)}${r.done ? ', hecha' : ''}`}
         {...tip.props}
         onClick={onResume}
         onContextMenu={(e) => menu.onContextMenu(e, r)}
         onKeyDown={(e) => menu.onKeyDown(e, r)}
       >
-        <IconClock size={13} className="rrow__icon" />
+        {/* Hecha: un check en lugar del reloj, como la luz de las sesiones vivas. */}
+        {r.done ? <IconCheck size={13} strokeWidth={2.4} className="rrow__icon" /> : <IconClock size={13} className="rrow__icon" />}
         <span className="srow__text">
           <span className="srow__title">{r.title}</span>
           <span className="srow__meta">{recentPlace(r)}</span>
@@ -195,10 +196,10 @@ export function Sidebar({ style }: { style?: CSSProperties }) {
   const conversacion = useConversationMenu();
   // Lo archivado sale de su proyecto, de «Anteriores» y de «En segundo plano»: tiene su propia sección.
   const activas = notArchived(sessions);
-  const vivas = groupSessions(activas, projects, { hideClosed: prefs.hideClosed });
-  const grupos = mergeGroups(vivas, groupRecent(notArchived(recent), projects, { hideClosed: prefs.hideClosed }));
+  const vivas = groupSessions(activas, projects, { hideDone: prefs.hideDone });
+  const grupos = mergeGroups(vivas, groupRecent(notArchived(recent), projects, { hideDone: prefs.hideDone }));
   const oculta = activas.length - vivas.reduce((n, g) => n + g.sessions.length, 0);
-  const archivadas = archivedEntries(sessions, recent, projects, { hideClosed: prefs.hideClosed });
+  const archivadas = archivedEntries(sessions, recent, projects, { hideDone: prefs.hideDone });
 
   return (
     <aside className="sidebar" aria-label="Proyectos y sesiones" style={style}>
@@ -210,10 +211,10 @@ export function Sidebar({ style }: { style?: CSSProperties }) {
           <button
             type="button"
             className="icon-btn"
-            aria-label="Ocultar sesiones cerradas"
-            aria-pressed={prefs.hideClosed}
-            title={prefs.hideClosed ? 'Mostrar las sesiones cerradas' : 'Ocultar las sesiones cerradas'}
-            onClick={() => setPrefs({ hideClosed: !prefs.hideClosed })}
+            aria-label="Ocultar hechas"
+            aria-pressed={prefs.hideDone}
+            title={prefs.hideDone ? 'Mostrar las sesiones hechas' : 'Ocultar las sesiones hechas'}
+            onClick={() => setPrefs({ hideDone: !prefs.hideDone })}
           >
             <IconFilter size={15} />
           </button>
@@ -224,7 +225,7 @@ export function Sidebar({ style }: { style?: CSSProperties }) {
         {loaded && grupos.length === 0 && (
           <p className="sidebar__empty">
             {error ??
-              (oculta > 0 ? 'Solo hay sesiones cerradas.' : archivadas.length > 0 ? 'Solo hay sesiones archivadas.' : 'Aún no hay sesiones.')}
+              (oculta > 0 ? 'Solo hay sesiones hechas.' : archivadas.length > 0 ? 'Solo hay sesiones archivadas.' : 'Aún no hay sesiones.')}
           </p>
         )}
         <LiveSidebarSection items={sinAbrir} menu={{ onContextMenu, onKeyDown }} />

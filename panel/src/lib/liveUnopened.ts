@@ -17,19 +17,19 @@ export function isLive(s: Pick<SessionInfo, 'alive' | 'state'>): boolean {
 }
 
 // Te espera primero; las que no informan de turnos («viva») cuentan como en reposo.
-const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, shell: 2, closed: 3, ended: 4 };
+const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, shell: 2, done: 3, ended: 4 };
 
 /**
  * Sesiones vivas que no están abiertas en pestañas, ordenadas por estado y
  * después por actividad reciente. Los proyectos ocultos no cuentan, salvo las
- * sesiones que esperan (siempre cuentan, como en los avisos); `hideClosed` omite
- * las marcadas [Closed]. Las archivadas no están aquí: tienen su propia sección. Una sesión de un proyecto desconocido se muestra con uno genérico.
+ * sesiones que esperan (siempre cuentan, como en los avisos); `hideDone` omite
+ * las hechas. Las archivadas no están aquí: tienen su propia sección. Una sesión de un proyecto desconocido se muestra con uno genérico.
  */
 export function liveUnopened(
   sessions: readonly SessionInfo[],
   projects: readonly ProjectInfo[],
   openTabs: readonly string[],
-  opciones: { hideClosed?: boolean } = {},
+  opciones: { hideDone?: boolean } = {},
 ): LiveItem[] {
   const abiertas = new Set(openTabs);
   const porId = new Map(projects.map((p) => [p.id, p]));
@@ -37,7 +37,7 @@ export function liveUnopened(
   for (const session of sessions) {
     if (!isLive(session) || session.archived || abiertas.has(session.name)) continue;
     const state = visualState(session);
-    if (opciones.hideClosed && state === 'closed') continue;
+    if (opciones.hideDone && state === 'done') continue;
     const project = porId.get(session.project) ?? fallbackProject(session.project);
     const hiddenProject = !project.visible;
     if (hiddenProject && state !== 'waiting') continue;

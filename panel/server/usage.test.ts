@@ -305,8 +305,9 @@ describe('lectura segura de archivos de estado', () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('valida el nombre: solo letras, números y guiones con la extensión', () => {
+  it('valida el nombre: solo letras, números, guiones y guiones bajos con la extensión', () => {
     expect(isStateFileName('abc-1.json', '.json')).toBe(true);
+    expect(isStateFileName('tmux-jdev-a_b-1-1730000000.json', '.json')).toBe(true);
     for (const malo of ['.json', 'a.b.json', '../x.json', 'a/b.json', 'a b.json', 'abc.jsonl', '.tmp.1.json', 'a%2e.json']) {
       expect(isStateFileName(malo, '.json'), malo).toBe(false);
     }

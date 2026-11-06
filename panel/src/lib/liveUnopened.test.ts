@@ -25,7 +25,8 @@ const sesion = (name: string, extra: Partial<SessionInfo> = {}): SessionInfo => 
   state: 'idle',
   tracked: true,
   title: name,
-  closed: false,
+  done: null,
+  conversationKey: 'tmux-jdev-x-1-1',
   alive: true,
   updatedAt: 1000,
   created: 0,
@@ -66,7 +67,7 @@ describe('liveUnopened', () => {
   it('ordena por estado y luego por actividad reciente', () => {
     const l = liveUnopened(
       [
-        sesion('cerrada', { closed: true, updatedAt: 9000 }),
+        sesion('cerrada', { done: { at: null, by: 'agent', note: null }, updatedAt: 9000 }),
         sesion('reposo-vieja', { updatedAt: 1000 }),
         sesion('reposo-nueva', { updatedAt: 5000 }),
         sesion('trabaja', { state: 'working', updatedAt: 100 }),
@@ -77,7 +78,7 @@ describe('liveUnopened', () => {
       [],
     );
     expect(nombres(l)).toEqual(['espera', 'trabaja', 'reposo-nueva', 'codex', 'reposo-vieja', 'cerrada']);
-    expect(l.map((i) => i.state)).toEqual(['waiting', 'working', 'idle', 'alive', 'idle', 'closed']);
+    expect(l.map((i) => i.state)).toEqual(['waiting', 'working', 'idle', 'alive', 'idle', 'done']);
   });
 
   it('omite las archivadas, también las que esperan: tienen su propia sección', () => {
@@ -93,9 +94,9 @@ describe('liveUnopened', () => {
     expect(nombres(liveUnopened([sesion('b'), sesion('a')], proyectos, []))).toEqual(['a', 'b']);
   });
 
-  it('con hideClosed omite las cerradas, pero no las cerradas que esperan', () => {
-    const lista = [sesion('c', { closed: true }), sesion('cw', { closed: true, state: 'waiting' }), sesion('n')];
-    expect(nombres(liveUnopened(lista, proyectos, [], { hideClosed: true }))).toEqual(['cw', 'n']);
+  it('con hideDone omite las hechas, pero no las hechas que esperan', () => {
+    const lista = [sesion('c', { done: { at: null, by: 'agent', note: null } }), sesion('cw', { done: { at: null, by: 'agent', note: null }, state: 'waiting' }), sesion('n')];
+    expect(nombres(liveUnopened(lista, proyectos, [], { hideDone: true }))).toEqual(['cw', 'n']);
     expect(nombres(liveUnopened(lista, proyectos, []))).toEqual(['cw', 'n', 'c']);
   });
 

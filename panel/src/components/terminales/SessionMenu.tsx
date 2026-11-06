@@ -75,7 +75,7 @@ type HostProps = { target: Target; withOpen: boolean; onTabClosed: () => void; o
 
 function SessionMenuHost({ target, withOpen, onTabClosed, onDone }: HostProps) {
   const { session, x, y, origin, id } = target;
-  const { actions, dialogs, dialogOpen, copied, error, clearError } = useSessionActions(session, { withOpen, onTabClosed });
+  const { actions, dialogs, dialogOpen, busy, copied, error, clearError } = useSessionActions(session, { withOpen, onTabClosed });
   const [menuAbierto, setMenuAbierto] = useState(true);
   const devolverFoco = useRef(false);
   const habiaDialogo = useRef(false);
@@ -95,17 +95,18 @@ function SessionMenuHost({ target, withOpen, onTabClosed, onDone }: HostProps) {
 
   // El anfitrión sigue montado mientras haya menú, diálogo o aviso; después se retira.
   useEffect(() => {
-    if (menuAbierto || dialogOpen || error || copied) return;
+    if (menuAbierto || dialogOpen || busy || error || copied) return;
     if (devolverFoco.current && origin?.isConnected) origin.focus();
     onDone(id);
-  }, [menuAbierto, dialogOpen, error, copied, origin, id, onDone]);
+  }, [menuAbierto, dialogOpen, busy, error, copied, origin, id, onDone]);
 
   const cerrar = (devolver: boolean) => {
     if (devolver) devolverFoco.current = true;
     setMenuAbierto(false);
   };
   const elegir = (a: MenuAction) => {
-    if (a.restoreFocus) devolverFoco.current = true;
+    // El foco vuelve a la fila o pestaña de origen (si sigue ahí), salvo al abrir la terminal, que lo toma ella.
+    if (a.restoreFocus || a.id !== 'abrir') devolverFoco.current = true;
     setMenuAbierto(false);
     a.onSelect();
   };

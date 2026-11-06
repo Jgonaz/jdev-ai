@@ -30,7 +30,8 @@ function sesion(name: string, parche: Partial<SessionInfo> = {}): SessionInfo {
     state: 'idle',
     tracked: true,
     title: name,
-    closed: false,
+    done: null,
+    conversationKey: 'tmux-jdev-x-1-1',
     alive: true,
     updatedAt: 0,
     created: 0,
@@ -133,24 +134,24 @@ describe('textos del resumen', () => {
 });
 
 describe('recuentos de estado', () => {
-  it('cuenta las que esperan, trabajan y reposan (cerradas incluidas)', () => {
+  it('cuenta las que esperan, trabajan y reposan (hechas incluidas)', () => {
     const c = stateCounts([
       sesion('w', { state: 'waiting' }),
       sesion('k1', { state: 'working' }),
-      sesion('k2', { state: 'working', closed: true }),
+      sesion('k2', { state: 'working', done: { at: null, by: 'agent', note: null } }),
       sesion('i', { state: 'idle' }),
-      sesion('c', { state: 'idle', closed: true }),
+      sesion('c', { state: 'idle', done: { at: null, by: 'agent', note: null } }),
       sesion('v', { tracked: false, state: 'alive' }),
       sesion('e', { state: 'ended', alive: false }),
     ]);
     expect(c).toEqual({ waiting: 1, working: 2, resting: 2 });
   });
 
-  it('una cerrada cuyo proceso terminó no está en reposo', () => {
+  it('una hecha cuyo proceso terminó no está en reposo', () => {
     const c = stateCounts([
-      sesion('c-viva', { state: 'idle', closed: true }),
-      sesion('c-muerta', { state: 'idle', closed: true, alive: false }),
-      sesion('c-terminada', { state: 'ended', closed: true }),
+      sesion('c-viva', { state: 'idle', done: { at: null, by: 'agent', note: null } }),
+      sesion('c-muerta', { state: 'idle', done: { at: null, by: 'agent', note: null }, alive: false }),
+      sesion('c-terminada', { state: 'ended', done: { at: null, by: 'agent', note: null } }),
     ]);
     expect(c).toEqual({ waiting: 0, working: 0, resting: 1 });
   });
@@ -201,14 +202,14 @@ describe('sesiones archivadas en Inicio', () => {
 describe('necesita tu atención', () => {
   const visibles = new Set(['a', 'b']);
 
-  it('ordena: esperan (la más antigua primero), cerradas abiertas y pendientes', () => {
+  it('ordena: esperan (la más antigua primero), hechas abiertas y pendientes', () => {
     const items = attentionItems(
       [
         sesion('w2', { state: 'waiting', updatedAt: 20 }),
-        sesion('c1', { state: 'idle', closed: true, updatedAt: 5 }),
+        sesion('c1', { state: 'idle', done: { at: null, by: 'agent', note: null }, updatedAt: 5 }),
         sesion('w1', { state: 'waiting', updatedAt: 10, project: 'b' }),
         sesion('oculta', { state: 'waiting', project: 'x' }),
-        sesion('muerta', { closed: true, alive: false }),
+        sesion('muerta', { done: { at: null, by: 'agent', note: null }, alive: false }),
         sesion('i', { state: 'idle' }),
       ],
       visibles,
@@ -218,17 +219,17 @@ describe('necesita tu atención', () => {
       'waiting:oculta',
       'waiting:w1',
       'waiting:w2',
-      'closed:c1',
+      'done:c1',
       'pending:3/2',
     ]);
   });
 
-  it('una sesión que espera en un proyecto oculto aparece con la marca; sus cerradas no', () => {
+  it('una sesión que espera en un proyecto oculto aparece con la marca; sus hechas no', () => {
     const items = attentionItems(
       [
         sesion('w', { state: 'waiting', updatedAt: 2 }),
         sesion('w-oculta', { state: 'waiting', project: 'x', updatedAt: 1 }),
-        sesion('c-oculta', { state: 'idle', closed: true, project: 'x' }),
+        sesion('c-oculta', { state: 'idle', done: { at: null, by: 'agent', note: null }, project: 'x' }),
       ],
       visibles,
       null,
@@ -237,21 +238,21 @@ describe('necesita tu atención', () => {
     expect(items.map((i) => (i.kind === 'waiting' ? `${i.session.name}:${i.hidden}` : i.kind))).toEqual(['w-oculta:true', 'w:false']);
   });
 
-  it('una sesión archivada que espera sigue en la lista y va marcada; sus cerradas ya no', () => {
+  it('una sesión archivada que espera sigue en la lista y va marcada; sus hechas ya no', () => {
     const items = attentionItems(
       [
         sesion('w-arch', { state: 'waiting', archived: true, updatedAt: 1 }),
         sesion('w', { state: 'waiting', updatedAt: 2 }),
-        sesion('c-arch', { state: 'idle', closed: true, archived: true }),
-        sesion('c', { state: 'idle', closed: true }),
+        sesion('c-arch', { state: 'idle', done: { at: null, by: 'agent', note: null }, archived: true }),
+        sesion('c', { state: 'idle', done: { at: null, by: 'agent', note: null } }),
       ],
       visibles,
       null,
     );
-    expect(items.map((i) => (i.kind === 'waiting' ? `${i.session.name}:${i.archived}` : i.kind === 'closed' ? `closed:${i.session.name}` : i.kind))).toEqual([
+    expect(items.map((i) => (i.kind === 'waiting' ? `${i.session.name}:${i.archived}` : i.kind === 'done' ? `done:${i.session.name}` : i.kind))).toEqual([
       'w-arch:true',
       'w:false',
-      'closed:c',
+      'done:c',
     ]);
   });
 

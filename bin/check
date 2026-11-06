@@ -24,7 +24,7 @@ check() {
 
 # Harness temporal con un proyecto de prueba y su historial.
 mkdir -p "$work/h/bin" "$work/h/adapters/codex" "$work/h/adapters/claude" "$work/h/projects/demo/.agent/history" "$work/bin"
-cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/session-title" "$harness_root/bin/session-state" "$harness_root/bin/session-statusline" "$harness_root/bin/session-activity" "$harness_root/bin/worktree" "$work/h/bin/"
+cp "$harness_root/bin/agent" "$harness_root/bin/session-status" "$harness_root/bin/subagent-notice" "$harness_root/bin/session-title" "$harness_root/bin/session-done" "$harness_root/bin/session-state" "$harness_root/bin/session-statusline" "$harness_root/bin/session-activity" "$harness_root/bin/worktree" "$work/h/bin/"
 cp "$harness_root/AGENTS.md" "$work/h/AGENTS.md"
 cp "$harness_root/adapters/codex/implementer.toml" "$work/h/adapters/codex/"
 cp "$harness_root/adapters/claude/agents.json" "$work/h/adapters/claude/"
@@ -86,6 +86,7 @@ check "sintaxis de bin/agent" 'sh -n "$harness_root/bin/agent"'
 check "sintaxis de bin/session-status" 'sh -n "$harness_root/bin/session-status"'
 check "sintaxis de bin/subagent-notice" 'sh -n "$harness_root/bin/subagent-notice"'
 check "sintaxis de bin/session-title" 'sh -n "$harness_root/bin/session-title"'
+check "sintaxis de bin/session-done" 'sh -n "$harness_root/bin/session-done"'
 check "sintaxis de bin/session-state" 'sh -n "$harness_root/bin/session-state"'
 check "sintaxis de bin/session-statusline" 'sh -n "$harness_root/bin/session-statusline"'
 check "sintaxis de bin/session-activity" 'sh -n "$harness_root/bin/session-activity"'
@@ -384,12 +385,53 @@ title() { CLAUDE_CONFIG_DIR="$work/claude" CLAUDE_CODE_SESSION_ID=s-1 "$work/h/b
 title_hook() { printf '{"session_id":"s-1","transcript_path":"%s"}' "$transcript" | "$work/h/bin/session-title" --hook; }
 last_line() { tail -n 1 "$transcript"; }
 check "título: fija el título con escapes JSON" 'title "Login con \"magic link\"" && [ "$(last_line)" = "{\"type\":\"custom-title\",\"customTitle\":\"Login con \\\"magic link\\\"\",\"sessionId\":\"s-1\"}" ]'
-check "título: --closed antepone la marca una sola vez" 'title --closed && title --closed && [ "$(grep -c "\[Closed\]" "$transcript")" -eq 1 ] && grep -q "sin cambios" "$work/out"'
-check "título: el hook reabre la sesión cerrada" '[ "$(title_hook)" = "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"sessionTitle\":\"Login con \\\"magic link\\\"\"}}" ]'
-check "título: --open quita la marca y el hook calla" 'title --open && last_line | grep -q "\"customTitle\":\"Login con" && [ -z "$(title_hook)" ]'
-check "título: --closed usa el título automático" 'printf "{\"type\":\"ai-title\",\"aiTitle\":\"Otro\",\"sessionId\":\"s-2\"}\n" > "$work/claude/projects/p/s-2.jsonl" && CLAUDE_CONFIG_DIR="$work/claude" CLAUDE_CODE_SESSION_ID=s-2 "$work/h/bin/session-title" --closed >/dev/null && tail -n 1 "$work/claude/projects/p/s-2.jsonl" | grep -q "\"customTitle\":\"\[Closed\] Otro\""'
+# Una marca «[Closed] » antigua en el título, escrita a mano (ya no la escribe nadie).
+check "título: el hook quita la marca antigua sin estado" 'printf "{\"type\":\"custom-title\",\"customTitle\":\"[Closed] Login con \\\"magic link\\\"\",\"sessionId\":\"s-1\"}\n" >> "$transcript" && [ "$(title_hook)" = "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"sessionTitle\":\"Login con \\\"magic link\\\"\"}}" ]'
+check "título: --strip-closed quita la marca y el hook calla" 'title --strip-closed && last_line | grep -q "\"customTitle\":\"Login con" && [ -z "$(title_hook)" ]'
+check "título: --strip-closed sin marca no escribe" 'lines=$(wc -l < "$transcript") && title --strip-closed && [ "$(wc -l < "$transcript")" -eq "$lines" ]'
 check "título: fuera de Claude Code no escribe" 'lines=$(wc -l < "$transcript") && (unset CLAUDE_CODE_SESSION_ID; "$work/h/bin/session-title" "x" 2>&1) | grep -q "no es una sesión de Claude Code" && [ "$(wc -l < "$transcript")" -eq "$lines" ]'
 check "título: hook con entrada no válida sin salida" '[ -z "$(echo basura | "$work/h/bin/session-title" --hook)" ]'
+# Estado de conversación: session-done escribe un archivo por conversación y
+# session-title --hook lo reabre cuando la persona vuelve a escribir.
+sd_id=11111111-2222-3333-4444-555555555555
+sd_state="$work/cstate"
+sd_file="$sd_state/jdev-ai/conversations/$sd_id.json"
+sd_transcript="$work/claude/projects/p/$sd_id.jsonl"
+printf '{"type":"ai-title","aiTitle":"Conversación de prueba","sessionId":"%s"}\n' "$sd_id" > "$sd_transcript"
+sd() { XDG_STATE_HOME="$sd_state" CLAUDE_CONFIG_DIR="$work/claude" CLAUDE_CODE_SESSION_ID=$sd_id "$work/h/bin/session-done" "$@" > "$work/out" 2>&1; }
+sd_hook() { printf '{"session_id":"%s","transcript_path":"%s"}' "${1:-$sd_id}" "$sd_transcript" | XDG_STATE_HOME="$sd_state" "$work/h/bin/session-title" --hook; }
+sd_json() {
+    command -v python3 >/dev/null 2>&1 || return 0
+    python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["state"] in ("done","open") and d["by"] in ("user","agent") and (sys.argv[2:] == [] or d.get("note") == sys.argv[2]) else 1)' "$sd_file" "$@"
+}
+sd_iso='[0-9]\{4\}-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'
+check "hecha: marca la conversación sin tocar el título" 'rm -rf "$sd_state"; lines=$(wc -l < "$sd_transcript"); sd && grep -q "^{\"state\":\"done\",\"at\":\"$sd_iso\",\"by\":\"agent\"}\$" "$sd_file" && sd_json && grep -q "hecha" "$work/out" && [ "$(wc -l < "$sd_transcript")" -eq "$lines" ]'
+check "hecha: guarda la nota escapada y sin saltos de línea" 'rm -rf "$sd_state"; sd --note "Integrada en \"main\"
+y desplegada" && grep -qF "\"by\":\"agent\",\"note\":\"Integrada en \\\"main\\\" y desplegada\"}" "$sd_file" && sd_json "Integrada en \"main\" y desplegada"'
+check "hecha: admite una nota de 500 caracteres y rechaza una de 501" 'rm -rf "$sd_state"; n=$(awk "BEGIN { for (i = 0; i < 500; i++) printf \"a\" }"); sd --note "$n" && sd_json "$n" && rm -rf "$sd_state"; sd --note "${n}a"; r=$?; [ $r -eq 2 ] && [ ! -e "$sd_state" ]'
+check "hecha: --open reabre, quita la marca antigua y no deja temporales" 'rm -rf "$sd_state"; printf "{\"type\":\"custom-title\",\"customTitle\":\"[Closed] Conversación de prueba\",\"sessionId\":\"%s\"}\n" "$sd_id" >> "$sd_transcript" && sd --open && grep -q "^{\"state\":\"open\",\"at\":\"$sd_iso\",\"by\":\"agent\"}\$" "$sd_file" && sd_json && tail -n 1 "$sd_transcript" | grep -q "\"customTitle\":\"Conversación de prueba\"" && [ -z "$(find "$sd_state/jdev-ai/conversations" -name ".*")" ]'
+check "hecha: --open sin transcript solo cambia el estado" 'rm -rf "$sd_state"; XDG_STATE_HOME="$sd_state" CLAUDE_CONFIG_DIR="$work/sin-claude" CLAUDE_CODE_SESSION_ID=$sd_id "$work/h/bin/session-done" --open >/dev/null 2>"$work/sd.err" && [ ! -s "$work/sd.err" ] && grep -q "\"state\":\"open\"" "$sd_file"'
+check "hecha: argumentos no válidos salen con 2 y el uso" 'rm -rf "$sd_state"; for a in "--nada" "texto" "--note" "--open --note x"; do sd $a; [ $? -eq 2 ] && grep -q "^Uso:" "$work/out" || return 1; done; [ ! -e "$sd_state" ]'
+check "hecha: fuera de Claude Code no escribe y avisa" 'rm -rf "$sd_state"; (unset CLAUDE_CODE_SESSION_ID; XDG_STATE_HOME="$sd_state" "$work/h/bin/session-done" 2>&1) | grep -q "no es una sesión de Claude Code" && [ ! -e "$sd_state" ]'
+check "hecha: un identificador no válido falla sin escribir" 'rm -rf "$sd_state"; for id in "../x" "s-1" "11111111-2222-3333-4444-55555555555G" "11111111-2222-3333-4444-5555555555556"; do XDG_STATE_HOME="$sd_state" CLAUDE_CODE_SESSION_ID=$id "$work/h/bin/session-done" >/dev/null 2>&1; [ $? -eq 1 ] || return 1; done; [ ! -e "$sd_state" ]'
+check "hecha: un directorio de estado inaccesible falla con aviso" ': > "$work/no-dir-sd"; XDG_STATE_HOME="$work/no-dir-sd" CLAUDE_CODE_SESSION_ID=$sd_id "$work/h/bin/session-done" >/dev/null 2>"$work/sd.err"; [ $? -eq 1 ] && [ -s "$work/sd.err" ]'
+check "hecha: session-title --closed avisa y marca solo el estado" 'rm -rf "$sd_state"; lines=$(wc -l < "$sd_transcript"); XDG_STATE_HOME="$sd_state" CLAUDE_CONFIG_DIR="$work/claude" CLAUDE_CODE_SESSION_ID=$sd_id "$work/h/bin/session-title" --closed >/dev/null 2>"$work/sd.err" && grep -q "en desuso" "$work/sd.err" && grep -q "\"state\":\"done\".*\"by\":\"agent\"" "$sd_file" && [ "$(wc -l < "$sd_transcript")" -eq "$lines" ]'
+check "hecha: session-title --open avisa y reabre" 'XDG_STATE_HOME="$sd_state" CLAUDE_CONFIG_DIR="$work/claude" CLAUDE_CODE_SESSION_ID=$sd_id "$work/h/bin/session-title" --open >/dev/null 2>"$work/sd.err" && grep -q "en desuso" "$work/sd.err" && grep -q "\"state\":\"open\"" "$sd_file"'
+check "hook de hecha: reabre por el estado, como la persona, y no toca el título" 'rm -rf "$sd_state"; sd && lines=$(wc -l < "$sd_transcript") && [ -z "$(sd_hook)" ] && grep -q "^{\"state\":\"open\",\"at\":\"$sd_iso\",\"by\":\"user\"}\$" "$sd_file" && sd_json && [ "$(wc -l < "$sd_transcript")" -eq "$lines" ]'
+check "hook de hecha: con la conversación abierta no escribe" 'sd --open && before=$(cat "$sd_file") && sleep 1 && [ -z "$(sd_hook)" ] && [ "$(cat "$sd_file")" = "$before" ]'
+check "hook de hecha: sin estado ni marca no crea nada" 'rm -rf "$sd_state"; [ -z "$(sd_hook)" ] && [ ! -e "$sd_state" ]'
+check "hook de hecha: la marca antigua sin estado cuenta como hecha y se reabre" 'rm -rf "$sd_state"; printf "{\"type\":\"custom-title\",\"customTitle\":\"[Closed] Conversación de prueba\",\"sessionId\":\"%s\"}\n" "$sd_id" >> "$sd_transcript" && [ "$(sd_hook)" = "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"sessionTitle\":\"Conversación de prueba\"}}" ] && grep -q "\"state\":\"open\".*\"by\":\"user\"" "$sd_file"'
+check "hook de hecha: con estado hecha y marca antigua limpia ambos" 'sd && [ "$(sd_hook)" = "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"sessionTitle\":\"Conversación de prueba\"}}" ] && grep -q "\"state\":\"open\"" "$sd_file"'
+check "hook de hecha: un identificador sin formato de conversación no escribe estado" 'rm -rf "$sd_state"; [ -n "$(sd_hook ../x)" ] && [ ! -e "$sd_state" ]'
+check "hecha: cuenta la nota en caracteres con LC_ALL=C" 'rm -rf "$sd_state"; n=$(awk "BEGIN { for (i = 0; i < 500; i++) printf \"ñ\" }"); LC_ALL=C sd --note "$n" && grep -qF "$n" "$sd_file" && rm -rf "$sd_state"; LC_ALL=C sd --note "${n}ñ"; r=$?; [ $r -eq 2 ] && [ ! -e "$sd_state" ]'
+check "hecha: sustituye por espacio U+2028, U+2029, U+0085 y los controles" 'rm -rf "$sd_state"; sd --note "$(printf "a\342\200\250b\342\200\251c\302\205d\001e")" && grep -qF "\"note\":\"a b c d e\"" "$sd_file" && sd_json "a b c d e"'
+check "hecha: conserva los acentos y emojis de la nota" 'rm -rf "$sd_state"; sd --note "Integrada ñ é 😀" && sd_json "Integrada ñ é 😀"'
+check "hecha: un XDG_STATE_HOME relativo se ignora y usa ~/.local/state" 'rm -rf "$work/home"; mkdir -p "$work/home"; (cd "$work" && HOME="$work/home" XDG_STATE_HOME=relativa CLAUDE_CODE_SESSION_ID=$sd_id "$work/h/bin/session-done" >/dev/null 2>&1) && [ -f "$work/home/.local/state/jdev-ai/conversations/$sd_id.json" ] && [ ! -e "$work/relativa" ]'
+check "hook de hecha: tolera espacios en el JSON del estado" 'printf "{\"type\":\"ai-title\",\"aiTitle\":\"Limpio\",\"sessionId\":\"%s\"}\n" "$sd_id" > "$sd_transcript"; mkdir -p "$sd_state/jdev-ai/conversations"; printf "{ \"state\" : \"done\", \"at\" : \"2026-11-05T15:20:00Z\", \"by\" : \"agent\" }\n" > "$sd_file" && [ -z "$(sd_hook)" ] && grep -q "\"state\":\"open\".*\"by\":\"user\"" "$sd_file"'
+check "hook de hecha: también lo lee en varias líneas" 'printf "{\"type\":\"ai-title\",\"aiTitle\":\"Limpio\",\"sessionId\":\"%s\"}\n" "$sd_id" > "$sd_transcript"; printf "{\n  \"state\": \"done\",\n  \"at\": \"2026-11-05T15:20:00Z\",\n  \"by\": \"user\"\n}\n" > "$sd_file" && [ -z "$(sd_hook)" ] && grep -q "\"state\":\"open\"" "$sd_file"'
+check "hook de hecha: un archivo corrupto cuenta como ausente y no se pisa si no hay marca" 'sd --open && printf "{\"type\":\"ai-title\",\"aiTitle\":\"Limpio\",\"sessionId\":\"%s\"}\n" "$sd_id" > "$sd_transcript" && for malo in "basura" "{\"state\":\"hecha\",\"at\":\"2026-11-05T15:20:00Z\",\"by\":\"user\"}" "{\"state\":\"done\",\"by\":\"user\"}" "{\"state\":\"done\",\"at\":\"2026-11-05T15:20:00Z\",\"by\":\"otro\"}" ""; do printf "%s\n" "$malo" > "$sd_file"; [ -z "$(sd_hook)" ] && [ "$(cat "$sd_file")" = "$malo" ] || return 1; done'
+check "hook de hecha: con el archivo corrupto manda la marca antigua" 'printf "{\"type\":\"custom-title\",\"customTitle\":\"[Closed] Vieja\",\"sessionId\":\"%s\"}\n" "$sd_id" >> "$sd_transcript" && printf "basura\n" > "$sd_file" && [ "$(sd_hook)" = "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"sessionTitle\":\"Vieja\"}}" ] && grep -q "\"state\":\"open\".*\"by\":\"user\"" "$sd_file"'
+check "hook de hecha: un XDG_STATE_HOME relativo se ignora" 'rm -rf "$work/home"; mkdir -p "$work/home/.local/state/jdev-ai/conversations"; printf "{\"state\":\"done\",\"at\":\"2026-11-05T15:20:00Z\",\"by\":\"agent\"}\n" > "$work/home/.local/state/jdev-ai/conversations/$sd_id.json"; printf "{\"session_id\":\"%s\",\"transcript_path\":\"%s\"}" "$sd_id" "$work/no-existe.jsonl" | (cd "$work" && HOME="$work/home" XDG_STATE_HOME=relativa "$work/h/bin/session-title" --hook) >/dev/null && grep -q "\"state\":\"open\"" "$work/home/.local/state/jdev-ai/conversations/$sd_id.json" && [ ! -e "$work/relativa" ]'
 check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
 check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "^┌ jdev-ai · demo · copilot$" "$work/out"'
 

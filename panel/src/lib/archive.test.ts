@@ -34,7 +34,8 @@ const sesion = (name: string, extra: Partial<SessionInfo> = {}): SessionInfo => 
   state: 'idle',
   tracked: true,
   title: name,
-  closed: false,
+  done: null,
+  conversationKey: 'tmux-jdev-x-1-1',
   alive: true,
   updatedAt: 1000,
   created: 5,
@@ -50,7 +51,7 @@ const reciente = (id: string, extra: Partial<RecentSession> = {}): RecentSession
   project: 'a',
   worktree: '',
   title: `Conversación ${id}`,
-  closed: false,
+  done: null,
   lastActivity: 1000,
   possiblyOpen: false,
   sizeBytes: 10,
@@ -94,10 +95,10 @@ describe('archivedEntries', () => {
     expect(l[0]!.project.id).toBe('nuevo');
   });
 
-  it('con hideClosed omite lo cerrado, salvo la sesión cerrada que espera', () => {
-    const sesiones = [sesion('c', { closed: true }), sesion('cw', { closed: true, state: 'waiting' })];
-    const recientes = [reciente('rc', { closed: true }), reciente('rn')];
-    expect(claves(archivedEntries(sesiones, recientes, proyectos, { hideClosed: true }))).toEqual(['s:cw', 'c:rn']);
+  it('con hideDone omite lo hecho, salvo la sesión hecha que espera', () => {
+    const sesiones = [sesion('c', { done: { at: null, by: 'agent', note: null } }), sesion('cw', { done: { at: null, by: 'agent', note: null }, state: 'waiting' })];
+    const recientes = [reciente('rc', { done: { at: null, by: 'agent', note: null } }), reciente('rn')];
+    expect(claves(archivedEntries(sesiones, recientes, proyectos, { hideDone: true }))).toEqual(['s:cw', 'c:rn']);
     expect(claves(archivedEntries(sesiones, recientes, proyectos))).toHaveLength(4);
   });
 

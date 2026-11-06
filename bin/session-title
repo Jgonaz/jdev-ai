@@ -6,10 +6,16 @@
 # añadir una línea para renombrar la sesión en curso.
 #
 #   session-title "<título>"  fija el título.
-#   session-title --closed    antepone «[Closed] » al título actual.
-#   session-title --open      quita «[Closed] » del título actual.
-#   session-title --hook      hook UserPromptSubmit: si el título está cerrado,
-#                             lo reabre devolviendo «sessionTitle» sin la marca.
+#   session-title --hook      hook UserPromptSubmit: si la conversación está
+#                             hecha (estado de bin/session-done o, por
+#                             compatibilidad, título con «[Closed] »), la reabre
+#                             y devuelve «sessionTitle» sin la marca antigua.
+#   session-title --strip-closed
+#                             quita «[Closed] » del título guardado, si lo
+#                             lleva (lo usa session-done --open).
+#   session-title --closed / --open
+#                             en desuso: avisan y llaman a session-done. El
+#                             título ya no lleva el estado.
 #
 # Fuera de Claude Code (sin CLAUDE_CODE_SESSION_ID) no hace nada y lo avisa. El
 # hook nunca bloquea el prompt: ante cualquier problema termina sin decir nada.
@@ -17,9 +23,10 @@
 set -u
 
 closed_mark="[Closed] "
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 
 usage() {
-    printf 'Uso: session-title "<título>" | --closed | --open | --hook\n' >&2
+    printf 'Uso: session-title "<título>" | --hook\n' >&2
     exit 2
 }
 
@@ -65,23 +72,91 @@ write_title() {
         "$(json_string "$1")" "$(json_string "$session_id")" >> "$transcript"
 }
 
+# Archivo de estado de la conversación (bin/session-done); vacío si el
+# identificador no tiene el formato de una conversación de Claude Code.
+conversation_file() {
+    [ "${#1}" -eq 36 ] || return 0
+    case "$1" in *[!0-9a-f-]*) return 0 ;; esac
+    # Una ruta relativa en XDG_STATE_HOME se ignora, como en el panel.
+    case "${XDG_STATE_HOME:-}" in
+        /*) root=$XDG_STATE_HOME ;;
+        *) root=${HOME:-}/.local/state ;;
+    esac
+    [ "$root" != "/.local/state" ] || return 0
+    printf '%s/jdev-ai/conversations/%s.json' "$root" "$1"
+}
+
+# Estado de un archivo de conversación: «done», «open» o vacío si no existe o no
+# es válido (JSON con state done|open, by user|agent y una fecha «at»). Tolera
+# espacios alrededor de los dos puntos.
+file_state() {
+    [ -n "$1" ] && [ -f "$1" ] || return 0
+    flat=$(tr '\n\r' '  ' < "$1" 2>/dev/null | head -c 8192) || return 0
+    printf '%s' "$flat" | grep -Eq '^[[:space:]]*\{.*\}[[:space:]]*$' || return 0
+    printf '%s' "$flat" | grep -Eq '"by"[[:space:]]*:[[:space:]]*"(user|agent)"' || return 0
+    printf '%s' "$flat" | grep -Eq '"at"[[:space:]]*:[[:space:]]*"[^"]+"' || return 0
+    if printf '%s' "$flat" | grep -Eq '"state"[[:space:]]*:[[:space:]]*"done"'; then printf done
+    elif printf '%s' "$flat" | grep -Eq '"state"[[:space:]]*:[[:space:]]*"open"'; then printf open
+    fi
+}
+
+# La persona vuelve a escribir: deja la conversación abierta. Es un hook, así
+# que cualquier fallo se ignora.
+write_open_state() {
+    dir=$(dirname -- "$1")
+    mkdir -p -- "$dir" 2>/dev/null || return 0
+    tmp=$(mktemp "$dir/.$(basename -- "$1").XXXXXX" 2>/dev/null) || return 0
+    printf '{"state":"open","at":"%s","by":"user"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$tmp" 2>/dev/null \
+        && mv -f -- "$tmp" "$1" 2>/dev/null
+    rm -f -- "$tmp" 2>/dev/null
+    return 0
+}
+
 if [ "${1:-}" = "--hook" ]; then
     [ $# -eq 1 ] || usage
     input=$(cat) || exit 0
     field() {
-        printf '%s' "$input" | tr '\n' ' ' | sed -n "s/.*\"$1\"[ ]*:[ ]*\"\\([^\"]*\\)\".*/\\1/p"
+        printf '%s' "$input" | tr '\n' ' ' | sed -n "s/.*\"$1\"[ ]*:[ ]*\"\([^\"]*\)\".*/\1/p"
     }
     transcript=$(field transcript_path)
-    [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
-    title=$(current_title)
-    case "$title" in
-        "$closed_mark"*) ;;
-        *) exit 0 ;;
+    state_file=$(conversation_file "$(field session_id)")
+    title=
+    if [ -n "$transcript" ] && [ -f "$transcript" ]; then
+        title=$(current_title)
+    fi
+    marked=0
+    case "$title" in "$closed_mark"*) marked=1 ;; esac
+    # Si hay archivo de estado, manda él; sin archivo, la marca antigua cuenta
+    # como «hecha».
+    reopen=0
+    # Un archivo corrupto o sin un «state» válido cuenta como ausente (la marca
+    # antigua manda, como en el panel).
+    state=$(file_state "$state_file")
+    case "$state" in
+        done) reopen=1 ;;
+        open) ;;
+        *) reopen=$marked ;;
     esac
+    [ "$reopen" -eq 0 ] || [ -z "$state_file" ] || write_open_state "$state_file"
+    [ "$marked" -eq 1 ] || exit 0
     printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","sessionTitle":%s}}\n' \
         "$(json_string "${title#"$closed_mark"}")"
     exit 0
 fi
+
+# Alias en desuso: el estado ya no vive en el título.
+case "${1:-}" in
+    --closed)
+        [ $# -eq 1 ] || usage
+        printf 'session-title: --closed está en desuso; usa session-done.\n' >&2
+        exec "$script_dir/session-done"
+        ;;
+    --open)
+        [ $# -eq 1 ] || usage
+        printf 'session-title: --open está en desuso; usa session-done --open.\n' >&2
+        exec "$script_dir/session-done" --open
+        ;;
+esac
 
 [ $# -eq 1 ] && [ -n "$1" ] || usage
 
@@ -100,28 +175,24 @@ for candidate in "$config_dir"/projects/*/"$session_id.jsonl"; do
     [ -f "$candidate" ] && transcript=$candidate && break
 done
 if [ -z "$transcript" ]; then
+    # --strip-closed lo lanza session-done --open: sin transcript no hay marca.
+    [ "$1" != "--strip-closed" ] || exit 0
     printf 'session-title: no se encuentra el transcript de la sesión %s en %s/projects\n' "$session_id" "$config_dir" >&2
     exit 1
 fi
 
 title=$(current_title)
-case "$1" in
-    --closed)
-        case "$title" in
-            "$closed_mark"*) new_title= ;;
-            "") new_title="${closed_mark}Sesión sin título" ;;
-            *) new_title="$closed_mark$title" ;;
-        esac
-        ;;
-    --open)
-        case "$title" in
-            "$closed_mark"*) new_title=${title#"$closed_mark"} ;;
-            *) new_title= ;;
-        esac
-        ;;
-    -*) usage ;;
-    *) new_title=$1 ;;
-esac
+if [ "$1" = "--strip-closed" ]; then
+    case "$title" in
+        "$closed_mark"*) new_title=${title#"$closed_mark"} ;;
+        *) exit 0 ;;
+    esac
+else
+    case "$1" in
+        -*) usage ;;
+        *) new_title=$1 ;;
+    esac
+fi
 
 if [ -z "$new_title" ] || [ "$new_title" = "$title" ]; then
     printf 'Título sin cambios: %s\n' "$title"

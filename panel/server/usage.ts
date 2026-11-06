@@ -19,9 +19,9 @@ export const STATUSLINE_MAX_BYTES = 64 * 1024;
 /** Tamaño máximo que se lee de un registro de actividad (el script lo vacía al pasar de 256 KiB). */
 export const ACTIVITY_MAX_BYTES = 512 * 1024;
 
-/** Nombre de archivo válido: un session_id (solo letras, números y guiones) y la extensión. */
+/** Nombre de archivo válido: un id (solo letras, números, guiones y guiones bajos) y la extensión. */
 export function isStateFileName(nombre: string, ext: string): boolean {
-  return nombre.endsWith(ext) && /^[A-Za-z0-9-]+$/.test(nombre.slice(0, -ext.length));
+  return nombre.endsWith(ext) && /^[A-Za-z0-9_-]+$/.test(nombre.slice(0, -ext.length));
 }
 
 /**

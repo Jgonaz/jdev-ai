@@ -137,17 +137,17 @@ Si un check falla o la PR no se puede integrar, SHALL NOT integrar. Si el fast-f
 
 ### Requirement: La sesión se marca como cerrada tras integrar
 
-En Claude Code, cuando la feature se integra en la rama destino, el agente SHALL anteponer `[Closed] ` al título de la sesión con `bin/session-title --closed`. En las sesiones abiertas con `bin/agent`, un hook `UserPromptSubmit` SHALL quitar la marca cuando el usuario vuelva a escribir en la sesión.
+En Claude Code, cuando la feature se integra en la rama destino, el agente SHALL marcar la conversación como hecha con `bin/session-done`, sin cambiar su título. En las sesiones abiertas con `bin/agent`, un hook `UserPromptSubmit` SHALL reabrirla cuando el usuario vuelva a escribir en la sesión.
 
 #### Scenario: Feature integrada
 
 - **WHEN** `bin/worktree merge <feature>` integra la PR
-- **THEN** el título de la sesión en `/resume` empieza por `[Closed] `
+- **THEN** la conversación queda marcada como hecha por el agente y el panel la muestra con el check «Hecha»
 
 #### Scenario: Retomar la sesión cerrada
 
-- **WHEN** el usuario escribe un nuevo mensaje en una sesión con título `[Closed] Alternativas de ejercicios`
-- **THEN** el título pasa a `Alternativas de ejercicios`
+- **WHEN** el usuario escribe un nuevo mensaje en una conversación marcada como hecha
+- **THEN** la conversación vuelve a estar abierta
 
 ### Requirement: La limpieza no pierde trabajo
 

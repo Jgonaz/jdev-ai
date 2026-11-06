@@ -192,9 +192,15 @@ línea por qué delega.
 
 Con Claude, el agente pone a cada sesión un título corto que describe el
 trabajo y que es el que ves en `/resume`. Al integrar una feature en la rama
-principal le antepone `[Closed] `, y un hook `UserPromptSubmit`
-(`bin/session-title --hook`) quita esa marca en cuanto vuelves a escribir en la
-terminal. La política está en [`rules/session-title.md`](rules/session-title.md).
+principal marca la conversación como hecha con `bin/session-done`, sin tocar
+el título (guarda cuándo, quién y una nota opcional en
+`~/.local/state/jdev-ai/conversations/`), y un hook `UserPromptSubmit`
+(`bin/session-title --hook`) la reabre en cuanto vuelves a escribir en la
+terminal. También puedes marcarla tú desde el panel. Las conversaciones que ya
+llevaban `[Closed] ` en el título cuentan como hechas, sin migrar nada; fuera del
+panel, la marca ya no se ve en la lista de `claude --resume`. Las políticas están
+en [`rules/session-title.md`](rules/session-title.md) y
+[`rules/session-done.md`](rules/session-done.md).
 
 Copilot y OpenCode mantienen su ejecución actual; podrán mapear los mismos
 roles a sus mecanismos nativos sin cambiar la política común ni los proyectos.
@@ -261,7 +267,7 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 
 `bin/panel` abre en el navegador un panel local que reúne las terminales de
 agente de todos los proyectos: barra lateral con las sesiones agrupadas por
-proyecto, su título y su estado (te espera, trabajando, en reposo o cerrada),
+proyecto, su título y su estado (te espera, trabajando, en reposo o hecha),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
 con `bin/agent`, las pantallas Inicio, Backlog, Worktrees, Guías e Historial y ajustes de
 tema, fuentes, terminal y avisos. En los avisos se elige un sonido para cuando
@@ -380,9 +386,9 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   pestañas, renombrado, archivado y «En segundo plano».
 - **Terminales vivas sin abrir.** Con el panel de Terminales vacío, una lista «Terminales vivas»
   (con «Abrir todas») reúne las sesiones vivas que no están en una pestaña, ordenadas por estado
-  (te espera, trabajando, en reposo, cerradas) y actividad; un apartado plegable «En segundo plano (N)»
-  de la barra lateral, encima de la leyenda, las lista siempre en compacto. Respetan «Ocultar sesiones
-  cerradas» y los proyectos ocultos, salvo las que te esperan.
+  (te espera, trabajando, en reposo, hechas) y actividad; un apartado plegable «En segundo plano (N)»
+  de la barra lateral, encima de la leyenda, las lista siempre en compacto. Respetan «Ocultar hechas»
+  y los proyectos ocultos, salvo las que te esperan.
 - **Seguridad.** El servidor solo escucha en `127.0.0.1` (puerto 4317 por
   defecto, `--port` para otro) y exige un token que se guarda en
   `~/.config/jdev-ai/panel-token`; `bin/panel --regenerate-token` lo cambia.
@@ -421,15 +427,19 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
 - **Menú contextual y renombrar.** El clic derecho (o la tecla Menú / Mayús+F10)
   sobre una sesión de la barra lateral o sobre una pestaña abre un menú con
   «Abrir» (solo en la barra lateral, si no está en una pestaña), «Renombrar…»,
-  «Copiar comando para adjuntar», «Cerrar pestaña» (solo si está abierta) y
-  «Terminar sesión…» (con confirmación); son las mismas acciones de «Más
-  acciones». Se mueve con las flechas, Inicio y Fin; Esc o un clic fuera lo
+  «Copiar comando para adjuntar», «Marcar como hecha» o «Reabrir» (no en las
+  terminales sin agente), «Cerrar pestaña» (solo si está abierta) y «Terminar
+  sesión…» (con confirmación); son las mismas acciones de «Más acciones». Las
+  conversaciones de «Anteriores» y «Archivadas» tienen también «Marcar como
+  hecha» y «Reabrir». Una conversación hecha se muestra con un check y el texto
+  «Hecha» (sin tachar el título), su tooltip dice cuándo y quién la marcó (tú o
+  el agente) y su nota, y el filtro «Ocultar hechas» de la barra lateral la
+  oculta (salvo si te espera). Marcarla no termina ni archiva la sesión. Se mueve con las flechas, Inicio y Fin; Esc o un clic fuera lo
   cierran. Dentro de la terminal el clic derecho no cambia. «Renombrar…» pide
   un título de hasta 80 caracteres, sin saltos de línea ni caracteres de
   control; Enter guarda y Esc cancela. En las sesiones de Claude con
-  transcript añade la línea `custom-title` que escribe `bin/session-title`
-  (conserva la marca «[Closed] » si la sesión estaba cerrada), así que también
-  es el título que verás en `/resume`; en el resto de agentes lo guarda en la
+  transcript añade la línea `custom-title` que escribe `bin/session-title`, así
+  que también es el título que verás en `/resume`; en el resto de agentes lo guarda en la
   opción `@jdev_title` de la sesión de tmux y solo vale para el panel.
 - **Paneles redimensionables.** Arrastra el borde de la barra lateral, del panel
   de Contexto y el visor de imágenes (comparten ancho), de la barra y el detalle
@@ -456,7 +466,8 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   proyectos, sesiones y worktrees, con los recuentos de sesiones que te
   esperan, trabajando y en reposo. «Necesita tu atención» lista las sesiones
   que te esperan, con el texto del aviso y «Responder», las marcadas como
-  cerradas que siguen abiertas, con «Revisar», y los pendientes vigentes del
+  hechas que siguen abiertas (apartado «Hechas que siguen abiertas»), con
+  «Revisar» y «Terminar» (con confirmación), y los pendientes vigentes del
   historial (los sin marcar de la última entrada de cada proyecto, como en el
   resumen de `bin/session-status`), que llevan a Historial con «Solo con
   «Pendiente de ti»». Debajo,
@@ -514,7 +525,7 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
 
 ## Validación del harness
 
-Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/session-state`, `bin/session-statusline`, `bin/session-activity`, `bin/worktree`, `bin/panel` o los archivos que inyectan, ejecuta:
+Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/session-done`, `bin/session-state`, `bin/session-statusline`, `bin/session-activity`, `bin/worktree`, `bin/panel` o los archivos que inyectan, ejecuta:
 
 ```sh
 bin/check
@@ -599,7 +610,7 @@ Con «Continúa hasta dar esta conversación por closed» (por ejemplo, como
 objetivo de `/goal`) o con su forma abreviada `/goal Close`, el agente trabaja
 sin pedir confirmación hasta cumplir el objetivo completo: valida, integra en
 la rama principal, elimina el worktree y, como último paso, marca siempre la
-sesión como `[Closed]`. Resuelve las dudas por su cuenta y deja las decisiones
+conversación como hecha con `bin/session-done`. Resuelve las dudas por su cuenta y deja las decisiones
 en el historial, pero sigue preguntando ante acciones peligrosas o
 destructivas. La política completa está en
 [`rules/closed-goal.md`](rules/closed-goal.md).

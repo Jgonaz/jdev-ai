@@ -2,7 +2,7 @@ import { STATE_LABELS, visualState } from '../../lib/sessions.ts';
 import type { SessionInfo, VisualState } from '../../types.ts';
 import { StatusLight } from '../StatusLight.tsx';
 
-const BASE: VisualState[] = ['waiting', 'working', 'idle', 'closed'];
+const BASE: VisualState[] = ['waiting', 'working', 'idle', 'done'];
 
 // «Viva», «terminada» y «terminal» solo aparecen si hay sesiones sin estado de turno (Codex, Copilot, OpenCode) o terminales sin agente.
 export function Legend({ sessions }: { sessions: readonly SessionInfo[] }) {

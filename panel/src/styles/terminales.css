@@ -112,8 +112,8 @@
 .srow > .light--shell {
   margin-top: 4px;
 }
-.srow > .light--closed {
-  margin-top: 8px;
+.srow > .light--done {
+  margin-top: 4px;
 }
 .srow__text {
   display: flex;
@@ -128,9 +128,8 @@
   white-space: nowrap;
   font-size: var(--text-md);
 }
-.srow--closed .srow__title {
+.srow--done .srow__title {
   color: var(--fg-muted);
-  text-decoration: line-through;
 }
 .srow--waiting .srow__title {
   color: var(--waiting-text);
@@ -367,8 +366,7 @@
   font-size: var(--text-md);
   font-weight: 600;
 }
-.pane--closed .pane__title {
-  text-decoration: line-through;
+.pane--done .pane__title {
   color: var(--fg-muted);
 }
 /* Una sola línea de datos: lo que sobra se recorta por la derecha antes que el contexto, que queda alineado a ese lado. */
@@ -993,9 +991,8 @@
   color: var(--waiting-text);
   font-weight: 500;
 }
-.lrow--closed .lrow__title {
+.lrow--done .lrow__title {
   color: var(--fg-muted);
-  text-decoration: line-through;
 }
 .lrow__meta {
   overflow: hidden;
@@ -1139,9 +1136,8 @@
   color: var(--waiting-text);
   font-weight: 500;
 }
-.slrow--closed .slrow__title {
+.slrow--done .slrow__title {
   color: var(--fg-muted);
-  text-decoration: line-through;
 }
 /* Conversación archivada: atenuada como las de «Anteriores»; «Retomar» al pasar por encima. */
 .slrow--conv {
@@ -1249,8 +1245,8 @@
 .rrow .srow__title {
   color: inherit;
 }
-.rrow--closed .srow__title {
-  text-decoration: line-through;
+.rrow--done .srow__title {
+  color: var(--fg-muted);
 }
 .rrow__action {
   display: none;
@@ -1857,6 +1853,24 @@
 .rowtip__work {
   flex-basis: 100%;
   color: var(--fg-soft);
+}
+/* Conversación hecha: cuándo y quién la marcó, y su nota. */
+.rowtip__done {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: calc(11.5px * var(--u));
+  color: var(--fg-soft);
+}
+.rowtip__done-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-term);
+  color: var(--fg-muted);
+}
+.rowtip__done-note {
+  overflow-wrap: anywhere;
 }
 /* Datos desactualizados: texto en el color atenuado (4,5:1) y barra aclarada, sin bajar la opacidad del texto. */
 .rowtip--stale .rowtip__live .pfact__strong {

@@ -22,7 +22,8 @@ const sesion = (extra: Partial<SessionInfo> = {}): SessionInfo => ({
   state: 'idle',
   tracked: true,
   title: 'Un título largo que no cabe en la barra lateral',
-  closed: false,
+  done: null,
+  conversationKey: 'tmux-jdev-x-1-1',
   alive: true,
   updatedAt: AHORA - MIN,
   created: AHORA - 134 * MIN,
@@ -42,6 +43,20 @@ const uso = (extra: Partial<NonNullable<SessionInfo['usage']>> = {}): NonNullabl
   ...extra,
 });
 
+describe('tooltip de una conversación hecha', () => {
+  const hecha = { at: '2026-11-05T15:20:00Z', by: 'user', note: 'Integrada en main' } as const;
+
+  it('dice cuándo y quién la marcó, y lleva su nota', () => {
+    const v = sessionTip(sesion({ done: hecha }), proyecto, Date.parse('2026-11-06T10:00:00Z'));
+    expect(v.done?.note).toBe('Integrada en main');
+    expect(v.done?.line).toMatch(/^Hecha el \d+ nov a las \d\d:\d\d · por ti$/);
+  });
+
+  it('con la marca antigua no hay fecha', () => {
+    expect(sessionTip(sesion({ done: { at: null, by: 'agent', note: null } }), proyecto, AHORA).done).toEqual({ line: 'Hecha · por el agente', note: null });
+  });
+});
+
 describe('sessionTip', () => {
   it('sin statusline solo lleva título, proyecto, lugar y agente', () => {
     const v = sessionTip(sesion(), proyecto, AHORA);
@@ -52,6 +67,7 @@ describe('sessionTip', () => {
       agent: 'Claude',
       live: null,
       activity: null,
+      done: null,
     });
   });
 
@@ -123,7 +139,7 @@ describe('recentTip', () => {
     project: 'fitnessia',
     worktree: '',
     title: 'Conversación anterior con un título largo',
-    closed: false,
+    done: null,
     lastActivity: AHORA - 5 * MIN,
     possiblyOpen: false,
     sizeBytes: 10,
@@ -139,7 +155,14 @@ describe('recentTip', () => {
       agent: 'Claude',
       live: null,
       activity: 'Actividad hace 5 min',
+      done: null,
     });
+  });
+
+  it('una conversación hecha lleva cuándo y quién la marcó, sin nota', () => {
+    const hecha = { at: '2026-11-05T15:20:00Z', by: 'agent', note: null } as const;
+    const r = recentTip(reciente({ done: hecha }), proyecto, Date.parse('2026-11-06T10:00:00Z'));
+    expect(r.done).toEqual({ line: expect.stringMatching(/^Hecha el \d+ nov a las \d\d:\d\d · por el agente$/), note: null });
   });
 
   it('en un worktree muestra su rama, si se conoce', () => {

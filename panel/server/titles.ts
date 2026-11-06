@@ -237,6 +237,20 @@ export async function appendCustomTitle(realPath: string, sessionId: string, tit
   }
 }
 
+/**
+ * Quita la marca antigua «[Closed] » del título guardado de la conversación,
+ * añadiendo un custom-title sin ella. Devuelve si lo hizo; no hace nada si el
+ * título no la lleva o se quedaría vacío.
+ */
+export async function stripClosedMark(reader: TitleReader, realPath: string, sessionId: string): Promise<boolean> {
+  const actual = bestTitle(await reader.readTitles(realPath));
+  if (actual === null) return false;
+  const { title, closed } = parseTitle(actual);
+  if (!closed || title === '') return false;
+  await appendCustomTitle(realPath, sessionId, title);
+  return true;
+}
+
 const AGENT_NAMES: Record<string, string> = {
   claude: 'Claude',
   codex: 'Codex',

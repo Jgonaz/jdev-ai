@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { api } from '../../api.ts';
+import { MARK_DONE_LABEL, REOPEN_LABEL } from '../../lib/done.ts';
 import { attachCommand, isShell } from '../../lib/sessions.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { SessionInfo } from '../../types.ts';
 import type { MenuAction } from '../ContextMenu.tsx';
-import { IconArchive, IconClose, IconCopy, IconExternal, IconPencil, IconStop } from '../Icons.tsx';
-import { Modal } from '../Modal.tsx';
+import { IconArchive, IconCheck, IconClose, IconCopy, IconExternal, IconPencil, IconRestore, IconStop } from '../Icons.tsx';
 import { RenameDialog } from './RenameDialog.tsx';
+import { TerminateDialog } from './TerminateDialog.tsx';
 
 type Dialogo = 'renombrar' | 'terminar' | null;
 
@@ -18,6 +18,8 @@ export type SessionActions = {
   dialogs: ReactNode;
   /** Hay un diálogo abierto. */
   dialogOpen: boolean;
+  /** Hay una acción sin diálogo en curso (marcar como hecha, archivar...): el menú no debe desmontarse hasta que acabe. */
+  busy: boolean;
   copied: boolean;
   /** Fallo de una acción sin diálogo (p. ej. copiar al portapapeles). */
   error: string | null;
@@ -28,17 +30,17 @@ export type SessionActions = {
  * Acciones de una sesión del panel que comparten «Más acciones» y el menú
  * contextual de la barra lateral y de las pestañas: Abrir (solo con `withOpen`
  * y si no está abierta en una pestaña), Renombrar, Copiar comando para
- * adjuntar, Archivar o Desarchivar, Cerrar pestaña (solo si está abierta) y
- * Terminar sesión.
+ * adjuntar, Marcar como hecha o Reabrir (no en las terminales sin agente),
+ * Archivar o Desarchivar, Cerrar pestaña (solo si está abierta) y Terminar
+ * sesión.
  */
 export function useSessionActions(session: SessionInfo, opciones: { withOpen?: boolean; onTabClosed?: () => void } = {}): SessionActions {
   const { closeTab, openSession, workspace } = useWorkspace();
-  const { tmuxSocket, setArchived } = useSessions();
+  const { tmuxSocket, setArchived, setDone } = useSessions();
   const [dialogo, setDialogo] = useState<Dialogo>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [terminando, setTerminando] = useState(false);
-  const [errorTerminar, setErrorTerminar] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const abierta = workspace.tabs.includes(session.name);
 
   const copiar = async () => {
@@ -53,29 +55,25 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
     }
   };
 
-  // Archivar solo aparta la fila: la sesión y su pestaña siguen como estaban.
-  const archivar = async () => {
+  // Una acción de red sin diálogo: mientras dura, `busy` mantiene vivo el menú para que un fallo se avise.
+  const conAviso = async (accion: () => Promise<void>, fallo: string) => {
+    setBusy(true);
     try {
-      await setArchived('session', session.name, !session.archived);
+      await accion();
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo archivar la sesión.');
+      setError(e instanceof Error ? e.message : fallo);
+    } finally {
+      setBusy(false);
     }
   };
 
-  const terminar = async () => {
-    setTerminando(true);
-    setErrorTerminar(null);
-    try {
-      await api.killSession(session.name);
-      closeTab(session.name);
-      setDialogo(null);
-    } catch (e) {
-      setErrorTerminar(e instanceof Error ? e.message : String(e));
-    } finally {
-      setTerminando(false);
-    }
-  };
+  // Archivar solo aparta la fila: la sesión y su pestaña siguen como estaban.
+  const archivar = () => conAviso(() => setArchived('session', session.name, !session.archived), 'No se pudo archivar la sesión.');
+
+  // Marcarla como hecha no termina ni archiva la sesión: solo cambia su estado.
+  const alternarHecha = () =>
+    conAviso(() => setDone(session.conversationKey, session.done ? 'open' : 'done'), 'No se pudo cambiar el estado de la conversación.');
 
   const actions: MenuAction[] = [];
   if (opciones.withOpen && !abierta) {
@@ -90,6 +88,14 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
     { id: 'renombrar', label: 'Renombrar…', icon: <IconPencil size={14} />, onSelect: () => setDialogo('renombrar') },
     { id: 'copiar', label: 'Copiar comando para adjuntar', icon: <IconCopy size={14} />, restoreFocus: true, onSelect: () => void copiar() },
   );
+  if (!isShell(session)) {
+    actions.push({
+      id: 'hecha',
+      label: session.done ? REOPEN_LABEL : MARK_DONE_LABEL,
+      icon: session.done ? <IconRestore size={14} /> : <IconCheck size={14} />,
+      onSelect: () => void alternarHecha(),
+    });
+  }
   actions.push({
     id: 'archivar',
     label: session.archived ? 'Desarchivar' : 'Archivar',
@@ -112,45 +118,15 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
     label: 'Terminar sesión…',
     icon: <IconStop size={14} />,
     danger: true,
-    onSelect: () => {
-      setErrorTerminar(null);
-      setDialogo('terminar');
-    },
+    onSelect: () => setDialogo('terminar'),
   });
 
   const dialogs = (
     <>
       {dialogo === 'renombrar' && <RenameDialog session={session} onClose={() => setDialogo(null)} />}
-      {dialogo === 'terminar' && (
-        <Modal
-          title="Terminar sesión"
-          role="alertdialog"
-          width={460}
-          initialFocus="[data-cancel]"
-          onClose={() => !terminando && setDialogo(null)}
-          footer={
-            <>
-              <button type="button" data-cancel className="btn btn--ghost btn--lg footer-push" onClick={() => setDialogo(null)} disabled={terminando}>
-                Cancelar
-              </button>
-              <button type="button" className="btn btn--danger btn--lg" onClick={() => void terminar()} disabled={terminando}>
-                {terminando ? 'Terminando…' : 'Terminar sesión'}
-              </button>
-            </>
-          }
-        >
-          <p className="confirm-text">
-            Se cerrará la sesión de tmux «{session.title}» y {isShell(session) ? 'la shell y los procesos que se ejecutan en ella' : 'el agente que se ejecuta en ella'}. No se puede deshacer.
-          </p>
-          {errorTerminar && (
-            <p className="form-error" role="alert">
-              {errorTerminar}
-            </p>
-          )}
-        </Modal>
-      )}
+      {dialogo === 'terminar' && <TerminateDialog session={session} onClose={() => setDialogo(null)} />}
     </>
   );
 
-  return { actions, dialogs, dialogOpen: dialogo !== null, copied, error, clearError: () => setError(null) };
+  return { actions, dialogs, dialogOpen: dialogo !== null, busy, copied, error, clearError: () => setError(null) };
 }

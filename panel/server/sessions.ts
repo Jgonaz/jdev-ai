@@ -1,10 +1,12 @@
 import { dirname, join } from 'node:path';
 import type { ArchiveStore } from './archive.ts';
+import { CONVERSATION_MAX_BYTES, isConversationId, isConversationKey, legacyTmuxConversationKey, parseConversation, resolveDone, tmuxConversationKey, writeConversation } from './conversations.ts';
+import type { ConversationEntry, Done } from './conversations.ts';
 import { DirStore } from './dirstore.ts';
 import { claudeConfigDir } from './paths.ts';
 import { StateStore, deriveState, stateByTmuxSession } from './states.ts';
 import type { SessionState } from './states.ts';
-import { CLOSED_MARK, TitleReader, appendCustomTitle, bestTitle, defaultTitle, parseTitle, resolveTranscript } from './titles.ts';
+import { TitleReader, appendCustomTitle, defaultTitle, parseTitle, resolveTranscript } from './titles.ts';
 import { createSession, isPanelSessionName, killSession, listSessions, setSessionTitle } from './tmux.ts';
 import type { CreateOptions, SessionPlan, TmuxConfig } from './tmux.ts';
 import { ACTIVITY_MAX_BYTES, STATUSLINE_MAX_BYTES, accountFrom, deriveActivity, followTargets, parseActivityLog, parseStatusline } from './usage.ts';
@@ -24,7 +26,13 @@ export type SessionInfo = {
   /** true si el agente informa de turnos (hay archivo de estado de Claude). */
   tracked: boolean;
   title: string;
-  closed: boolean;
+  /**
+   * La conversación está hecha: según su estado (bin/session-done o el panel) o, si
+   * no tiene, por la marca antigua `[Closed] ` del título. null si está abierta.
+   */
+  done: Done | null;
+  /** Clave de su estado de conversación: el id de Claude o `tmux-<nombre>-<creación>`. */
+  conversationKey: string;
   alive: boolean;
   /** Milisegundos desde la época del último cambio conocido. */
   updatedAt: number;
@@ -73,6 +81,10 @@ export type SessionServiceOptions = {
   statuslineDir?: string;
   /** Registro de actividad por sesión; por defecto, `activity/` junto a stateDir. */
   activityDir?: string;
+  /** Estado de las conversaciones (hecha o abierta); por defecto, `conversations/` junto a stateDir. */
+  conversationsDir?: string;
+  /** Se invoca cuando cambia el estado de alguna conversación (también las que no están en el panel). */
+  onConversations?: () => void;
   /** Lista de archivadas; sin ella, ninguna sesión lo está. */
   archive?: ArchiveStore;
   /** Directorio de proyectos de Claude (con los transcripts); por defecto, el de CLAUDE_CONFIG_DIR o ~/.claude. */
@@ -96,6 +108,8 @@ export class SessionService {
   private readonly states: StateStore;
   private readonly statuslines: DirStore<Statusline>;
   private readonly activities: DirStore<ActivityEvent[]>;
+  private readonly conversations: DirStore<ConversationEntry>;
+  private readonly conversationsDir: string;
   private readonly titles = new TitleReader();
   private current: SessionInfo[] = [];
   private emitted = '';
@@ -135,6 +149,19 @@ export class SessionService {
       onChange: () => this.schedule(),
       pollMs: opts.stateFallbackMs,
     });
+    this.conversationsDir = opts.conversationsDir ?? join(dirname(opts.stateDir), 'conversations');
+    this.conversations = new DirStore<ConversationEntry>({
+      dir: this.conversationsDir,
+      ext: '.json',
+      maxBytes: CONVERSATION_MAX_BYTES,
+      // El nombre manda y solo valen las claves de conversación.
+      parse: (contenido, _mtimeMs, id) => (isConversationKey(id) ? parseConversation(contenido) : null),
+      onChange: () => {
+        this.schedule();
+        this.opts.onConversations?.();
+      },
+      pollMs: opts.stateFallbackMs,
+    });
   }
 
   get tmux(): TmuxConfig {
@@ -143,7 +170,7 @@ export class SessionService {
 
   async start(): Promise<void> {
     this.stopped = false;
-    await Promise.all([this.states.start(), this.statuslines.start(), this.activities.start()]);
+    await Promise.all([this.states.start(), this.statuslines.start(), this.activities.start(), this.conversations.start()]);
     this.emitted = JSON.stringify(await this.refresh());
     this.emittedAccount = JSON.stringify(this.account);
     this.poll = setInterval(() => this.schedule(), this.opts.pollMs ?? 2000);
@@ -155,6 +182,7 @@ export class SessionService {
     this.states.stop();
     this.statuslines.stop();
     this.activities.stop();
+    this.conversations.stop();
     if (this.poll) clearInterval(this.poll);
     if (this.timer) clearTimeout(this.timer);
     this.poll = this.timer = null;
@@ -182,6 +210,30 @@ export class SessionService {
       cwd: file.cwd,
       targets: followTargets(this.activities.snapshot().get(file.sessionId) ?? [], this.restarted.get(file.sessionId) ?? 0),
     };
+  }
+
+  /** Estado de las conversaciones (última lectura), por clave. */
+  conversationStates(): ReadonlyMap<string, ConversationEntry> {
+    return this.conversations.snapshot();
+  }
+
+  /** Ruta del transcript que un archivo de estado de Claude asocia a la conversación `id`, si consta. */
+  transcriptOf(id: string): string | null {
+    if (!isConversationId(id)) return null;
+    return this.states.snapshot().find((f) => f.sessionId === id && f.transcriptPath !== '')?.transcriptPath ?? null;
+  }
+
+  /**
+   * Marca la conversación `clave` como hecha o abierta, por la persona, y avisa
+   * del cambio. `note` solo se guarda al marcarla como hecha. La clave ya viene
+   * validada y comprobada contra las conocidas.
+   */
+  async setConversation(clave: string, state: 'done' | 'open', note: string | null): Promise<ConversationEntry> {
+    const entry: ConversationEntry = { state, at: new Date().toISOString(), by: 'user', note: state === 'done' ? note : null };
+    await writeConversation(this.conversationsDir, clave, entry);
+    await this.conversations.refresh();
+    this.emitIfChanged(await this.refresh());
+    return entry;
   }
 
   /** Límites de la cuenta de la statusline más reciente de una sesión del panel; null si no se conocen. */
@@ -238,7 +290,7 @@ export class SessionService {
    * Cambia el título de una sesión. Con transcript de Claude (archivo de estado
    * con transcript_path dentro del directorio de proyectos de Claude) añade una
    * línea custom-title, que es de donde Claude y bin/session-title leen el
-   * título, y conserva la marca «[Closed] » si la tenía. Sin transcript (otros
+   * título. El título no lleva el estado de la conversación. Sin transcript (otros
    * agentes, o Claude sin estado aún) lo guarda en la opción @jdev_title de la
    * sesión de tmux. `title` ya viene validado. Devuelve false si la sesión no
    * existe; lanza TranscriptRejected si su transcript queda fuera de Claude.
@@ -252,9 +304,7 @@ export class SessionService {
       ? await resolveTranscript(file.transcriptPath, this.opts.claudeProjectsDir ?? join(claudeConfigDir(), 'projects'))
       : null;
     if (file && real) {
-      const actual = bestTitle(await this.titles.readTitles(real));
-      const cerrada = actual !== null && parseTitle(actual).closed;
-      await appendCustomTitle(real, file.sessionId, cerrada ? `${CLOSED_MARK}${title}` : title);
+      await appendCustomTitle(real, file.sessionId, title);
     } else if (!(await setSessionTitle(this.opts.tmux, name, title))) {
       return false;
     }
@@ -325,7 +375,7 @@ export class SessionService {
     }
     // Solo con una lista de tmux leída con éxito: un fallo no debe vaciar lo archivado.
     this.opts.archive?.pruneSessions(sesiones);
-    await Promise.all([this.states.refresh(), this.statuslines.refresh(), this.activities.refresh()]);
+    await Promise.all([this.states.refresh(), this.statuslines.refresh(), this.activities.refresh(), this.conversations.refresh()]);
     const estados = stateByTmuxSession(this.states.snapshot(), sesiones);
     // Si dentro de una terminal sin agente se lanza un agente, sus hooks dejarían
     // un estado atribuido a esa sesión: no se tiene en cuenta (sería un «te espera»).
@@ -347,6 +397,11 @@ export class SessionService {
       const titulos = file?.transcriptPath ? await this.titles.readTitles(file.transcriptPath) : { custom: null, ai: null };
       const bruto = titulos.custom ?? (s.title !== '' ? s.title : null) ?? titulos.ai;
       const parsed = bruto === null ? null : parseTitle(bruto);
+      const claveClaude = file && isConversationKey(file.sessionId) ? file.sessionId : null;
+      const clave = claveClaude ?? tmuxConversationKey(s.name, s.created);
+      const conversaciones = this.conversations.snapshot();
+      // Una clave de tmux con la creación en segundos (formato anterior) sigue valiendo si no hay otra más nueva.
+      const entrada = conversaciones.get(clave) ?? (claveClaude ? undefined : conversaciones.get(legacyTmuxConversationKey(s.name, s.created)));
       const proyecto = proyectos.find((p) => p.id === s.project);
       const branch = s.worktree
         ? (proyecto?.worktrees.find((w) => w.name === s.worktree)?.branch ?? null)
@@ -360,7 +415,8 @@ export class SessionService {
         state: deriveState(file, s.alive),
         tracked: file !== undefined,
         title: parsed && parsed.title !== '' ? parsed.title : defaultTitle(s.project, s.agent, s.created),
-        closed: parsed?.closed ?? false,
+        done: resolveDone(entrada, parsed?.closed ?? false),
+        conversationKey: clave,
         alive: s.alive,
         updatedAt: lastChange(s.created, file),
         created: s.created,

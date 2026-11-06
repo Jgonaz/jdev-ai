@@ -13,7 +13,8 @@ No añadas una regla compartida hasta que exista una necesidad real.
 - [`surface.md`](surface.md): cómo mostrar y recibir imágenes según trabajes en el panel gráfico o en una terminal.
 - [`design.md`](design.md): cuándo proponer cerrar los diseños en Claude Design antes de implementar interfaz.
 - [`worktrees.md`](worktrees.md): cuándo aislar un cambio grande en un worktree y cómo integrarlo.
-- [`session-title.md`](session-title.md): título de la sesión en `/resume` y marca `[Closed]` tras integrar.
+- [`session-title.md`](session-title.md): título de la sesión en `/resume`.
+- [`session-done.md`](session-done.md): cuándo y cómo marcar una conversación como hecha o reabrirla.
 - [`closed-goal.md`](closed-goal.md): qué implica «Continúa hasta dar esta conversación por closed» y qué autoriza.
 
 ## Dónde va cada cosa

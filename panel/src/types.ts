@@ -3,6 +3,9 @@ export type { Settings, ProjectOverride } from '../shared/settings-schema.ts';
 
 export type SessionState = 'waiting' | 'working' | 'idle' | 'ended' | 'alive';
 
+/** Conversación marcada como hecha: cuándo (null si solo consta la marca antigua del título), quién y la nota. */
+export type Done = { at: string | null; by: 'user' | 'agent'; note: string | null };
+
 export type SessionInfo = {
   name: string;
   project: string;
@@ -14,7 +17,10 @@ export type SessionInfo = {
   /** true si el agente informa de turnos (Claude con hooks). */
   tracked: boolean;
   title: string;
-  closed: boolean;
+  /** Hecha según su estado de conversación o la marca antigua `[Closed] ` del título; null si está abierta. */
+  done: Done | null;
+  /** Clave de su estado de conversación (PUT /api/conversations/:clave/state). */
+  conversationKey: string;
   alive: boolean;
   updatedAt: number;
   created: number;
@@ -105,7 +111,8 @@ export type RecentSession = {
   /** Nombre del worktree ('' en el checkout principal). */
   worktree: string;
   title: string;
-  closed: boolean;
+  /** Hecha según su estado de conversación o la marca antigua `[Closed] ` del título; null si está abierta. */
+  done: Done | null;
   /** Milisegundos desde la época de la última modificación del transcript. */
   lastActivity: number;
   /** Actividad en los últimos minutos: puede seguir abierta en otra ventana. */
@@ -122,7 +129,7 @@ export type ArchiveList = { sessions: { name: string; created: number }[]; conve
  * Estado visual de una sesión: lo que se pinta en luces, chips y textos. `shell` es
  * una terminal sin agente viva: en lugar de luz lleva un icono de terminal.
  */
-export type VisualState = 'waiting' | 'working' | 'idle' | 'closed' | 'alive' | 'ended' | 'shell';
+export type VisualState = 'waiting' | 'working' | 'idle' | 'done' | 'alive' | 'ended' | 'shell';
 
 // ------------------------------------------------------------------ Backlog
 

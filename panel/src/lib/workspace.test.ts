@@ -166,14 +166,25 @@ describe('persistencia', () => {
     };
     expect(loadWorkspace(roto)).toBeNull();
     expect(() => saveWorkspace(EMPTY_WORKSPACE, roto)).not.toThrow();
-    expect(loadUiPrefs(roto)).toEqual({ contextOpen: true, hideClosed: false });
+    expect(loadUiPrefs(roto)).toEqual({ contextOpen: true, hideDone: false });
   });
 
   it('preferencias de interfaz', () => {
-    saveUiPrefs({ contextOpen: false, hideClosed: true });
-    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideClosed: true });
+    saveUiPrefs({ contextOpen: false, hideDone: true });
+    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true });
     localStorage.setItem('jdev-panel:ui', '{"contextOpen":"sí"}');
-    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideClosed: false });
+    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false });
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('migra la preferencia anterior hideClosed a hideDone', () => {
+    localStorage.setItem('jdev-panel:ui', '{"contextOpen":false,"hideClosed":true}');
+    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true });
+    // La nueva manda si conviven.
+    localStorage.setItem('jdev-panel:ui', '{"contextOpen":true,"hideClosed":true,"hideDone":false}');
+    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false });
+    // Al guardar desaparece el nombre anterior.
+    saveUiPrefs(loadUiPrefs());
+    expect(localStorage.getItem('jdev-panel:ui')).toBe('{"contextOpen":true,"hideDone":false}');
   });
 });

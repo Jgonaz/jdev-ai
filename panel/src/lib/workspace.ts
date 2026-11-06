@@ -149,16 +149,18 @@ export function safeStorage(): Storage | null {
 }
 
 /** Preferencias de interfaz que se recuerdan en este navegador. */
-export type UiPrefs = { contextOpen: boolean; hideClosed: boolean };
+export type UiPrefs = { contextOpen: boolean; hideDone: boolean };
 const UI_KEY = 'jdev-panel:ui';
 
 export function loadUiPrefs(storage: Pick<Storage, 'getItem'> | null = safeStorage()): UiPrefs {
-  const defecto: UiPrefs = { contextOpen: true, hideClosed: false };
+  const defecto: UiPrefs = { contextOpen: true, hideDone: false };
   try {
-    const v = JSON.parse(storage?.getItem(UI_KEY) ?? 'null') as Partial<UiPrefs> | null;
+    // `hideClosed` es el nombre anterior de `hideDone` («Ocultar cerradas»): se migra al leer.
+    const v = JSON.parse(storage?.getItem(UI_KEY) ?? 'null') as (Partial<UiPrefs> & { hideClosed?: unknown }) | null;
+    const oculta = typeof v?.hideDone === 'boolean' ? v.hideDone : typeof v?.hideClosed === 'boolean' ? v.hideClosed : defecto.hideDone;
     return {
       contextOpen: typeof v?.contextOpen === 'boolean' ? v.contextOpen : defecto.contextOpen,
-      hideClosed: typeof v?.hideClosed === 'boolean' ? v.hideClosed : defecto.hideClosed,
+      hideDone: oculta,
     };
   } catch {
     return defecto;
