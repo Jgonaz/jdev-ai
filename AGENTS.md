@@ -37,6 +37,10 @@
   ajustes internos no lo requieren salvo que el proyecto diga otra cosa. No
   crees un changelog si el proyecto no lo contempla.
 - Al acabar cada iteración, termina la respuesta con `Siguiente paso recomendado: ...`.
+  Si ya no queda trabajo del agente (como mucho, que la persona pruebe algo o
+  pasos que no dependen de trabajo del agente), di antes lo que le quede a la
+  persona, si hay algo, y termina con esta línea en lugar de la anterior:
+  `✅ Nada pendiente: puedes cerrar esta terminal.`
 
 ## Procesos
 
