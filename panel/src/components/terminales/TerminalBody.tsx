@@ -10,6 +10,7 @@ import { terminalMayTakeFocus } from '../../lib/focus.ts';
 import { HOVER_DELAY_MS, rowBounds } from '../../lib/imageHover.ts';
 import { expandHome, scanBufferImagePaths } from '../../lib/imageLinks.ts';
 import { translateTerminalKey } from '../../lib/terminalKeys.ts';
+import { decodeOsc52 } from '../../lib/osc52.ts';
 import { useImages } from '../../state/ImagesContext.tsx';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
@@ -133,6 +134,13 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
         },
       }),
     );
+    // Lo que tmux copia (selección con el ratón) llega por OSC 52: va al portapapeles del sistema.
+    // Sin contexto seguro (panel por http fuera de localhost) no hay API de portapapeles.
+    const dPortapapeles = t.parser.registerOscHandler(52, (datos) => {
+      const texto = decodeOsc52(datos);
+      if (texto !== null) navigator.clipboard?.writeText(texto).catch(() => undefined);
+      return true;
+    });
     t.open(contenedor);
     const abridor = createAutoOpener(t, {
       isEnabled: () => ajustes.current.terminal.autoOpenImages,
@@ -313,6 +321,7 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
       dBinary.dispose();
       dResize.dispose();
       dLinks.dispose();
+      dPortapapeles.dispose();
       ws?.close();
       t.dispose();
       term.current = null;

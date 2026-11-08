@@ -423,7 +423,9 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
 - **Pestañas.** Cada pestaña de terminal lleva una «x» (siempre en la activa;
   en las demás, al pasar el ratón o al enfocarlas) y el clic central también la
   cierra: solo quita la terminal del panel, la sesión sigue viva en tmux y en la
-  barra lateral. La siguiente pestaña pasa a ser la activa.
+  barra lateral. La siguiente pestaña pasa a ser la activa. Para reordenarlas,
+  arrastra una pestaña con el ratón a izquierda o derecha (pasa a ser la activa);
+  el orden se guarda en el navegador.
 - **Menú contextual y renombrar.** El clic derecho (o la tecla Menú / Mayús+F10)
   sobre una sesión de la barra lateral o sobre una pestaña abre un menú con
   «Abrir» (solo en la barra lateral, si no está en una pestaña), «Renombrar…»,
@@ -459,7 +461,11 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   y cada una tiene su propia cabecera y ruta: `#/backlog/<id>[/<elemento>]`,
   `#/worktrees/<id>` y `#/guias/<id>[/<guía>]`. Los enlaces antiguos
   `#/proyectos/…` se redirigen a las nuevas.
-- **Seleccionar texto.** Con el ratón de tmux activo, usa Mayús + arrastrar.
+- **Seleccionar y copiar texto.** Arrastra, o haz doble o triple clic: al soltar,
+  la selección se queda marcada y se copia al portapapeles (tmux la envía por
+  OSC 52). Escape o `q` salen de la selección para volver a escribir. Mayús +
+  arrastrar hace una selección del navegador, solo de lo visible. El clic
+  derecho abre solo el menú del navegador.
 - **Inicio.** Es la pantalla al abrir el panel (en Ajustes > Apariencia >
   Inicio puedes elegir Terminales). Saluda según la hora con «Tu nombre» o, si
   está vacío, con el primer nombre de `git config user.name`, y resume

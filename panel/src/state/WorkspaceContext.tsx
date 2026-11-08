@@ -29,6 +29,8 @@ type WorkspaceValue = {
   activate: (name: string) => void;
   closeTab: (name: string) => void;
   move: (delta: number) => void;
+  /** Lleva una pestaña a otra posición (arrastrándola en la barra). */
+  reorder: (name: string, to: number) => void;
   setLayout: (layout: Layout) => void;
   cycleLayout: () => void;
   /** Algún diálogo modal (nueva sesión o retomar) está abierto. */
@@ -133,6 +135,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'close', name });
   }, []);
   const move = useCallback((delta: number) => dispatch({ type: 'move', delta }), []);
+  const reorder = useCallback((name: string, to: number) => dispatch({ type: 'reorder', name, to }), []);
   const setLayout = useCallback((layout: Layout) => dispatch({ type: 'layout', layout }), []);
   const cycleLayout = useCallback(() => dispatch({ type: 'cycleLayout' }), []);
   const openDialog = useCallback((init?: NewSessionInit) => {
@@ -177,6 +180,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activate,
       closeTab,
       move,
+      reorder,
       setLayout,
       cycleLayout,
       dialogOpen,
@@ -205,6 +209,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activate,
       closeTab,
       move,
+      reorder,
       setLayout,
       cycleLayout,
       dialogOpen,

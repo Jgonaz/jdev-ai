@@ -50,6 +50,20 @@ describe('espacio de trabajo', () => {
     expect(visibleTabs(w)).toEqual(['b', 'c']);
   });
 
+  it('reordenar lleva la pestaña a la posición pedida y mantiene la activa a la vista', () => {
+    let w = aplicar({ ...EMPTY_WORKSPACE, layout: 2 }, ...abrir('a', 'b', 'c', 'd'), { type: 'activate', name: 'a' });
+    w = aplicar(w, { type: 'reorder', name: 'a', to: 2 });
+    expect(w.tabs).toEqual(['b', 'c', 'a', 'd']);
+    expect(visibleTabs(w)).toContain('a');
+    w = aplicar(w, { type: 'reorder', name: 'd', to: -3 });
+    expect(w.tabs).toEqual(['d', 'b', 'c', 'a']);
+    w = aplicar(w, { type: 'reorder', name: 'b', to: 99 });
+    expect(w.tabs).toEqual(['d', 'c', 'a', 'b']);
+    // Sin cambio o con una pestaña que no existe, el estado es el mismo objeto.
+    expect(aplicar(w, { type: 'reorder', name: 'd', to: 0 })).toBe(w);
+    expect(aplicar(w, { type: 'reorder', name: 'x', to: 1 })).toBe(w);
+  });
+
   it('cambiar de terminal es circular', () => {
     let w = aplicar(EMPTY_WORKSPACE, ...abrir('a', 'b'));
     w = aplicar(w, { type: 'move', delta: 1 });

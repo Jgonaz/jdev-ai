@@ -27,6 +27,8 @@ export type WorkspaceAction =
   | { type: 'activate'; name: string }
   | { type: 'close'; name: string }
   | { type: 'move'; delta: number }
+  /** Lleva la pestaña a la posición `to` (índice en el orden final), al arrastrarla. */
+  | { type: 'reorder'; name: string; to: number }
   | { type: 'layout'; layout: Layout }
   | { type: 'cycleLayout' }
   | { type: 'prune'; alive: ReadonlySet<string> };
@@ -79,6 +81,14 @@ export function workspaceReducer(w: Workspace, a: WorkspaceAction): Workspace {
       const idx = w.active === null ? 0 : w.tabs.indexOf(w.active);
       const next = (((idx + a.delta) % w.tabs.length) + w.tabs.length) % w.tabs.length;
       return normalize({ ...w, active: w.tabs[next]! });
+    }
+    case 'reorder': {
+      const idx = w.tabs.indexOf(a.name);
+      if (idx < 0) return w;
+      const resto = w.tabs.filter((t) => t !== a.name);
+      const to = Math.max(0, Math.min(Math.trunc(a.to), resto.length));
+      if (to === idx) return w;
+      return normalize({ ...w, tabs: [...resto.slice(0, to), a.name, ...resto.slice(to)] });
     }
     case 'layout':
       return normalize({ ...w, layout: a.layout });

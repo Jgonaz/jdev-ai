@@ -46,7 +46,7 @@ export function TerminalSection() {
       <div className="check-list">
         <CheckRow
           label="Copiar al seleccionar"
-          hint="Con tmux, mantén Mayús al arrastrar para que el navegador haga la selección."
+          hint="Lo que seleccionas arrastrando (lo hace tmux) se copia siempre. Esta opción copia además la selección del navegador, la que haces con Mayús al arrastrar."
           checked={t.copyOnSelect}
           onChange={(v) => update({ terminal: { copyOnSelect: v } })}
         />

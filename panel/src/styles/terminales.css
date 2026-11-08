@@ -214,6 +214,15 @@
   white-space: nowrap;
 }
 .tab > * {
+  /* Al arrastrar una pestaña para reordenarla no se selecciona texto. */
+  user-select: none;
+}
+.tabs--dragging,
+.tabs--dragging .tab {
+  cursor: grabbing;
+}
+.tabs--dragging .tabwrap--active {
+  opacity: 0.75;
   flex: none;
 }
 .tab > .tab__title {

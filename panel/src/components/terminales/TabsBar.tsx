@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
+import { DRAG_THRESHOLD_PX, dropIndex } from '../../lib/tabDrag.ts';
 import { visualState } from '../../lib/sessions.ts';
 import type { Layout } from '../../lib/workspace.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
@@ -36,6 +38,7 @@ function FollowTab({ clave, activa, enPantalla, onClose }: { clave: string; acti
   return (
     <div
       role="presentation"
+      data-tab={clave}
       className={`tabwrap${activa ? ' tabwrap--active' : ''}`}
       // El clic central cierra la pestaña, como en el navegador; sin esto el navegador activa el autodesplazamiento.
       onMouseDown={(e) => e.button === 1 && e.preventDefault()}
@@ -82,7 +85,7 @@ function FollowTab({ clave, activa, enPantalla, onClose }: { clave: string; acti
 
 export function TabsBar() {
   const { sessions, projects } = useSessions();
-  const { workspace, visible, activate, move, closeTab, setLayout, contextVisible, toggleContext, requestTerminalFocus } = useWorkspace();
+  const { workspace, visible, activate, move, reorder, closeTab, setLayout, contextVisible, toggleContext, requestTerminalFocus } = useWorkspace();
   const { viewer, closeViewer } = useImages();
   const lista = useRef<HTMLDivElement>(null);
   const { menu, onContextMenu, onKeyDown } = useSessionMenu({ onTabClosed: focusActiveTabSoon });
@@ -95,6 +98,56 @@ export function TabsBar() {
     sel.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
     if (lista.current?.contains(document.activeElement)) sel.focus({ preventScroll: true });
   }, [workspace.active, workspace.tabs.length]);
+
+  // Arrastre con el ratón para reordenar: el clic normal sigue activando la pestaña
+  // hasta que el puntero se mueve DRAG_THRESHOLD_PX. Solo ratón: en táctil el gesto
+  // horizontal desplaza la lista de pestañas.
+  const arrastre = useRef<{ name: string; x0: number; id: number; activo: boolean } | null>(null);
+  const suprimirClic = useRef(false);
+  const alPulsar = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || e.pointerType !== 'mouse') return;
+    const objetivo = e.target as HTMLElement;
+    if (objetivo.closest('.tab__close')) return;
+    const name = objetivo.closest<HTMLElement>('.tabwrap[data-tab]')?.dataset.tab;
+    if (name) arrastre.current = { name, x0: e.clientX, id: e.pointerId, activo: false };
+  };
+  const alMover = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const a = arrastre.current;
+    const el = lista.current;
+    if (!a || !el || e.pointerId !== a.id) return;
+    if (!a.activo) {
+      if (Math.abs(e.clientX - a.x0) < DRAG_THRESHOLD_PX) return;
+      a.activo = true;
+      // Capturado, el puntero sigue mandando a la lista aunque salga de ella.
+      el.setPointerCapture(e.pointerId);
+      el.classList.add('tabs--dragging');
+      // Como en el navegador, la pestaña que se arrastra pasa a ser la activa.
+      activate(a.name);
+    }
+    const centros = [...el.querySelectorAll<HTMLElement>('.tabwrap[data-tab]')]
+      .filter((t) => t.dataset.tab !== a.name)
+      .map((t) => {
+        const r = t.getBoundingClientRect();
+        return r.left + r.width / 2;
+      });
+    reorder(a.name, dropIndex(e.clientX, centros));
+    // Cerca de un borde, la lista se desplaza para llegar a las pestañas ocultas.
+    const caja = el.getBoundingClientRect();
+    if (e.clientX < caja.left + 24) el.scrollLeft -= 12;
+    else if (e.clientX > caja.right - 24) el.scrollLeft += 12;
+  };
+  const alSoltar = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const a = arrastre.current;
+    if (!a || e.pointerId !== a.id) return;
+    arrastre.current = null;
+    if (!a.activo) return;
+    lista.current?.classList.remove('tabs--dragging');
+    if (lista.current?.hasPointerCapture(e.pointerId)) lista.current.releasePointerCapture(e.pointerId);
+    // El clic que sigue a soltar no debe contar como clic en la pestaña.
+    suprimirClic.current = true;
+    window.setTimeout(() => (suprimirClic.current = false), 0);
+    focusActiveTabSoon();
+  };
 
   // Cierra la pestaña en el panel (la sesión sigue viva en tmux) y deja el foco en la pestaña activa.
   const cerrar = (name: string) => {
@@ -109,6 +162,15 @@ export function TabsBar() {
         className="tabs"
         role="tablist"
         aria-label="Terminales abiertas"
+        onPointerDown={alPulsar}
+        onPointerMove={alMover}
+        onPointerUp={alSoltar}
+        onPointerCancel={alSoltar}
+        onClickCapture={(e) => {
+          if (!suprimirClic.current) return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         onKeyDown={(e) => {
           // Flechas dentro de la lista de pestañas (sin Ctrl+Alt, que es el atajo global).
           if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -132,6 +194,7 @@ export function TabsBar() {
             <div
               key={name}
               role="presentation"
+              data-tab={name}
               className={`tabwrap${activa ? ' tabwrap--active' : ''}`}
               onContextMenu={(e) => onContextMenu(e, s, e.currentTarget.querySelector<HTMLElement>('.tab'))}
               onKeyDown={(e) => onKeyDown(e, s, e.currentTarget.querySelector<HTMLElement>('.tab'))}
