@@ -41,6 +41,12 @@
   pasos que no dependen de trabajo del agente), di antes lo que le quede a la
   persona, si hay algo, y termina con esta línea en lugar de la anterior:
   `✅ Nada pendiente: puedes cerrar esta terminal.`
+  Úsala solo si, en lo que ha tocado esta conversación, no hay cambios sin
+  commit ni commits sin subir, ningún worktree está sin integrar o sin borrar,
+  ningún proceso ni subagente lanzado por ti sigue en marcha y el historial
+  está registrado si tocaba. Si algo de eso queda y necesita el visto bueno de
+  la persona (por ejemplo, commit y push), es el siguiente paso recomendado.
+  Los cambios locales ajenos a la conversación no cuentan.
 
 ## Procesos
 
