@@ -577,6 +577,45 @@ export async function scrollPane(cfg: TmuxConfig, name: string, peticion: Scroll
   return paneScroll(cfg, name);
 }
 
+// ------------------------------------------------------- Salida de copy-mode
+
+// Tras seleccionar con el ratón, la terminal sigue en copy-mode
+// (copy-pipe-no-clear en panel/tmux.conf) y, si ya está abajo del todo, nada la
+// saca: lo que se escribe se lo queda copy-mode y la terminal parece congelada.
+// El servidor del panel la saca antes de pasar a la aplicación lo que se teclea.
+
+/**
+ * Qué supone para copy-mode un trozo de entrada de la terminal del panel:
+ * - `enter`: puede entrar en copy-mode (ratón o Mayús+RePág).
+ * - `type`: es escritura para la aplicación; si hay copy-mode, se cancela antes.
+ * - `keep`: se la queda tmux tal cual. Eventos de foco, Mayús+AvPág y las teclas
+ *   con las que se sale a mano (Escape) o se copia por costumbre (Ctrl+C): si
+ *   llegaran a la aplicación, Claude Code interrumpiría lo que está haciendo.
+ */
+export type CopyModeInput = 'enter' | 'type' | 'keep';
+
+// Informes de ratón SGR (\e[<b;x;yM/m) o X10 (\e[M + 3 bytes); pueden venir varios juntos.
+const MOUSE_RE = /^(?:\x1b\[<[0-9;]*[Mm]|\x1b\[M[\s\S]{3})+$/;
+const SHIFT_PGUP = '\x1b[5;2~';
+const KEEP = new Set(['\x1b[I', '\x1b[O', '\x1b[6;2~', '\x1b', '\x03']);
+
+export function classifyCopyModeInput(datos: string): CopyModeInput {
+  if (datos === '' || KEEP.has(datos)) return 'keep';
+  if (datos === SHIFT_PGUP || MOUSE_RE.test(datos)) return 'enter';
+  return 'type';
+}
+
+/** Saca de copy-mode la terminal de la sesión si está en él; si no, no hace nada. */
+export async function leaveCopyMode(cfg: TmuxConfig, name: string): Promise<void> {
+  if (!isPanelSessionName(name)) return;
+  const t = `=${name}:`;
+  try {
+    await runTmux(cfg, ['if-shell', '-F', '-t', t, '#{pane_in_mode}', `send-keys -X -t '${t}' cancel`]);
+  } catch (e) {
+    if (!noSession(e)) throw e;
+  }
+}
+
 function sanitizeProject(project: string): string {
   const s = project
     .toLowerCase()

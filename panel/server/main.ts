@@ -38,11 +38,13 @@ import {
   SessionInputError,
   TmuxError,
   attachCommand,
+  classifyCopyModeInput,
   isPanelSessionName,
   checkScrollRequest,
   paneCurrentPath,
   paneScroll,
   scrollPane,
+  leaveCopyMode,
   planSession,
   sessionExists,
   tmuxConfig,
@@ -233,6 +235,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const wss = new WebSocketServer({ noServer: true });
   const clientes = new Set<WebSocket>();
   const terminales = new Set<WebSocket>();
+  // Sesiones que pueden estar en copy-mode (ratón, Mayús+RePág o la barra de
+  // scroll): antes de escribir en ellas se cancela (ver leaveCopyMode). Así no se
+  // consulta a tmux con cada tecla.
+  const posibleCopyMode = new Set<string>();
 
   const archivo = new ArchiveStore(opts.configDir);
 
@@ -551,6 +557,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
           sendJson(res, 400, { error: e.message });
           return;
         }
+        posibleCopyMode.add(nombre);
         estado = await scrollPane(tmux, nombre, peticion);
       }
       if (estado === null) {
@@ -1344,6 +1351,27 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         terminales.delete(ws);
         if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'terminal cerrada');
       });
+      // Las escrituras van en cadena: si hay que salir de copy-mode, lo que se
+      // teclea mientras tanto no adelanta a la tecla que espera.
+      let cola: Promise<void> = Promise.resolve();
+      const escribir = (entrada: string | Buffer) => {
+        // latin1: un byte por carácter, para reconocer secuencias sin decodificar UTF-8.
+        const tipo = classifyCopyModeInput(typeof entrada === 'string' ? entrada : entrada.toString('latin1'));
+        if (tipo === 'enter') posibleCopyMode.add(nombre);
+        if (tipo === 'type' && posibleCopyMode.has(nombre)) {
+          posibleCopyMode.delete(nombre);
+          cola = cola.then(() =>
+            leaveCopyMode(tmux, nombre).catch((e: unknown) => console.error('No se pudo salir de copy-mode:', e)),
+          );
+        }
+        cola = cola.then(() => {
+          try {
+            pty.write(entrada);
+          } catch {
+            // El pty ya se cerró.
+          }
+        });
+      };
       ws.on('message', (datos: Buffer, binario: boolean) => {
         if (!binario) {
           const texto = datos.toString('utf8');
@@ -1361,10 +1389,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
               // No es JSON: es entrada normal.
             }
           }
-          pty.write(texto);
+          escribir(texto);
           return;
         }
-        pty.write(datos);
+        escribir(datos);
       });
       const cerrar = () => {
         terminales.delete(ws);

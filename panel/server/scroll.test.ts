@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { WebSocket } from 'ws';
 import { startServer } from './main.ts';
 import type { RunningServer } from './main.ts';
 import type { Project } from './projects.ts';
@@ -10,8 +11,10 @@ import {
   MAX_SCROLL_LINE,
   SessionInputError,
   checkScrollRequest,
+  classifyCopyModeInput,
   createSession,
   killServer,
+  leaveCopyMode,
   paneScroll,
   planSession,
   scrollPane,
@@ -22,6 +25,25 @@ import type { TmuxConfig } from './tmux.ts';
 vi.setConfig({ testTimeout: 30000 });
 
 const HARNESS = resolve(import.meta.dirname, '..', '..');
+
+describe('classifyCopyModeInput', () => {
+  it('el ratón y Mayús+RePág pueden entrar en copy-mode', () => {
+    expect(classifyCopyModeInput('\x1b[<0;10;5M')).toBe('enter');
+    expect(classifyCopyModeInput('\x1b[<32;11;5M\x1b[<32;12;5M\x1b[<0;12;5m')).toBe('enter');
+    expect(classifyCopyModeInput('\x1b[M !!')).toBe('enter');
+    expect(classifyCopyModeInput('\x1b[5;2~')).toBe('enter');
+  });
+
+  it('el foco, Mayús+AvPág, Escape y Ctrl+C se los queda tmux', () => {
+    for (const d of ['', '\x1b[I', '\x1b[O', '\x1b[6;2~', '\x1b', '\x03']) expect(classifyCopyModeInput(d)).toBe('keep');
+  });
+
+  it('el resto es escritura para la aplicación', () => {
+    for (const d of ['a', 'hola', '\r', '\x7f', '\x1b[A', 'ñ', 'texto pegado\nen dos líneas', '\x1bb']) {
+      expect(classifyCopyModeInput(d)).toBe('type');
+    }
+  });
+});
 
 describe('checkScrollRequest', () => {
   it('acepta las acciones sin línea y «line» con un entero acotado', () => {
@@ -191,6 +213,40 @@ describe('scroll del historial con un tmux aislado', () => {
     expect(pantalla).toMatch(/033\s+\[\s+5\s+~\s+033\s+\[\s+6\s+~/);
     expect((await paneScroll(cfg, nombre))!.alternate).toBe(false);
     tmux('kill-session', '-t', `=${n}`);
+  });
+
+  it('leaveCopyMode sale de copy-mode y, fuera de él o sin sesión, no hace nada', async () => {
+    await scrollPane(cfg, nombre, { action: 'page-up' });
+    expect((await paneScroll(cfg, nombre))!.inMode).toBe(true);
+    await leaveCopyMode(cfg, nombre);
+    expect((await paneScroll(cfg, nombre))!.inMode).toBe(false);
+    await leaveCopyMode(cfg, nombre);
+    await leaveCopyMode(cfg, 'jdev-nada-9');
+    expect((await paneScroll(cfg, nombre))!.inMode).toBe(false);
+  });
+
+  it('escribir en la terminal del panel saca de copy-mode y la tecla llega a la aplicación', async () => {
+    expect((await post(nombre, { action: 'page-up' })).status).toBe(200);
+    expect((await paneScroll(cfg, nombre))!.inMode).toBe(true);
+    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/ws/term/${nombre}?cols=80&rows=24`, {
+      headers: { Authorization: `Bearer ${token}`, Origin: `http://localhost:${srv.port}` },
+    });
+    await new Promise<void>((ok, ko) => {
+      ws.once('open', () => ok());
+      ws.once('error', ko);
+    });
+    try {
+      ws.send(Buffer.from('zqxj'));
+      let pantalla = '';
+      for (let i = 0; i < 100 && !pantalla.includes('zqxj'); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        pantalla = tmux('capture-pane', '-p', '-t', `=${nombre}:`);
+      }
+      expect(pantalla).toContain('zqxj');
+      expect((await paneScroll(cfg, nombre))!.inMode).toBe(false);
+    } finally {
+      ws.close();
+    }
   });
 
   describe('API', () => {
