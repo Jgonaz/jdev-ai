@@ -58,6 +58,18 @@
 .hdrbtn[aria-expanded='true'] {
   border-color: var(--line-strong);
 }
+/* Botón fantasma de la chuleta de atajos: solo el icono, a la altura de los demás controles. */
+.icon-btn.hdrghost {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius);
+}
+.icon-btn.hdrghost:hover,
+.icon-btn.hdrghost[aria-expanded='true'] {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
 .hdrbtn__name {
   font-weight: 600;
 }

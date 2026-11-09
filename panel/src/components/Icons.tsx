@@ -54,6 +54,12 @@ export const IconTerminal = (p: Props) => (
     <path d="M4 17l6-5-6-5M12 19h8" />
   </Svg>
 );
+export const IconKeyboard = (p: Props) => (
+  <Svg {...p}>
+    <rect x="2.5" y="6" width="19" height="12" rx="2" />
+    <path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8" />
+  </Svg>
+);
 export const IconLock = (p: Props) => (
   <Svg {...p}>
     <rect x="5" y="11" width="14" height="9" rx="2" />

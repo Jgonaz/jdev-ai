@@ -298,12 +298,26 @@
   border-radius: 10px;
   overflow: hidden;
 }
+.shortcuts-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.shortcuts-group__title {
+  margin: 0 0 8px;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
 .shortcuts__row {
   display: flex;
   align-items: center;
   gap: 16px;
   min-height: 44px;
-  padding: 0 14px;
+  padding: 8px 14px;
+  line-height: 1.4;
   border-bottom: 1px solid var(--line-soft);
   background: var(--bg-panel);
 }
@@ -311,9 +325,21 @@
   border-bottom: 0;
 }
 .shortcuts__row dt {
-  flex: 0 0 150px;
+  flex: 0 0 190px;
+}
+/* En pantallas estrechas la tecla va encima de su descripción. */
+@media (max-width: 559.98px) {
+  .shortcuts__row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .shortcuts__row dt {
+    flex: none;
+  }
 }
 .shortcuts kbd {
+  display: inline-block;
   padding: 2px 8px;
   border: 1px solid var(--line-strong);
   border-radius: 4px;

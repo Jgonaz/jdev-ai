@@ -3,6 +3,8 @@
   inset: 0;
   z-index: 100;
   display: grid;
+  /* Columna acotada al viewport: si no, crece con el ancho fijo del diálogo y su max-width no lo limita. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 16px;
   background: var(--overlay);

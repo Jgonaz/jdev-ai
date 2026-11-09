@@ -6,6 +6,7 @@ import { useSessions } from '../state/SessionsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
 import { HeaderAgent } from './HeaderAgent.tsx';
 import { HeaderLimits } from './HeaderLimits.tsx';
+import { HeaderShortcuts } from './HeaderShortcuts.tsx';
 import { IconPlus } from './Icons.tsx';
 import { Logo } from './Logo.tsx';
 import { ProjectsMenu } from './ProjectsMenu.tsx';
@@ -52,6 +53,7 @@ export function Header({ route }: { route: Route | null }) {
               </span>
             </div>
           )}
+          <HeaderShortcuts />
           <button type="button" className="btn btn--accent" aria-label="Nueva sesión" title="Nueva sesión" onClick={() => openDialog()}>
             <IconPlus size={14} />
             <span className="btn__label">Nueva sesión</span>

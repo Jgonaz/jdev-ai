@@ -399,7 +399,9 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   quede `Ctrl+T`, úsalo como aplicación (`bin/panel --app` o la PWA
   instalada); `Ctrl+W` sigue cerrando la ventana. Dentro de la terminal,
   `Ctrl+Retroceso` borra la palabra anterior (envía `Ctrl+W`) y `Ctrl+Supr` la
-  siguiente (envía `Alt+D`), como en bash y Claude Code.
+  siguiente (envía `Alt+D`), como en bash y Claude Code. El botón del teclado
+  de la cabecera, a la izquierda de «Nueva sesión», abre una chuleta con todos
+  los atajos (la misma lista que Ajustes › Atajos de teclado).
 - **Historial de las terminales.** El historial lo tiene tmux, no el navegador:
   la rueda entra en el modo de copia de tmux (5 líneas por muesca) y
   `Mayús+RePág` / `Mayús+AvPág` suben y bajan una página (al llegar abajo se
