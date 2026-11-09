@@ -73,6 +73,12 @@ function InicioFields() {
           onChange={(v) => update({ startScreen: v })}
         />
       </div>
+      <SwitchRow
+        label="Mostrar tu actividad"
+        hint="Estadísticas de Claude Code y Codex en Inicio, calculadas en tu equipo a partir de sus transcripts."
+        checked={settings.inicio?.activity !== false}
+        onChange={(v) => update({ inicio: { activity: v } })}
+      />
     </fieldset>
   );
 }

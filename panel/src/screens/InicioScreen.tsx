@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { IconPlus } from '../components/Icons.tsx';
+import { ActivitySection } from '../components/inicio/ActivitySection.tsx';
 import { TerminateDialog } from '../components/terminales/TerminateDialog.tsx';
 import { Monogram } from '../components/Monogram.tsx';
 import { StatusLight } from '../components/StatusLight.tsx';
@@ -424,6 +425,9 @@ export function InicioScreen({ onGoToTerminal }: { onGoToTerminal: () => void })
                 </p>
               )}
             </section>
+
+            {/* `?.`: un servidor anterior a este ajuste aún no lo envía. */}
+            {settings.inicio?.activity !== false && <ActivitySection />}
 
             <section className="inicio__section" aria-labelledby="h-proyectos">
               <div className="inicio__section-head">

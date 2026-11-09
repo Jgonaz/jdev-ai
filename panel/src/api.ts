@@ -19,6 +19,7 @@ import type {
   Settings,
   WorktreeList,
 } from './types.ts';
+import type { ActivityAgent, ActivityRange, ActivityResponse } from '../shared/activity.ts';
 import type { FollowKind, FollowResponse } from '../shared/follow.ts';
 import type { SettingsPatch } from './lib/settingsPatch.ts';
 import { parseImageHeaders } from './lib/imageZoom.ts';
@@ -123,6 +124,8 @@ export const api = {
     request<GuideContent>(`${projectBase(proyecto)}/guides/content?${new URLSearchParams({ path: ruta }).toString()}`, { signal }),
   worktrees: (proyecto: string, signal?: AbortSignal) => request<WorktreeList>(`${projectBase(proyecto)}/worktrees`, { signal }),
   overview: (signal?: AbortSignal) => request<Overview>('/api/overview', { signal }),
+  activity: (range: ActivityRange, agent: ActivityAgent, signal?: AbortSignal) =>
+    request<ActivityResponse>(`/api/activity?${new URLSearchParams({ range, agent }).toString()}`, { signal }),
   history: (signal?: AbortSignal) => request<{ entries: HistoryEntry[] }>('/api/history', { signal }).then((r) => r.entries),
   historyEntry: (proyecto: string, archivo: string, signal?: AbortSignal) =>
     request<{ entry: HistoryDetail }>(historyBase(proyecto, archivo), { signal }).then((r) => r.entry),

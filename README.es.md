@@ -484,6 +484,20 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   curso y worktrees, el último registro y los accesos a sus terminales, su
   backlog y una sesión nueva; al lado, las últimas entradas del historial.
   Solo lee: no mueve, marca ni cierra nada.
+- **Tu actividad.** En Inicio, entre «Necesita tu atención» y «Proyectos»,
+  resume cuánto has trabajado con Claude Code y Codex: tokens de salida (con
+  entrada y caché), sesiones, respuestas y horas activas frente al periodo
+  anterior, un calendario de respuestas de las últimas 12 semanas (con vista en
+  tabla), tokens por proyecto, reparto por modelo, subagentes y herramientas.
+  Filtra por periodo (esta semana, 30 días, todo) y por agente, y se oculta en
+  Ajustes > Apariencia > Inicio. Se calcula en tu equipo leyendo, solo para
+  eso, `~/.claude/projects/` (con los subagentes; o `CLAUDE_CONFIG_DIR`) y
+  `~/.codex/sessions/` (o `CODEX_HOME`), sin modificarlos; el resumen se guarda
+  en `${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel/activity-index.json`, que se
+  puede borrar sin perder nada. La primera lectura, de gigas, tarda unos
+  segundos y se hace en segundo plano; después solo lee lo nuevo. Las horas
+  activas y el proyecto (por el directorio de trabajo) son aproximaciones, y no
+  hay coste en dinero.
 - **Backlog, Worktrees y Guías.** La pantalla Backlog muestra el backlog de cada proyecto (`docs/backlog/` del
   checkout principal) en columnas por estado, con filtros por tipo y prioridad
   y búsqueda. El detalle de un elemento enseña su resumen, su cabecera y el

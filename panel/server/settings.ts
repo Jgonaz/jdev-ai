@@ -69,6 +69,7 @@ const ESQUEMA: Record<string, Nodo> = {
   personality: {
     grupo: { cursor: booleano, lights: booleano, ascii: booleano, greeting: booleano, grid: booleano },
   },
+  inicio: { grupo: { activity: booleano } },
   notifications: {
     grupo: {
       system: booleano,

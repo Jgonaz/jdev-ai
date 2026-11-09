@@ -64,6 +64,14 @@ describe('ajustes', () => {
     expect('desconocida' in s).toBe(false);
   });
 
+  it('«Mostrar tu actividad» está activado por defecto, se puede apagar y rechaza lo que no es booleano', () => {
+    expect(DEFAULT_SETTINGS.inicio.activity).toBe(true);
+    expect(mergeSettings(DEFAULT_SETTINGS, { inicio: { activity: false } }).inicio.activity).toBe(false);
+    expect(mergeSettings(DEFAULT_SETTINGS, { inicio: { activity: 'no' } }).inicio.activity).toBe(true);
+    // Un archivo guardado antes de existir el ajuste lo recibe activado.
+    expect(mergeSettings(DEFAULT_SETTINGS, { theme: { accent: 'menta' } }).inicio).toEqual({ activity: true });
+  });
+
   it('admite tamaños de terminal con medios puntos y la distribución «last»', () => {
     let s = updateSettings({ sizes: { terminal: 12.5 }, terminal: { initialLayout: 'last' } });
     expect(s.sizes.terminal).toBe(12.5);

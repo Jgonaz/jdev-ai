@@ -40,3 +40,18 @@ export function uploadsDir(env: NodeJS.ProcessEnv = process.env): string {
   const base = xdg && isAbsolute(xdg) ? xdg : join(homedir(), '.cache');
   return join(base, 'jdev-ai', 'panel', 'uploads');
 }
+
+// Carpeta donde bin/panel guarda los resúmenes que puede reconstruir sin perder
+// nada: ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel. Aquí vive el índice de actividad.
+export function panelCacheDir(env: NodeJS.ProcessEnv = process.env): string {
+  const xdg = env.XDG_CACHE_HOME;
+  const base = xdg && isAbsolute(xdg) ? xdg : join(homedir(), '.cache');
+  return join(base, 'jdev-ai', 'panel');
+}
+
+// Directorio de Codex: CODEX_HOME si es una ruta absoluta, y si no ~/.codex.
+// Sus sesiones están en <dir>/sessions/AAAA/MM/DD/rollout-*.jsonl.
+export function codexHome(env: NodeJS.ProcessEnv = process.env): string {
+  const dir = env.CODEX_HOME;
+  return dir && isAbsolute(dir) ? dir : join(homedir(), '.codex');
+}

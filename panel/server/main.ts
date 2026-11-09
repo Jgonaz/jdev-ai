@@ -24,7 +24,11 @@ import { checkNote, isConversationId, isConversationKey, resolveDone } from './c
 import { GuideError, listGuides, readGuide } from './guides.ts';
 import { HistoryError, HistoryStore, historyDirs, historySignature, isHistoryState, toListEntry } from './history.ts';
 import { ImageError, MAX_IMAGE_BYTES, SVG_CSP, defaultImageDirs, openImage } from './images.ts';
-import { claudeConfigDir, configDir, sessionStateDir, uploadsDir } from './paths.ts';
+import { claudeConfigDir, codexHome, configDir, panelCacheDir, sessionStateDir, uploadsDir } from './paths.ts';
+import { ActivityIndex } from './activity-index.ts';
+import { buildActivity } from './activity-query.ts';
+import { ACTIVITY_AGENTS, ACTIVITY_RANGES } from '../shared/activity.ts';
+import type { ActivityAgent, ActivityRange } from '../shared/activity.ts';
 import { buildOverview, readGitName } from './overview.ts';
 import type { Overview } from './overview.ts';
 import { listProjects, worktreeDetails } from './projects.ts';
@@ -106,6 +110,12 @@ export type ServerOptions = {
   claudeConfigDir?: string;
   /** Raíces bajo las que Claude deja `claude-<uid>/` con la salida de sus shells; por defecto /tmp y TMPDIR. Para pruebas. */
   claudeTmpRoots?: string[];
+  /** Directorio de Codex (con sessions/ dentro); por defecto, CODEX_HOME o ~/.codex. */
+  codexHome?: string;
+  /** Caché del panel (índice de actividad); por defecto, ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel. */
+  cacheDir?: string;
+  /** Empezar a indexar la actividad al arrancar, en segundo plano. Solo lo pide el arranque real: así las pruebas no leen ~/.claude ni escriben en la caché. */
+  indexActivityAtStart?: boolean;
   /** Carpeta de los sonidos de Windows para los avisos; por defecto, /mnt/c/Windows/Media (WSL). */
   windowsMediaDir?: string;
   /** Carpeta de las imágenes adjuntadas; por defecto, ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel/uploads. */
@@ -286,6 +296,48 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     doneOf: (id, legacyClosed) => resolveDone(sesiones.conversationStates().get(id), legacyClosed),
   });
   const titulosReabrir = new TitleReader();
+  // Actividad con los agentes (Inicio › «tu actividad»): índice incremental de
+  // los transcripts de Claude y las sesiones de Codex, solo lectura.
+  const actividad = new ActivityIndex({
+    claudeProjectsDir: projectsDirClaude,
+    codexSessionsDir: join(opts.codexHome ?? codexHome(), 'sessions'),
+    cacheDir: opts.cacheDir ?? panelCacheDir(),
+  });
+  const ACTIVIDAD_FRESCA_MS = 60000;
+  const ACTIVIDAD_ESPERA_MS = 1500;
+  async function activityApi(res: ServerResponse, url: URL, metodo: string): Promise<void> {
+    if (metodo !== 'GET') {
+      res.setHeader('Allow', 'GET');
+      sendJson(res, 405, { error: 'método no permitido' });
+      return;
+    }
+    const rango = url.searchParams.get('range') ?? 'week';
+    const agente = url.searchParams.get('agent') ?? 'all';
+    if (!(ACTIVITY_RANGES as readonly string[]).includes(rango) || !(ACTIVITY_AGENTS as readonly string[]).includes(agente)) {
+      sendJson(res, 400, { error: 'range (week, 30d, all) o agent (all, claude, codex) no válidos' });
+      return;
+    }
+    // Una visita relee lo nuevo si la última pasada tiene más de 60 s. Si ya hay datos
+    // se espera un momento a que acabe; la primera vez no se espera: responde con lo que haya.
+    actividad.start();
+    if (Date.now() - actividad.lastPassAt > ACTIVIDAD_FRESCA_MS) void actividad.refresh();
+    if (actividad.hasData) await actividad.settle(ACTIVIDAD_ESPERA_MS);
+    const proyectos = (await sesiones.projectList()).map((p) => ({ id: p.id, name: p.name, path: p.path, mono: p.mono, color: p.color }));
+    sendJson(
+      res,
+      200,
+      buildActivity({
+        files: actividad.files.values(),
+        projects: proyectos,
+        range: rango as ActivityRange,
+        agent: agente as ActivityAgent,
+        now: new Date(),
+        indexing: actividad.indexing,
+        progress: actividad.progress,
+        updatedAt: actividad.updatedAt,
+      }),
+    );
+  }
 
   // Resumen de Inicio: se calcula al pedirlo y se reutiliza hasta el siguiente
   // aviso de sesiones, backlog o historial (o 10 s, por los cambios de rama y
@@ -1186,6 +1238,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       sendJson(res, 200, await overview());
       return;
     }
+    if (pathname === '/api/activity') {
+      await activityApi(res, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
+      return;
+    }
     if (pathname === '/api/image') {
       await imageApi(res, new URL(req.url ?? '/', 'http://127.0.0.1'), metodo);
       return;
@@ -1410,6 +1466,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   void sesiones.start();
   void vigilanteBacklog.start();
   void vigilanteHistorial.start();
+  if (opts.indexActivityAtStart && readSettings(opts.configDir).inicio.activity) actividad.start();
 
   return new Promise((ok, ko) => {
     server.once('error', ko);
@@ -1427,6 +1484,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
             vigilanteBacklog.stop();
             vigilanteHistorial.stop();
             detenerLimpieza();
+            actividad.stop();
             for (const c of clientes) c.terminate();
             for (const c of terminales) c.terminate();
             wss.close();
@@ -1491,6 +1549,7 @@ async function main(): Promise<void> {
     distDir: join(harnessRoot, 'panel', 'dist'),
     configDir: dir,
     extraOrigins,
+    indexActivityAtStart: true,
   });
 
   if (args.regenerateToken) console.log('Token regenerado.');

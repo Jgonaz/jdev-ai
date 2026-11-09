@@ -67,6 +67,11 @@ export type Settings = {
     autoOpenImages: boolean;
   };
   personality: { cursor: boolean; lights: boolean; ascii: boolean; greeting: boolean; grid: boolean };
+  /** Contenido opcional de Inicio. */
+  inicio: {
+    /** Sección «tu actividad» (estadísticas de Claude y Codex). */
+    activity: boolean;
+  };
   notifications: {
     system: boolean;
     counter: boolean;
@@ -103,6 +108,7 @@ export const DEFAULT_SETTINGS: Settings = {
     autoOpenImages: false,
   },
   personality: { cursor: true, lights: true, ascii: true, greeting: true, grid: true },
+  inicio: { activity: true },
   notifications: { system: false, counter: true, sound: false, onFinish: false, soundWaiting: 'teletipo', soundFinish: 'gota' },
   newSession: { agent: 'claude', location: 'principal' },
   profile: { name: '' },
