@@ -14,6 +14,7 @@ import {
   THEMES,
   isSoundId,
   isValidProfileName,
+  isValidRunCommand,
 } from '../shared/settings-schema.ts';
 import type { ProjectOverride, Settings } from '../shared/settings-schema.ts';
 
@@ -50,6 +51,8 @@ const color: Hoja = (v) => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
 // Nombre del saludo: texto corto de una línea (sin caracteres de control ni
 // separadores de línea), con la misma regla que el cliente; '' vuelve al nombre de Git.
 const nombre: Hoja = isValidProfileName;
+// Comando de arranque de un proyecto: una línea de hasta 500 caracteres.
+const comandoArranque: Hoja = isValidRunCommand;
 
 const ESQUEMA: Record<string, Nodo> = {
   theme: { grupo: { name: enumerado(...THEMES), followSystem: booleano, accent: enumerado(...ACCENTS) } },
@@ -84,7 +87,7 @@ const ESQUEMA: Record<string, Nodo> = {
   profile: { grupo: { name: nombre } },
   startScreen: enumerado(...START_SCREENS),
   port: entero(1024, 65535),
-  projects: { registro: { mono: monograma, color, visible: booleano } },
+  projects: { registro: { mono: monograma, color, visible: booleano, run: comandoArranque } },
 };
 
 type Objeto = Record<string, unknown>;
@@ -125,8 +128,11 @@ function aplicarRegistro(destino: Objeto, parche: unknown, campos: Record<string
     const actual: Objeto = esObjeto(destino[id]) && Object.hasOwn(destino, id) ? { ...destino[id] } : {};
     for (const [campo, valida] of Object.entries(campos)) {
       if (!Object.hasOwn(entrada, campo)) continue;
-      if (entrada[campo] === null) delete actual[campo];
-      else if (valida(entrada[campo])) actual[campo] = entrada[campo];
+      const valor = entrada[campo];
+      // Un comando de arranque vacío o solo de espacios, como null, vuelve a la detección.
+      const vacio = campo === 'run' && typeof valor === 'string' && valor.trim() === '';
+      if (valor === null || vacio) delete actual[campo];
+      else if (valida(valor)) actual[campo] = valor;
     }
     if (Object.keys(actual).length > 0) destino[id] = actual;
     else delete destino[id];

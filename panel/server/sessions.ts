@@ -51,6 +51,8 @@ export type SessionInfo = {
   activity: SessionActivity | null;
   /** La persona la ha archivado: sigue viva, pero se muestra aparte en la barra lateral. */
   archived: boolean;
+  /** Comando de arranque del proyecto si es su terminal de arranque (botón ▶ de la barra lateral); null si no lo es. */
+  run: string | null;
   /** Comando equivalente de bin/agent, si se conoce (solo en la respuesta de creación). */
   command?: string;
 };
@@ -428,6 +430,7 @@ export class SessionService {
             ? deriveActivity(this.activities.snapshot().get(file.sessionId) ?? [], this.restarted.get(file.sessionId) ?? 0)
             : null,
         archived: this.opts.archive?.hasSession(s.name, s.created) ?? false,
+        run: s.agent === SHELL_AGENT && s.run !== '' ? s.run : null,
       });
     }
     lista.sort((a, b) => a.created - b.created || a.name.localeCompare(b.name));

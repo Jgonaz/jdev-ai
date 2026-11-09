@@ -23,6 +23,9 @@ const proyecto = (id: string, visible = true): ProjectInfo => ({
   visible,
   defaultMono: 'XX',
   defaultColor: '#000',
+  runCommand: null,
+  runSource: null,
+  runDetected: null,
 });
 
 const sesion = (name: string, extra: Partial<SessionInfo> = {}): SessionInfo => ({
@@ -43,6 +46,7 @@ const sesion = (name: string, extra: Partial<SessionInfo> = {}): SessionInfo => 
   usage: null,
   activity: null,
   archived: true,
+  run: null,
   ...extra,
 });
 

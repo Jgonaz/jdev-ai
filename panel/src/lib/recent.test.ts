@@ -29,6 +29,9 @@ const proyecto = (id: string, visible = true): ProjectInfo => ({
   visible,
   defaultMono: 'XX',
   defaultColor: '#000',
+  runCommand: null,
+  runSource: null,
+  runDetected: null,
 });
 
 const reciente = (id: string, project: string, extra: Partial<RecentSession> = {}): RecentSession => ({

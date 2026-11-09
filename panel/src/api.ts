@@ -81,6 +81,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(entrada),
     }),
+  /** Arranca el comando de arranque del proyecto en una terminal sin agente, o devuelve la que ya está viva. */
+  startProject: (proyecto: string) =>
+    request<{ session: SessionInfo; created: boolean }>(`${projectBase(proyecto)}/run`, { method: 'POST' }),
+  /** Para el proyecto: Ctrl+C y termina su terminal de arranque. */
+  stopProject: (proyecto: string) =>
+    request<{ stopped: boolean; graceful: boolean }>(`${projectBase(proyecto)}/run`, { method: 'DELETE' }),
   recent: () => request<{ recent: RecentSession[] }>('/api/recent').then((r) => r.recent),
   /** Archiva o desarchiva una sesión del panel (por su nombre de tmux) o una conversación de «Anteriores» (por su id). */
   setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) =>

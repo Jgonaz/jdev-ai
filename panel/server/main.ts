@@ -31,6 +31,7 @@ import { ACTIVITY_AGENTS, ACTIVITY_RANGES } from '../shared/activity.ts';
 import type { ActivityAgent, ActivityRange } from '../shared/activity.ts';
 import { buildOverview, readGitName } from './overview.ts';
 import type { Overview } from './overview.ts';
+import { RunController, RunError } from './runner.ts';
 import { listProjects, worktreeDetails } from './projects.ts';
 import type { Project } from './projects.ts';
 import { RecentIndex, SESSION_ID } from './recent.ts';
@@ -128,6 +129,8 @@ export type ServerOptions = {
   /** Intervalos de relectura (ms), para pruebas. */
   pollMs?: number;
   stateFallbackMs?: number;
+  /** Espera a Ctrl+C al parar el servidor de un proyecto, en ms; por defecto, 5000. Para pruebas. */
+  runStopWaitMs?: number;
   /** Relectura de respaldo del backlog (ms); por defecto 10 s. */
   backlogFallbackMs?: number;
   /** Relectura de respaldo del historial (ms); por defecto 15 s. */
@@ -296,6 +299,15 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     doneOf: (id, legacyClosed) => resolveDone(sesiones.conversationStates().get(id), legacyClosed),
   });
   const titulosReabrir = new TitleReader();
+  const arranque = new RunController({
+    sessions: sesiones,
+    tmux,
+    harnessRoot: opts.harnessRoot,
+    overrides: () => readSettings(opts.configDir).projects,
+    historyLimit: () => readSettings(opts.configDir).terminal.scrollback,
+    stopWaitMs: opts.runStopWaitMs,
+  });
+
   // Actividad con los agentes (Inicio › «tu actividad»): índice incremental de
   // los transcripts de Claude y las sesiones de Codex, solo lectura.
   const actividad = new ActivityIndex({
@@ -748,6 +760,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
 
   // /api/projects/:id/{backlog,guides,worktrees}[/...]: lectura del backlog, las
   // guías y los worktrees del proyecto, y cambio de estado de un elemento.
+  // /api/projects/:id/run (POST, DELETE): arrancar y parar su servidor de desarrollo.
   async function projectApi(
     req: IncomingMessage,
     res: ServerResponse,
@@ -755,7 +768,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     url: URL,
     metodo: string,
   ): Promise<void> {
-    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|worktrees)(?:\/(.*))?$/.exec(pathname);
+    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|worktrees|run)(?:\/(.*))?$/.exec(pathname);
     if (!m) {
       sendJson(res, 404, { error: 'no encontrado' });
       return;
@@ -778,6 +791,37 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     const proyecto = await findProject(id);
     if (!proyecto) {
       sendJson(res, 404, { error: 'El proyecto no existe.' });
+      return;
+    }
+
+    // Arrancar y parar el servidor de desarrollo del proyecto (botón ▶ / ■ de la barra lateral).
+    if (recurso === 'run') {
+      if (resto !== '') {
+        sendJson(res, 404, { error: 'no encontrado' });
+        return;
+      }
+      if (metodo !== 'POST' && metodo !== 'DELETE') {
+        res.setHeader('Allow', 'POST, DELETE');
+        sendJson(res, 405, { error: 'método no permitido' });
+        return;
+      }
+      try {
+        if (metodo === 'POST') {
+          const { session, created } = await arranque.start(proyecto);
+          sendJson(res, created ? 201 : 200, { session, created });
+        } else {
+          sendJson(res, 200, await arranque.stop(proyecto));
+        }
+      } catch (e) {
+        if (e instanceof RunError) {
+          sendJson(res, e.status, { error: e.message });
+          return;
+        }
+        console.error(`Error ${metodo === 'POST' ? 'arrancando' : 'parando'} el proyecto:`, e);
+        sendJson(res, 500, {
+          error: `No se pudo ${metodo === 'POST' ? 'arrancar' : 'parar'} el proyecto${e instanceof TmuxError ? `: ${e.stderr.trim() || e.message}` : ''}`,
+        });
+      }
       return;
     }
 

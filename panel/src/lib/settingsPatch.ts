@@ -8,7 +8,7 @@ const esObjeto = (v: unknown): v is Patch => typeof v === 'object' && v !== null
 export type SettingsPatch = {
   [K in keyof Settings]?: Settings[K] extends object
     ? K extends 'projects'
-      ? Record<string, { mono?: string | null; color?: string | null; visible?: boolean | null } | null>
+      ? Record<string, { mono?: string | null; color?: string | null; visible?: boolean | null; run?: string | null } | null>
       : { [P in keyof Settings[K]]?: Settings[K][P] }
     : Settings[K];
 };

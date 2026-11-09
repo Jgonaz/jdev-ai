@@ -39,6 +39,7 @@ function sesion(name: string, parche: Partial<SessionInfo> = {}): SessionInfo {
     usage: null,
     activity: null,
     archived: false,
+    run: null,
     ...parche,
   };
 }
@@ -56,6 +57,9 @@ function proyecto(id: string, parche: Partial<ProjectInfo> = {}): ProjectInfo {
     visible: true,
     defaultMono: id.slice(0, 2).toUpperCase(),
     defaultColor: '#6fb7ff',
+    runCommand: null,
+    runSource: null,
+    runDetected: null,
     ...parche,
   };
 }

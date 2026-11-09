@@ -32,6 +32,8 @@ export type SessionInfo = {
   activity: SessionActivity | null;
   /** Archivada en la barra lateral: sigue viva, pero se muestra aparte. */
   archived: boolean;
+  /** Comando de arranque si es la terminal de arranque de su proyecto (botón ▶ / ■); null si no lo es. */
+  run: string | null;
 };
 
 export type ContextUsage = {
@@ -88,6 +90,11 @@ export type ProjectInfo = {
   visible: boolean;
   defaultMono: string;
   defaultColor: string;
+  /** Comando de arranque efectivo (el propio de Ajustes o el de package.json); null si no hay. */
+  runCommand: string | null;
+  runSource: 'custom' | 'detected' | null;
+  /** Lo detectado en package.json, aunque haya un comando propio. */
+  runDetected: string | null;
 };
 
 /** `shell` es la «Terminal (sin agente)»: una shell normal en la carpeta del proyecto. */

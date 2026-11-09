@@ -4,6 +4,8 @@ import {
   attachCommand,
   effectiveProject,
   groupSessions,
+  runOf,
+  runSessionOf,
   sessionMeta,
   sessionPlace,
   stateChip,
@@ -31,6 +33,7 @@ function sesion(parche: Partial<SessionInfo> = {}): SessionInfo {
     usage: null,
     activity: null,
     archived: false,
+    run: null,
     ...parche,
   };
 }
@@ -48,6 +51,9 @@ function proyecto(id: string, parche: Partial<ProjectInfo> = {}): ProjectInfo {
     visible: true,
     defaultMono: id.slice(0, 2).toUpperCase(),
     defaultColor: '#6fb7ff',
+    runCommand: null,
+    runSource: null,
+    runDetected: null,
     ...parche,
   };
 }
@@ -164,5 +170,34 @@ describe('effectiveProject', () => {
     const p = proyecto('balanz.io', { mono: 'BZ', color: '#111111' });
     expect(effectiveProject(p, { mono: 'XX', color: '#222222', visible: false })).toMatchObject({ mono: 'XX', color: '#222222', visible: false });
     expect(effectiveProject(p, undefined)).toMatchObject({ mono: 'BA', color: '#6fb7ff', visible: true });
+  });
+});
+
+describe('comando de arranque', () => {
+  it('el comando propio de Ajustes manda sobre el detectado y se aplica al instante', () => {
+    const p = proyecto('app', { runCommand: 'pnpm dev', runSource: 'detected', runDetected: 'pnpm dev' });
+    expect(effectiveProject(p, { run: 'pnpm exec nuxt dev --port 3037' })).toMatchObject({ runCommand: 'pnpm exec nuxt dev --port 3037', runSource: 'custom', runDetected: 'pnpm dev' });
+    expect(effectiveProject(p, undefined)).toMatchObject({ runCommand: 'pnpm dev', runSource: 'detected' });
+    expect(effectiveProject(p, { mono: 'XX' })).toMatchObject({ runCommand: 'pnpm dev', runSource: 'detected' });
+    // Sin ninguno de los dos no hay comando: el botón se desactiva.
+    expect(effectiveProject(proyecto('app'), undefined)).toMatchObject({ runCommand: null, runSource: null });
+  });
+
+  it('runOf ignora un comando propio vacío', () => {
+    expect(runOf('', 'npm run dev')).toEqual({ runCommand: 'npm run dev', runSource: 'detected' });
+    expect(runOf('  ', null)).toEqual({ runCommand: null, runSource: null });
+    expect(runOf(' make dev ', null)).toEqual({ runCommand: 'make dev', runSource: 'custom' });
+  });
+
+  it('la terminal de arranque viva de un proyecto es la que lleva run y no ha terminado', () => {
+    const arranque = sesion({ name: 'jdev-app-2', project: 'app', agent: 'shell', run: 'pnpm dev' });
+    const lista = [sesion({ name: 'jdev-app-1', project: 'app' }), arranque, sesion({ name: 'jdev-otro-1', project: 'otro', agent: 'shell', run: 'x' })];
+    expect(runSessionOf(lista, 'app')?.name).toBe('jdev-app-2');
+    expect(runSessionOf(lista, 'otro')?.name).toBe('jdev-otro-1');
+    expect(runSessionOf(lista, 'ninguno')).toBeUndefined();
+    // Una terminal normal, o una de arranque terminada, no cuenta.
+    expect(runSessionOf([sesion({ project: 'app', agent: 'shell' })], 'app')).toBeUndefined();
+    expect(runSessionOf([{ ...arranque, alive: false }], 'app')).toBeUndefined();
+    expect(runSessionOf([{ ...arranque, state: 'ended' }], 'app')).toBeUndefined();
   });
 });

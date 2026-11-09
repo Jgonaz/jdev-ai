@@ -50,6 +50,7 @@ function sesion(parche: Partial<SessionInfo> = {}): SessionInfo {
     usage: null,
     activity: null,
     archived: false,
+    run: null,
     ...parche,
   };
 }

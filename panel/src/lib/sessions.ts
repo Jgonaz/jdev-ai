@@ -61,12 +61,26 @@ export function visualState(s: Pick<SessionInfo, 'state' | 'done' | 'alive' | 't
 
 /** Proyecto con los overrides de Ajustes aplicados al instante, sin esperar a la API. */
 export function effectiveProject(p: ProjectInfo, override: ProjectOverride | undefined): ProjectInfo {
+  const propio = override?.run;
   return {
     ...p,
     mono: override?.mono ?? p.defaultMono,
     color: override?.color ?? p.defaultColor,
     visible: override?.visible ?? true,
+    ...runOf(propio, p.runDetected),
   };
+}
+
+/** Comando de arranque efectivo: el propio de Ajustes manda sobre el detectado en package.json. */
+export function runOf(propio: string | undefined, detectado: string | null): Pick<ProjectInfo, 'runCommand' | 'runSource'> {
+  const custom = propio?.trim() ?? '';
+  if (custom !== '') return { runCommand: custom, runSource: 'custom' };
+  return { runCommand: detectado, runSource: detectado === null ? null : 'detected' };
+}
+
+/** Terminal de arranque viva de un proyecto: la que lleva `run` y no ha terminado. */
+export function runSessionOf(sessions: readonly SessionInfo[], proyecto: string): SessionInfo | undefined {
+  return sessions.find((s) => s.project === proyecto && s.agent === SHELL_AGENT && typeof s.run === 'string' && s.alive && s.state !== 'ended');
 }
 
 /** Proyecto desconocido (sesión de un proyecto que ya no está en la lista). */
@@ -83,6 +97,9 @@ export function fallbackProject(id: string): ProjectInfo {
     visible: true,
     defaultMono: id.slice(0, 2).toUpperCase() || '?',
     defaultColor: '#9aa1a9',
+    runCommand: null,
+    runSource: null,
+    runDetected: null,
   };
 }
 

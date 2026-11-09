@@ -274,6 +274,23 @@
   text-align: center;
   text-transform: uppercase;
 }
+.prow__run {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.prow__run-label {
+  flex: none;
+}
+.prow__run-input {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.prow__run .field__error {
+  flex: 1 1 100%;
+}
 .prow__swatches {
   display: flex;
   gap: 6px;

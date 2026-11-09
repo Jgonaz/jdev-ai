@@ -31,6 +31,7 @@ const sesion = (extra: Partial<SessionInfo> = {}): SessionInfo => ({
   usage: null,
   activity: null,
   archived: false,
+  run: null,
   ...extra,
 });
 

@@ -18,6 +18,7 @@ import { ArchivedSection } from './ArchivedSessions.tsx';
 import { useConversationMenu } from './ConversationMenu.tsx';
 import { Legend } from './Legend.tsx';
 import { LiveSidebarSection } from './LiveSessions.tsx';
+import { RunButton } from './RunButton.tsx';
 import { RowTipBlock, RowTooltip, useRowTip } from './RowTooltip.tsx';
 import { useSessionMenu } from './SessionMenu.tsx';
 import { useLiveUnopened } from './useLiveUnopened.ts';
@@ -53,7 +54,7 @@ function SessionRow({
         onContextMenu={(e) => menu.onContextMenu(e, s)}
         onKeyDown={(e) => menu.onKeyDown(e, s)}
       >
-        <StatusLight state={estado} label />
+        <StatusLight state={estado} label running={typeof s.run === 'string' && estado === 'shell'} />
         <span className="srow__text">
           <span className="srow__title">{s.title}</span>
           <span className="srow__meta">{sessionMeta(s)}</span>
@@ -173,6 +174,7 @@ function Group({ g, ahora, menu, conversationMenu }: { g: SidebarGroup; ahora: n
         <Monogram project={g.project} />
         <span className="group__name">{g.project.name}</span>
         <NewTerminalButton project={g.project} />
+        <RunButton project={g.project} />
         {g.sessions.length > 0 && (
           <span className="group__count" title="Sesiones en marcha en el panel">
             {g.sessions.length}

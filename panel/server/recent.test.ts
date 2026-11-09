@@ -36,6 +36,9 @@ function proyecto(id: string, path: string, worktrees: { name: string; path: str
     visible: true,
     defaultMono: 'XX',
     defaultColor: '#000000',
+    runCommand: null,
+    runSource: null,
+    runDetected: null,
   };
 }
 

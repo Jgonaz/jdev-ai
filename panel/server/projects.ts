@@ -3,6 +3,8 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 import { PROJECT_PALETTE } from '../shared/settings-schema.ts';
+import { resolveRun } from './devrun.ts';
+import type { RunSource } from './devrun.ts';
 import type { ProjectOverride, Settings } from './settings.ts';
 
 const execFileAsync = promisify(execFile);
@@ -23,6 +25,11 @@ export type Project = {
   visible: boolean;
   defaultMono: string;
   defaultColor: string;
+  /** Comando de arranque efectivo (el propio de Ajustes o el de package.json); null si no hay. */
+  runCommand: string | null;
+  runSource: RunSource | null;
+  /** Lo detectado en package.json, aunque haya un comando propio. */
+  runDetected: string | null;
 };
 
 // Dos letras significativas en mayúsculas: las iniciales de las dos primeras
@@ -112,6 +119,7 @@ export async function listProjects(
       const defaultMono = defaultMonogram(e.id);
       const defaultColor = colores.get(e.id)!;
       const ov: ProjectOverride = Object.hasOwn(overrides, e.id) ? overrides[e.id]! : {};
+      const run = await resolveRun(e.path, ov.run);
       return {
         id: e.id,
         name: e.id,
@@ -124,6 +132,9 @@ export async function listProjects(
         visible: ov.visible ?? true,
         defaultMono,
         defaultColor,
+        runCommand: run.command,
+        runSource: run.source,
+        runDetected: run.detected,
       };
     }),
   );

@@ -37,6 +37,9 @@ function proyecto(id: string, extra: Partial<Project> = {}): Project {
     visible: true,
     defaultMono: 'XX',
     defaultColor: '#000000',
+    runCommand: null,
+    runSource: null,
+    runDetected: null,
     ...extra,
   };
 }

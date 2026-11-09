@@ -98,6 +98,9 @@ describe('scroll del historial con un tmux aislado', () => {
     visible: true,
     defaultMono: 'DM',
     defaultColor: '#000000',
+    runCommand: null,
+    runSource: null,
+    runDetected: null,
   };
 
   const get = (n: string) => fetch(`${base}/api/sessions/${n}/scroll`, { headers: { Authorization: `Bearer ${token}` } });

@@ -384,6 +384,22 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   admite worktree nuevo ni prompt, lleva un icono de terminal en lugar de la luz de
   estado y no cuenta en los avisos ni en los recuentos de Inicio. Funciona con
   pestañas, renombrado, archivado y «En segundo plano».
+- **Arrancar y parar un proyecto.** El botón ▶ junto al «+» de cada proyecto de la
+  barra lateral crea una terminal sin agente en su carpeta principal, titulada
+  «dev · <proyecto>», escribe en ella el comando de arranque (queda en el historial
+  de la shell) y la abre en una pestaña. Al cerrar la pestaña el servidor sigue en
+  «En segundo plano». El botón pasa a ■: envía `Ctrl+C`, espera hasta 5 s a que
+  el proceso termine y termina la sesión en cualquier caso. Hay como mucho una
+  terminal de arranque por proyecto; volver a arrancar abre la que ya está viva.
+  El comando es el que escribas en Ajustes › Proyectos › «Comando de arranque»
+  (guardado en `projects.<proyecto>.run` de `panel.json`, una línea de hasta 500
+  caracteres, que se ejecuta tal cual en tu shell) o, si no hay, el script `dev`
+  del `package.json` de la carpeta principal con el gestor que indique
+  `packageManager` o, si no, el lockfile (`pnpm-lock.yaml` → `pnpm dev`;
+  `bun.lockb`/`bun.lock` → `bun dev`; `yarn.lock` → `yarn dev`; si no, `npm run dev`).
+  Sin ninguno de los dos, el botón sale desactivado y su ayuda lleva a Ajustes. Solo
+  aparece en los proyectos que ya salen en la barra lateral (con sesiones o
+  conversaciones anteriores).
 - **Terminales vivas sin abrir.** Con el panel de Terminales vacío, una lista «Terminales vivas»
   (con «Abrir todas») reúne las sesiones vivas que no están en una pestaña, ordenadas por estado
   (te espera, trabajando, en reposo, hechas) y actividad; un apartado plegable «En segundo plano (N)»

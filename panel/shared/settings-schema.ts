@@ -49,7 +49,18 @@ export function isSoundId(v: unknown): v is SoundId {
   return typeof v === 'string' && ((SOUNDS as readonly string[]).includes(v) || (WINDOWS_SOUND.test(v) && !v.startsWith('win:.')));
 }
 
-export type ProjectOverride = { mono?: string; color?: string; visible?: boolean };
+/** Longitud máxima del comando de arranque de un proyecto, en caracteres (puntos de código). */
+export const RUN_COMMAND_MAX = 500;
+
+/**
+ * Comando de arranque propio de un proyecto: una línea de texto, sin caracteres
+ * de control ni separadores de línea, de RUN_COMMAND_MAX como mucho. Lo valida
+ * el servidor y el cliente antes de guardar; la cadena vacía no se guarda (vuelve a la detección).
+ */
+export const isValidRunCommand = (v: unknown): v is string =>
+  typeof v === 'string' && v.trim() !== '' && codePointLength(v) <= RUN_COMMAND_MAX && !new RegExp(NOMBRE_PROHIBIDO.source, 'u').test(v);
+
+export type ProjectOverride = { mono?: string; color?: string; visible?: boolean; run?: string };
 
 export type Settings = {
   theme: { name: (typeof THEMES)[number]; followSystem: boolean; accent: (typeof ACCENTS)[number] };

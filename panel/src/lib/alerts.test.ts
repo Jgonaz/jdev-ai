@@ -21,6 +21,7 @@ function s(name: string, state: SessionInfo['state'], parche: Partial<SessionInf
     usage: null,
     activity: null,
     archived: false,
+    run: null,
     ...parche,
   };
 }

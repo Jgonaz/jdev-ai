@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import type { ExecFileException } from 'node:child_process';
 import { accessSync, constants, statSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { basename, isAbsolute, join } from 'node:path';
 import type { Project } from './projects.ts';
 
 // Todas las llamadas a tmux usan execFile (sin shell) contra un servidor propio
@@ -111,6 +111,8 @@ export type TmuxSession = {
   attached: number;
   /** Título propio guardado con el renombrado del panel (@jdev_title); '' si no hay. */
   title: string;
+  /** Comando de arranque si es la terminal de arranque de su proyecto (@jdev_run); '' si no lo es. */
+  run: string;
 };
 
 export function tmuxConfig(
@@ -263,7 +265,7 @@ export function planSession(
 // Shell de login de la persona: `$SHELL` si es una ruta absoluta ejecutable
 // (tmux ejecuta el argv sin pasar por una shell, así que no se resuelve por
 // PATH) y, si no, bash.
-function loginShell(env: NodeJS.ProcessEnv): string {
+export function loginShell(env: NodeJS.ProcessEnv): string {
   const candidata = env.SHELL;
   if (candidata && isAbsolute(candidata)) {
     try {
@@ -276,6 +278,11 @@ function loginShell(env: NodeJS.ProcessEnv): string {
     }
   }
   return 'bash';
+}
+
+/** Nombre con el que tmux (`#{pane_current_command}`) conoce la shell de login: el nombre de su ejecutable. */
+export function loginShellName(env: NodeJS.ProcessEnv = process.env): string {
+  return basename(loginShell(env));
 }
 
 // Terminal sin agente: la shell de login, interactiva (sin «-c»), en la carpeta
@@ -353,6 +360,11 @@ function runTmux(cfg: TmuxConfig, args: string[]): Promise<ExecResult> {
   });
 }
 
+// tmux antepone «\» a los «$» que parecen una variable ($nombre, ${nombre}) de los valores
+// que se guardan en una opción de usuario, así que un comando se guarda con «$» y «%» codificados.
+export const encodeOptionValue = (valor: string): string => valor.replaceAll('%', '%25').replaceAll('$', '%24');
+export const decodeOptionValue = (valor: string): string => valor.replaceAll('%24', '$').replaceAll('%25', '%');
+
 // tmux trata como separador de comandos un argumento que termina en «;». Para
 // que un prompt o un valor acabado en «;» llegue intacto se escapa como «\;».
 function arg(valor: string): string {
@@ -375,6 +387,7 @@ const LIST_FORMAT = [
   '#{session_attached}',
   '#{pane_dead}',
   '#{@jdev_title}',
+  '#{@jdev_run}',
 ].join('\t');
 
 export async function listSessions(cfg: TmuxConfig): Promise<TmuxSession[]> {
@@ -388,7 +401,7 @@ export async function listSessions(cfg: TmuxConfig): Promise<TmuxSession[]> {
   const sesiones: TmuxSession[] = [];
   for (const linea of salida.split('\n')) {
     if (linea === '') continue;
-    const [name = '', project = '', agent = '', worktree = '', createdIso = '', activity = '', created = '', attached = '', dead = '', title = ''] =
+    const [name = '', project = '', agent = '', worktree = '', createdIso = '', activity = '', created = '', attached = '', dead = '', title = '', run = ''] =
       linea.split('\t');
     if (!isPanelSessionName(name)) continue;
     const creadaIso = Date.parse(createdIso);
@@ -402,6 +415,7 @@ export async function listSessions(cfg: TmuxConfig): Promise<TmuxSession[]> {
       alive: dead !== '1',
       attached: Number(attached) || 0,
       title,
+      run: decodeOptionValue(run),
     });
   }
   return sesiones;
@@ -641,6 +655,10 @@ function nextName(existentes: readonly TmuxSession[], base: string): string {
 export type CreateOptions = {
   /** Líneas de historial de tmux para la sesión (ajuste de scroll). */
   historyLimit?: number;
+  /** Comando de arranque del proyecto: marca la sesión como su terminal de arranque (@jdev_run). */
+  run?: string;
+  /** Título inicial de la sesión (@jdev_title); la persona puede renombrarla después. */
+  title?: string;
 };
 
 export type CreatedSession = { name: string; plan: SessionPlan };
@@ -690,6 +708,8 @@ export async function createSession(
         ...meta('@jdev_agent', plan.agent),
         ...meta('@jdev_worktree', plan.worktree),
         ...meta('@jdev_created', new Date().toISOString()),
+        ...(opciones.run ? meta('@jdev_run', encodeOptionValue(opciones.run)) : []),
+        ...(opciones.title ? meta('@jdev_title', opciones.title) : []),
       ]);
       return { name, plan };
     } catch (e) {
@@ -726,6 +746,52 @@ export async function killSession(cfg: TmuxConfig, name: string): Promise<boolea
     throw e;
   }
   return true;
+}
+
+// ------------------------------------------------------------------- Teclas
+
+/**
+ * Escribe `texto` tal cual en la terminal de la sesión (send-keys -l: sin
+ * interpretar nombres de tecla) y pulsa Enter, como lo escribiría una persona:
+ * queda en el historial de la shell. Devuelve false si la sesión no existe.
+ */
+export async function typeLine(cfg: TmuxConfig, name: string, texto: string): Promise<boolean> {
+  if (!isPanelSessionName(name)) return false;
+  try {
+    await runTmux(cfg, ['send-keys', '-t', `=${name}:`, '-l', '--', arg(texto)]);
+    await runTmux(cfg, ['send-keys', '-t', `=${name}:`, 'Enter']);
+  } catch (e) {
+    if (noSession(e)) return false;
+    throw e;
+  }
+  return true;
+}
+
+/** Envía Ctrl+C a la terminal de la sesión. Devuelve false si no existe. */
+export async function sendInterrupt(cfg: TmuxConfig, name: string): Promise<boolean> {
+  if (!isPanelSessionName(name)) return false;
+  try {
+    await runTmux(cfg, ['send-keys', '-t', `=${name}:`, 'C-c']);
+  } catch (e) {
+    if (noSession(e)) return false;
+    throw e;
+  }
+  return true;
+}
+
+/** Proceso en primer plano de la terminal de la sesión (`#{pane_current_command}`); null si la sesión no existe. */
+export async function paneCommand(cfg: TmuxConfig, name: string): Promise<string | null> {
+  if (!isPanelSessionName(name)) return null;
+  let salida: string;
+  try {
+    salida = (await runTmux(cfg, ['display-message', '-p', '-t', `=${name}:`, '#{session_name}\t#{pane_current_command}'])).stdout;
+  } catch (e) {
+    if (noSession(e)) return null;
+    throw e;
+  }
+  // Con un objetivo inexistente display-message no falla: imprime los campos vacíos.
+  const [sesion = '', comando = ''] = salida.replace(/\r?\n$/, '').split('\t');
+  return sesion === name ? comando : null;
 }
 
 // Cierra el servidor tmux del socket configurado (solo para limpiar pruebas).

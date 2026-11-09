@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PROJECT_PALETTE } from '../../../shared/settings-schema.ts';
+import { PROJECT_PALETTE, RUN_COMMAND_MAX, isValidRunCommand } from '../../../shared/settings-schema.ts';
 import { Monogram } from '../../components/Monogram.tsx';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useSettings } from '../../state/SettingsContext.tsx';
@@ -15,8 +15,20 @@ const NOMBRES_COLOR: Record<string, string> = {
 };
 
 function ProjectRow({ p }: { p: ProjectInfo }) {
-  const { update } = useSettings();
+  const { settings, update } = useSettings();
   const [mono, setMono] = useState<string | null>(null);
+  // Comando de arranque: lo escrito mientras se edita; null = lo guardado.
+  const [run, setRun] = useState<string | null>(null);
+  const propio = settings.projects[p.id]?.run ?? '';
+  const textoRun = run ?? propio;
+  const errorRun = run !== null && run.trim() !== '' && !isValidRunCommand(run.trim()) ? `Una sola línea de hasta ${RUN_COMMAND_MAX} caracteres, sin caracteres de control.` : null;
+  const cambiarRun = (crudo: string) => {
+    setRun(crudo);
+    const limpio = crudo.trim();
+    // Vacío = volver al comando detectado en package.json; uno no válido no se guarda.
+    if (limpio === '') update({ projects: { [p.id]: { run: null } } });
+    else if (isValidRunCommand(limpio) && limpio !== propio) update({ projects: { [p.id]: { run: limpio } } });
+  };
 
   const cambiarMono = (crudo: string) => {
     const limpio = Array.from(crudo.replace(/[^\p{L}\p{N}]/gu, '').toUpperCase()).slice(0, 2).join('');
@@ -64,6 +76,29 @@ function ProjectRow({ p }: { p: ProjectInfo }) {
         <input type="checkbox" checked={p.visible} onChange={(e) => update({ projects: { [p.id]: { visible: e.target.checked } } })} />
         Visible
       </label>
+      <div className="prow__run">
+        <label className="prow__label prow__run-label" htmlFor={`run-${p.id}`}>
+          Comando de arranque
+        </label>
+        <input
+          id={`run-${p.id}`}
+          type="text"
+          className="input input--mono prow__run-input"
+          value={textoRun}
+          placeholder={p.runDetected ? `${p.runDetected}, detectado` : 'Sin script dev en package.json'}
+          aria-invalid={errorRun ? true : undefined}
+          aria-describedby={errorRun ? `run-${p.id}-error` : undefined}
+          onChange={(e) => cambiarRun(e.target.value)}
+          onBlur={() => setRun(null)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {errorRun && (
+          <span id={`run-${p.id}-error`} className="field__error" role="alert">
+            {errorRun}
+          </span>
+        )}
+      </div>
     </li>
   );
 }
@@ -76,7 +111,7 @@ export function ProjectsSection() {
         <h2 id="h-proy" className="set-h2">
           Proyectos
         </h2>
-        <p className="set-lead">Monograma y color de cada proyecto, y si aparece en la barra lateral.</p>
+        <p className="set-lead">Monograma y color de cada proyecto, si aparece en la barra lateral y el comando que arranca el botón ▶ (vacío, usa el script dev de su package.json).</p>
       </div>
       {projects.length > 0 ? (
         <ul className="prow-list">

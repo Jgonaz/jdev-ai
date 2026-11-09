@@ -85,6 +85,33 @@
   background: var(--bg-raised);
   color: var(--fg);
 }
+/* ▶ / ■ de arranque: pegado al «+»; en marcha, el color del trabajo en curso. */
+.group__run {
+  margin-left: -6px;
+  text-decoration: none;
+}
+.group__run--on {
+  color: var(--working);
+}
+.group__run--off {
+  opacity: 0.45;
+}
+.group__run--off:hover,
+.group__run--off:focus-visible {
+  opacity: 1;
+}
+.group__run:disabled {
+  cursor: progress;
+}
+.group__spin {
+  box-sizing: border-box;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--working);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
 .srow {
   display: flex;
   align-items: flex-start;
@@ -187,6 +214,15 @@
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
+  /* Al arrastrar una pestaña para reordenarla no se selecciona texto. */
+  user-select: none;
+}
+.tabs--dragging,
+.tabs--dragging .tab {
+  cursor: grabbing;
+}
+.tabs--dragging .tabwrap--active {
+  opacity: 0.75;
 }
 /* Contenedor de la pestaña y su «x»: es él quien se encoge y se trunca. */
 .tabwrap {
@@ -214,15 +250,6 @@
   white-space: nowrap;
 }
 .tab > * {
-  /* Al arrastrar una pestaña para reordenarla no se selecciona texto. */
-  user-select: none;
-}
-.tabs--dragging,
-.tabs--dragging .tab {
-  cursor: grabbing;
-}
-.tabs--dragging .tabwrap--active {
-  opacity: 0.75;
   flex: none;
 }
 .tab > .tab__title {

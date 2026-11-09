@@ -100,6 +100,11 @@ export const IconStop = (p: Props) => (
     <rect x="6" y="6" width="12" height="12" rx="2" />
   </Svg>
 );
+export const IconPlay = (p: Props) => (
+  <Svg fill="currentColor" strokeLinejoin="round" {...p}>
+    <path d="M8 5.5v13l11-6.5z" />
+  </Svg>
+);
 export const IconClock = (p: Props) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="9" />
