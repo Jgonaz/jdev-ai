@@ -75,7 +75,7 @@ Autenticada y de solo lectura, como el resto.
 
 - Sección de Inicio según el diseño, con los tokens del tema.
 - **Colores:**
-  - magnitudes (calendario y barras) en un solo tono, con una rampa secuencial derivada del acento de cada tema y validada;
+  - magnitudes (calendario y barras) en un solo tono, con una rampa secuencial azul común a todos los temas (la del diseño aprobado) y validada;
   - modelos con cuatro colores categóricos fijos por modelo (el color sigue al modelo, no a su puesto), validados para daltonismo en cada tema;
   - cada modelo lleva además su nombre y porcentaje, así que no depende solo del color.
 - **Tooltips** al pasar el ratón o con el foco en celdas del calendario, barras y segmentos. Vista en tabla del calendario.

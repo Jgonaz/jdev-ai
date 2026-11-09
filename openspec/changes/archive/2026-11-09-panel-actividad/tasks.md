@@ -17,4 +17,4 @@
 
 - [x] 3.1 README
 - [x] 3.2 `bin/check`, `pnpm --dir panel typecheck`, `test`, `build` y `openspec validate --strict`
-- [ ] 3.3 QA de punta a punta contra el diseño, si la persona da el visto bueno
+- [x] 3.3 QA de punta a punta contra el diseño, si la persona da el visto bueno

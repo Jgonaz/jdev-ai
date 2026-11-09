@@ -816,3 +816,96 @@ El panel SHALL ofrecer «Marcar como hecha» y «Reabrir» en el menú contextua
 - **WHEN** el navegador guardaba la preferencia «Ocultar cerradas» activada de una versión anterior
 - **THEN** «Ocultar hechas» aparece activada, sin que la persona tenga que volver a elegirla
 
+### Requirement: Actividad con los agentes en Inicio
+
+Inicio SHALL mostrar una sección «tu actividad», calculada en el equipo a partir de los transcripts de Claude Code (incluidos sus subagentes) y de las sesiones de Codex, con filtros de periodo (esta semana, 30 días, todo) y de agente (todos, Claude, Codex).
+
+La sección SHALL mostrar:
+
+- tokens de salida, con su desglose de entrada y caché;
+- sesiones;
+- respuestas;
+- horas activas.
+
+Cada cifra SHALL compararse con el periodo anterior equivalente, salvo en «todo».
+
+Además, la sección SHALL mostrar:
+
+- un calendario de respuestas por día de las últimas 12 semanas, con la racha y el mejor día y una vista en tabla;
+- los tokens de salida por proyecto;
+- el reparto de respuestas por modelo, con leyenda y porcentajes;
+- los subagentes y herramientas más usados.
+
+Cada respuesta SHALL contarse una sola vez aunque el transcript la repita. El panel SHALL leer esos archivos solo para calcular las cifras, sin modificarlos, y SHALL guardar un resumen en caché para no releerlos enteros en cada visita. La sección SHALL poder ocultarse desde Ajustes.
+
+#### Scenario: Ver la semana al empezar
+
+- **WHEN** la persona abre Inicio
+- **THEN** ve las cifras de la semana en curso con su variación frente a la anterior, el calendario y los repartos por proyecto y modelo
+
+#### Scenario: Filtrar por agente
+
+- **WHEN** la persona elige «Codex» en el filtro de agente
+- **THEN** todas las cifras y gráficos de la sección cuentan solo las sesiones de Codex
+
+#### Scenario: Primera vez
+
+- **WHEN** el panel aún no ha terminado de leer los transcripts
+- **THEN** la sección indica que está calculando y muestra lo que ya tiene, sin bloquear el resto de Inicio
+
+#### Scenario: Respuesta repetida en el transcript
+
+- **WHEN** un transcript contiene varias líneas con el uso de una misma respuesta
+- **THEN** sus tokens y la respuesta se cuentan una sola vez
+
+#### Scenario: Ocultar la sección
+
+- **WHEN** la persona desactiva «Mostrar tu actividad» en Ajustes
+- **THEN** Inicio deja de mostrar la sección
+
+### Requirement: Arrancar y parar un proyecto desde la barra lateral
+
+Cada proyecto de la barra lateral SHALL tener un botón para arrancar su comando de arranque. El botón SHALL:
+
+1. Crear una terminal sin agente en la carpeta principal del proyecto.
+2. Ejecutar el comando dentro de la shell.
+3. Abrir la terminal en una pestaña, titulada «dev · <proyecto>».
+
+La terminal SHALL seguir en marcha en segundo plano al cerrar su pestaña.
+
+Mientras esa terminal siga viva, el botón SHALL servir para pararla: SHALL enviar `Ctrl+C` y SHALL terminar la sesión, también si el proceso no ha terminado a los pocos segundos.
+
+SHALL haber como mucho una terminal de arranque por proyecto.
+
+El comando de arranque SHALL ser el comando propio del proyecto configurado en Ajustes. Si no hay ninguno, SHALL ser el script `dev` de su `package.json`, con el gestor que indique el proyecto. Si no hay ninguno de los dos, el botón SHALL estar desactivado y SHALL indicar cómo configurarlo.
+
+#### Scenario: Arrancar un proyecto con script dev
+
+- **WHEN** la persona pulsa ▶ en un proyecto con `pnpm-lock.yaml` y un script `dev`
+- **THEN** se abre la terminal «dev · <proyecto>» ejecutando `pnpm dev` y el botón pasa a ■
+
+#### Scenario: Dejarlo en segundo plano
+
+- **WHEN** la persona cierra la pestaña de la terminal de arranque
+- **THEN** el servidor sigue en marcha, la terminal aparece en «En segundo plano» y el botón sigue en ■
+
+#### Scenario: Parar
+
+- **WHEN** la persona pulsa ■
+- **THEN** el panel envía `Ctrl+C`, termina la terminal y el botón vuelve a ▶
+
+#### Scenario: Comando propio
+
+- **WHEN** el proyecto tiene en Ajustes el comando `pnpm exec nuxt dev --port 3037`
+- **THEN** ▶ ejecuta ese comando en lugar del detectado
+
+#### Scenario: Sin comando
+
+- **WHEN** el proyecto no tiene script `dev` ni comando propio
+- **THEN** el botón está desactivado y su ayuda lleva a Ajustes › Proyectos
+
+#### Scenario: Pulsar arrancar dos veces
+
+- **WHEN** la terminal de arranque de un proyecto ya está viva y se vuelve a pedir arrancarlo
+- **THEN** el panel abre esa misma terminal sin crear otra
+
