@@ -269,7 +269,7 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 agente de todos los proyectos: barra lateral con las sesiones agrupadas por
 proyecto, su título y su estado (te espera, trabajando, en reposo o hecha),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
-con `bin/agent`, las pantallas Inicio, Backlog, Worktrees, Guías e Historial y ajustes de
+con `bin/agent`, las pantallas Inicio, Backlog, Cambios, Guías e Historial y ajustes de
 tema, fuentes, terminal y avisos. En los avisos se elige un sonido para cuando
 una sesión te espera y otro para cuando termina, entre varios sintetizados en el
 navegador (teletipo, campanilla, dos tonos, gota, pulso, acorde, marimba y
@@ -510,15 +510,15 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   el área central nunca baja de 360 px. En anchos estrechos, donde el contexto y
   el detalle se superponen, no hay tirador.
 - **Menú Proyectos.** «Proyectos» en la cabecera es un desplegable con Backlog,
-  Worktrees y Guías, tres pantallas independientes: Backlog y Guías abren
-  el último proyecto usado (o el primero visible) y Worktrees, el primero visible
-  con worktrees abiertos (o, si ninguno tiene, el primero); la pantalla actual
+  Cambios y Guías, tres pantallas independientes: Backlog y Guías abren
+  el último proyecto usado (o el primero visible) y Cambios, el primero visible
+  con cambios (o, si ninguno tiene, el último usado en Cambios o el primero); la pantalla actual
   queda marcada en el menú. Se abre con el clic, con Enter, Espacio o las flechas y, con un ratón,
   al detenerse sobre el botón (se cierra al salir; en táctil, solo con clic). Las tres comparten la barra lateral de
   proyectos (con su ancho; al elegir otro proyecto se queda en la misma pantalla)
   y cada una tiene su propia cabecera y ruta: `#/backlog/<id>[/<elemento>]`,
-  `#/worktrees/<id>` y `#/guias/<id>[/<guía>]`. Los enlaces antiguos
-  `#/proyectos/…` se redirigen a las nuevas.
+  `#/cambios/<id>[/main[/<archivo>]|/wt/<worktree>[/<archivo>]]` y `#/guias/<id>[/<guía>]`. Los enlaces antiguos
+  `#/proyectos/…` y `#/worktrees/…` se redirigen a las nuevas.
 - **Seleccionar y copiar texto.** Arrastra, o haz doble o triple clic: al soltar,
   la selección se queda marcada y se copia al portapapeles (tmux la envía por
   OSC 52). Escape o `q` salen de la selección para volver a escribir. Mayús +
@@ -554,7 +554,7 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   segundos y se hace en segundo plano; después solo lee lo nuevo. Las horas
   activas y el proyecto (por el directorio de trabajo) son aproximaciones, y no
   hay coste en dinero.
-- **Backlog, Worktrees y Guías.** La pantalla Backlog muestra el backlog de cada proyecto (`docs/backlog/` del
+- **Backlog, Cambios y Guías.** La pantalla Backlog muestra el backlog de cada proyecto (`docs/backlog/` del
   checkout principal) en columnas por estado, con filtros por tipo y prioridad
   y búsqueda. El detalle de un elemento enseña su resumen, su cabecera y el
   documento completo, y permite moverlo de estado («Pasar a por hacer» o
@@ -565,10 +565,19 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   (respetando los hooks del proyecto y mostrando su salida si fallan) y, si se
   marca, el push a su remoto.
   «Trabajar en esto» abre Nueva sesión con un prompt para abordar el elemento,
-  sin moverlo. Worktrees muestra las ramas abiertas del proyecto
-  (`projects/<proyecto>.worktrees/`, con sus sesiones y cambios) y Guías las de
+  sin moverlo. Cambios abre directamente el diff del checkout principal del proyecto
+  (también el del propio harness), con una pestaña por lugar (`main · N` y un
+  worktree por pestaña, con su número de archivos y un punto si una sesión trabaja
+  ahí). Lo que se compara: en el checkout principal, lo que aún no está en su rama
+  remota (commits sin subir, cambios sin commit y archivos nuevos; sin rama remota,
+  solo lo que no tiene commit) y, en un worktree, lo que llevaría su PR (desde que
+  se separó de la rama principal). La barra del lugar da su rama, los commits por
+  delante y por detrás, «cambios sin commit», las sesiones del panel que trabajan
+  ahí (con acceso a su terminal) y «Nueva sesión aquí». Debajo, un árbol de archivos
+  con su estado y líneas y el diff del elegido, lado a lado o unificado (se recuerda
+  la elección; en ancho estrecho, siempre unificado), solo de lectura. Guías muestra las de
   `docs/user-guides/`; en la barra lateral, cada pantalla cuenta lo suyo
-  (elementos abiertos, worktrees o guías).
+  (elementos abiertos, archivos cambiados o guías).
 - **Historial.** Reúne las entradas de `.agent/history/` del checkout
   principal de cada proyecto y del harness (sin subcarpetas como `archive/`),
   agrupadas por día, con filtros por proyecto y estado y «Solo con «Pendiente

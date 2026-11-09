@@ -6,7 +6,7 @@ import { Board } from '../components/proyectos/Board.tsx';
 import { CommitDialog } from '../components/proyectos/CommitDialog.tsx';
 import { Detail } from '../components/proyectos/Detail.tsx';
 import { ProjectHeader, ProjectSidebar, ProjectsEmpty, useSidebarWidth } from '../components/proyectos/ProjectSidebar.tsx';
-import { WorktreeStrip } from '../components/proyectos/Worktrees.tsx';
+import { WorktreeStrip } from '../components/proyectos/WorktreeStrip.tsx';
 import {
   NO_FILTERS,
   STATES,
@@ -23,7 +23,7 @@ import { projectHref } from '../lib/route.ts';
 import { usePanelWidth } from '../lib/usePanelWidth.ts';
 import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import { useProjectScreen } from '../lib/useProjectScreen.ts';
-import { useWorktrees } from '../lib/useWorktrees.ts';
+import { useChangesOverview } from '../lib/useChangesOverview.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
 import type { BacklogDetail, BacklogList, BacklogState } from '../types.ts';
@@ -65,7 +65,7 @@ export function BacklogScreen(props: {
   const [filtros, setFiltros] = useState<Filters>(NO_FILTERS);
   // Proyecto cuyo diálogo «Confirmar cambios» está abierto.
   const [confirmando, setConfirmando] = useState<string | null>(null);
-  const worktrees = useWorktrees(actualId);
+  const lugares = useChangesOverview(actualId);
   const seqs = useRef<Record<string, number>>({});
   const idBase = useId();
   const idBuscar = useId();
@@ -109,7 +109,7 @@ export function BacklogScreen(props: {
   }, [clave, cargarLista]);
 
   // Avisos del servidor, al volver a la ventana y cada 30 s (para ver `pending` tras un commit).
-  // Los worktrees (la franja) se refrescan por su cuenta en useWorktrees.
+  // Los worktrees (la franja) se refrescan por su cuenta en useChangesOverview.
   useEffect(() => {
     const baja = onBacklogChange((p) => {
       if (ids.includes(p)) cargarLista(p);
@@ -178,7 +178,7 @@ export function BacklogScreen(props: {
 
   const detalleEnLinea = elemento !== null && !superpuesto;
   const pending = lista?.data?.pending ?? 0;
-  const conSesiones = worktrees.data?.worktrees.filter((w) => w.sessions.length > 0) ?? [];
+  const conSesiones = lugares.data?.worktrees.filter((w) => w.sessions.length > 0) ?? [];
 
   return (
     <div className="screen screen--proyectos" ref={raiz} onKeyDown={alPulsar}>

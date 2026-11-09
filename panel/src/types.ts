@@ -197,14 +197,57 @@ export type CommitPhase = 'commit' | 'push' | 'done' | 'error';
 export type Guide = { path: string; title: string; updated: number };
 export type GuideContent = { path: string; title: string; source: string };
 
-export type WorktreeDetail = Worktree & {
+/** Datos de un lugar (checkout principal o worktree) para sus pestañas y su barra. */
+export type PlaceInfo = {
+  branch: string | null;
+  /** Rama remota (solo en el checkout principal, y solo si la rama la tiene). */
+  upstream: string | null;
+  /** Commits por delante y por detrás: en `main`, de su rama remota (null sin ella); en un worktree, de la rama principal. */
   ahead: number | null;
   behind: number | null;
   dirty: boolean | null;
-  /** Nombres de tmux de las sesiones del panel en este worktree. */
+  /** Archivos cambiados; null si no se pudo calcular. */
+  changes: number | null;
+  /** Nombres de tmux de las sesiones del panel en este lugar. */
   sessions: string[];
 };
-export type WorktreeList = { base: string | null; worktrees: WorktreeDetail[] };
+export type WorktreeInfo = Omit<PlaceInfo, 'upstream'> & { name: string };
+export type ChangesOverview = { base: string | null; main: PlaceInfo; worktrees: WorktreeInfo[] };
+
+/** Estado de un archivo cambiado: añadido, modificado, borrado, renombrado, cambio de tipo o sin seguimiento. */
+export type ChangeStatus = 'A' | 'M' | 'D' | 'R' | 'T' | 'U';
+export type ChangedFile = {
+  path: string;
+  /** Ruta anterior de un renombrado. */
+  oldPath: string | null;
+  status: ChangeStatus;
+  /** Líneas añadidas y quitadas; null en binarios y en archivos nuevos demasiado grandes para contarlas. */
+  added: number | null;
+  deleted: number | null;
+  binary: boolean;
+};
+export type PlaceChanges = {
+  /** Con qué se compara: la rama remota del checkout principal o la rama principal. */
+  base: string | null;
+  /** Commit de partida de la comparación. */
+  mergeBase: string;
+  /** Rama remota usada como base (solo en el checkout principal con rama remota). */
+  upstream: string | null;
+  files: ChangedFile[];
+  /** La lista se cortó en el tope de archivos. */
+  truncated: boolean;
+  /** Archivos cambiados en total (más que `files.length` si se cortó). */
+  total: number;
+};
+export type FileDiff = {
+  path: string;
+  oldPath: string | null;
+  status: ChangeStatus;
+  binary: boolean;
+  tooLarge: boolean;
+  /** Parche unificado; null en binarios y diffs demasiado grandes. */
+  patch: string | null;
+};
 
 // ---------------------------------------------------------------- Historial
 

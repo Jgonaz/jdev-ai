@@ -8,7 +8,7 @@ import { IconChevron } from './Icons.tsx';
 
 const OPCIONES: { pantalla: ProjectScreen; label: string }[] = [
   { pantalla: 'backlog', label: 'Backlog' },
-  { pantalla: 'worktrees', label: 'Worktrees' },
+  { pantalla: 'cambios', label: 'Cambios' },
   { pantalla: 'guias', label: 'Guías' },
 ];
 
@@ -20,7 +20,7 @@ const RETARDO_CERRAR_MS = 250;
 
 /**
  * «Proyectos» de la cabecera: un desplegable con las tres pantallas de proyecto
- * (Backlog, Worktrees y Guías). Es un solo botón (no uno partido): el menú es la
+ * (Backlog, Cambios y Guías). Es un solo botón (no uno partido): el menú es la
  * única forma de llegar a ellas. Cada opción es un enlace a la pantalla del
  * último proyecto usado (o el primero visible), así que también funciona con
  * Ctrl+clic y sirve estando ya en una de ellas. `pantalla` es la pantalla de
@@ -160,7 +160,7 @@ export function ProjectsMenu({ pantalla }: { pantalla: ProjectScreen | null }) {
               key={o.pantalla}
               role="menuitem"
               className="menu__item"
-              href={projectHref(o.pantalla, o.pantalla === 'worktrees' && pantalla !== 'worktrees' ? null : proyecto)}
+              href={projectHref(o.pantalla, o.pantalla === 'cambios' && pantalla !== 'cambios' ? null : proyecto)}
               aria-current={pantalla === o.pantalla ? 'page' : undefined}
               tabIndex={-1}
               onClick={() => cerrar(false)}

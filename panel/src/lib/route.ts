@@ -1,26 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export type Route = 'inicio' | 'terminales' | 'backlog' | 'worktrees' | 'guias' | 'historial' | 'ajustes';
+export type Route = 'inicio' | 'terminales' | 'backlog' | 'cambios' | 'guias' | 'historial' | 'ajustes';
 
 /** Pantalla que se muestra con la URL sin ruta (ajuste «Pantalla al abrir»). */
 export type StartScreen = 'inicio' | 'terminales';
 
 /** Pantallas de un proyecto, a las que se llega desde el menú «Proyectos». */
-export type ProjectScreen = 'backlog' | 'worktrees' | 'guias';
-export const PROJECT_SCREENS: readonly ProjectScreen[] = ['backlog', 'worktrees', 'guias'];
+export type ProjectScreen = 'backlog' | 'cambios' | 'guias';
+export const PROJECT_SCREENS: readonly ProjectScreen[] = ['backlog', 'cambios', 'guias'];
 
 export const isProjectScreen = (r: Route | string | null | undefined): r is ProjectScreen => PROJECT_SCREENS.some((p) => p === r);
 
 export type ResolvedRoute = {
   route: Route;
   /**
-   * Proyecto de las rutas por proyecto (`#/backlog/<id>`, `#/worktrees/<id>`,
+   * Proyecto de las rutas por proyecto (`#/backlog/<id>`, `#/cambios/<id>`,
    * `#/guias/<id>`) y del historial (`#/historial/<id>/<archivo>`).
    */
   project: string | null;
   /**
    * Elemento del backlog de `#/backlog/<id>/<itemId>`, ruta de la guía de
-   * `#/guias/<id>/<ruta>` o archivo de la entrada de `#/historial/<id>/<archivo>`.
+   * `#/guias/<id>/<ruta>`, lugar de `#/cambios/<id>/(main[/<archivo>]|wt/<worktree>[/<archivo>])`
+   * (ver `parseCambiosItem`) o archivo de la entrada de `#/historial/<id>/<archivo>`.
    */
   item: string | null;
   /** La URL no lleva ruta: la pantalla es la de «Pantalla al abrir». */
@@ -43,14 +44,15 @@ const decodificar = (s: string | undefined): string | null => {
   }
 };
 
-/** Ruta de una guía (`a/b.md`) a partir de los segmentos de la URL, o null si no hay o alguno no se decodifica. */
+/** Ruta de una guía (`a/b.md`) o de un lugar de Cambios (`wt/ts/src/a.ts`) a partir de los segmentos de la URL, o null si no hay o alguno no se decodifica. */
 const decodificarRuta = (partes: string[]): string | null => {
   if (partes.length === 0) return null;
   const decodificadas = partes.map(decodificar);
   return decodificadas.every((d) => d !== null) ? decodificadas.join('/') : null;
 };
 
-const NOMBRES_ANTIGUOS: readonly string[] = ['worktrees', 'guias', 'backlog'];
+// `worktrees` es el nombre antiguo de la pantalla Cambios.
+const NOMBRES_ANTIGUOS: Record<string, ProjectScreen> = { worktrees: 'cambios', guias: 'guias', backlog: 'backlog' };
 
 // Formato de los identificadores del backlog (el mismo que ITEM_ID_RE de server/backlog.ts).
 const ITEM_ID = /^BL-[0-9]{8}-[0-9]{4}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -70,10 +72,23 @@ export function resolveRoute(hash: string, start: StartScreen = 'inicio'): Resol
     }
     return { ...base, route: 'backlog', project, item };
   }
-  if (partes[0] === 'worktrees' && partes.length <= 2) {
-    return { ...base, route: 'worktrees', project: decodificar(partes[1]) };
+  // Cambios y Guías: el elemento (`main/<archivo>`, `wt/<worktree>/<archivo>`, la guía) puede tener subcarpetas, así que ocupa el resto de la URL.
+  if (partes[0] === 'cambios') {
+    const project = decodificar(partes[1]);
+    const item = decodificarRuta(partes.slice(2));
+    // Un lugar o archivo que no se puede decodificar, o que no es `main…` ni `wt/<worktree>…`, se quita de la URL.
+    if (partes.length > 2 && (item === null || parseCambiosItem(item) === null)) {
+      return { ...base, route: 'cambios', project, redirect: projectHref('cambios', project, null) };
+    }
+    return { ...base, route: 'cambios', project, item };
   }
-  // Guías: la ruta de la guía puede tener subcarpetas, así que ocupa el resto de la URL.
+  // Ruta antigua `#/worktrees[/<id>[/<worktree>[/<archivo>]]]`: es la de Cambios con ese worktree.
+  if (partes[0] === 'worktrees') {
+    const project = decodificar(partes[1]);
+    const wt = decodificarRuta(partes.slice(2));
+    const item = wt === null ? null : cambiosItem({ kind: 'wt', name: wt.split('/')[0]! }, wt.split('/').slice(1).join('/') || null);
+    return { ...base, route: 'cambios', project, item, redirect: projectHref('cambios', project, item) };
+  }
   if (partes[0] === 'guias') {
     const project = decodificar(partes[1]);
     const item = decodificarRuta(partes.slice(2));
@@ -88,7 +103,7 @@ export function resolveRoute(hash: string, start: StartScreen = 'inicio'): Resol
   if (partes[0] === 'proyectos' && partes.length <= 3) {
     const project = decodificar(partes[1]);
     const tercero = partes[2];
-    const pantalla: ProjectScreen = tercero !== undefined && NOMBRES_ANTIGUOS.includes(tercero) ? (tercero as ProjectScreen) : 'backlog';
+    const pantalla: ProjectScreen = (tercero !== undefined && Object.hasOwn(NOMBRES_ANTIGUOS, tercero) ? NOMBRES_ANTIGUOS[tercero] : undefined) ?? 'backlog';
     const item = pantalla === 'backlog' && tercero !== 'backlog' ? decodificar(tercero) : null;
     return { ...base, route: pantalla, project, item, redirect: projectHref(pantalla, project, item) };
   }
@@ -111,16 +126,39 @@ export function routeHref(ruta: Route): string {
 
 /**
  * Ruta de una pantalla de proyecto: `#/backlog[/<id>[/<itemId>]]`,
- * `#/worktrees[/<id>]` o `#/guias[/<id>[/<ruta de la guía>]]`. Sin proyecto, la
- * pantalla elige el último usado o el primero visible. Worktrees no lleva
- * elemento. La ruta de una guía conserva sus `/` y codifica cada tramo.
+ * `#/cambios[/<id>[/<lugar>]]` (el elemento es `cambiosItem(lugar, archivo)`) o
+ * `#/guias[/<id>[/<ruta de la guía>]]`. Sin proyecto, la pantalla elige el último
+ * usado, o el primero visible (Cambios, el primero con cambios). El elemento de
+ * Cambios y Guías conserva sus `/` y codifica cada tramo.
  */
 export function projectHref(pantalla: ProjectScreen, proyecto?: string | null, item?: string | null): string {
   const raiz = `#/${pantalla}`;
   if (!proyecto) return raiz;
   const p = `${raiz}/${encodeURIComponent(proyecto)}`;
-  if (!item || pantalla === 'worktrees') return p;
-  return pantalla === 'guias' ? `${p}/${item.split('/').map(encodeURIComponent).join('/')}` : `${p}/${encodeURIComponent(item)}`;
+  if (!item) return p;
+  return pantalla === 'backlog' ? `${p}/${encodeURIComponent(item)}` : `${p}/${item.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/** Dónde se miran los cambios: el checkout principal o un worktree por nombre. */
+export type PlaceRef = { kind: 'main' } | { kind: 'wt'; name: string };
+
+/**
+ * Lugar y archivo del elemento de `#/cambios/<id>/<elemento>`: `main[/<archivo>]` o
+ * `wt/<worktree>[/<archivo>]`; sin elemento es el checkout principal. null si el
+ * elemento no tiene esa forma (el prefijo evita confundir un worktree con una carpeta).
+ */
+export function parseCambiosItem(item: string | null): { place: PlaceRef; file: string | null } | null {
+  if (item === null || item === '') return { place: { kind: 'main' }, file: null };
+  const partes = item.split('/');
+  if (partes[0] === 'main') return { place: { kind: 'main' }, file: partes.slice(1).join('/') || null };
+  if (partes[0] === 'wt' && partes[1]) return { place: { kind: 'wt', name: partes[1] }, file: partes.slice(2).join('/') || null };
+  return null;
+}
+
+/** Elemento de la ruta de Cambios para un lugar y, opcionalmente, un archivo de sus cambios; null es el checkout principal sin archivo. */
+export function cambiosItem(place: PlaceRef, file?: string | null): string | null {
+  if (place.kind === 'main') return file ? `main/${file}` : null;
+  return file ? `wt/${place.name}/${file}` : `wt/${place.name}`;
 }
 
 /** `#/historial` o `#/historial/<proyecto>/<archivo>`. */
@@ -133,7 +171,7 @@ export function historyHref(proyecto?: string | null, archivo?: string | null): 
  * Hash canónico de una pantalla de proyecto para lo que se muestra, o null si el
  * pedido ya lo es. Un proyecto inexistente u oculto se sustituye por el mostrado
  * (sin elemento), y el elemento se quita si no se muestra (`withItem` falso: un
- * elemento o una guía que no existe) o si la pantalla no lleva ninguno (Worktrees).
+ * elemento, una guía o un worktree que no existe).
  */
 export function canonicalProjectHref(
   pantalla: ProjectScreen,
@@ -141,7 +179,7 @@ export function canonicalProjectHref(
   mostrado: string,
   withItem = true,
 ): string | null {
-  const item = pantalla !== 'worktrees' && pedido.project === mostrado && withItem ? pedido.item : null;
+  const item = pedido.project === mostrado && withItem ? pedido.item : null;
   return pedido.project === mostrado && pedido.item === item ? null : projectHref(pantalla, mostrado, item);
 }
 

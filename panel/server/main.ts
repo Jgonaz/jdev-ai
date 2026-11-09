@@ -22,6 +22,8 @@ import { BacklogError, BacklogStore, BacklogWatcher, ITEM_ID_RE, pendingChanges,
 import { commitBacklog, commitPreview, validateCommitRequest } from './backlog-commit.ts';
 import { checkNote, isConversationId, isConversationKey, resolveDone } from './conversations.ts';
 import { GuideError, listGuides, readGuide } from './guides.ts';
+import { PlaceError, changesOverview, changesSummary, placeChanges, placeFileDiff } from './worktree-diff.ts';
+import type { Place } from './worktree-diff.ts';
 import { HistoryError, HistoryStore, historyDirs, historySignature, isHistoryState, toListEntry } from './history.ts';
 import { ImageError, MAX_IMAGE_BYTES, SVG_CSP, defaultImageDirs, openImage } from './images.ts';
 import { claudeConfigDir, codexHome, configDir, panelCacheDir, sessionStateDir, uploadsDir } from './paths.ts';
@@ -32,7 +34,7 @@ import type { ActivityAgent, ActivityRange } from '../shared/activity.ts';
 import { buildOverview, readGitName } from './overview.ts';
 import type { Overview } from './overview.ts';
 import { RunController, RunError } from './runner.ts';
-import { listProjects, worktreeDetails } from './projects.ts';
+import { listProjects } from './projects.ts';
 import type { Project } from './projects.ts';
 import { RecentIndex, SESSION_ID } from './recent.ts';
 import { SHELL_AGENT, SessionService } from './sessions.ts';
@@ -853,8 +855,9 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     return (await sesiones.projectList()).find((p) => p.id === id) ?? (await sesiones.projectList(true)).find((p) => p.id === id);
   }
 
-  // /api/projects/:id/{backlog,guides,worktrees}[/...]: lectura del backlog, las
-  // guías y los worktrees del proyecto, y cambio de estado de un elemento.
+  // /api/projects/:id/{backlog,guides,changes}[/...]: lectura del backlog, las
+  // guías y los cambios (checkout principal y worktrees) del proyecto, y cambio de
+  // estado de un elemento.
   // /api/projects/:id/run (POST, DELETE): arrancar y parar su servidor de desarrollo.
   async function projectApi(
     req: IncomingMessage,
@@ -863,7 +866,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     url: URL,
     metodo: string,
   ): Promise<void> {
-    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|worktrees|run)(?:\/(.*))?$/.exec(pathname);
+    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|changes|run)(?:\/(.*))?$/.exec(pathname);
     if (!m) {
       sendJson(res, 404, { error: 'no encontrado' });
       return;
@@ -1004,15 +1007,35 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       return;
     }
 
-    // worktrees
-    if (resto !== '') {
+    // changes: sin caché, el cliente quiere ver los worktrees, ramas y cambios recién creados.
+    const actual = (await sesiones.projectList(true)).find((p) => p.id === proyecto.id) ?? proyecto;
+    if (resto === '') {
+      if (!soloMetodo('GET')) return;
+      sendJson(res, 200, await changesOverview(actual, await sesiones.refresh()));
+      return;
+    }
+    // /changes/main y /changes/wt/:wt (lista), y su /diff?path=: lo que cada lugar cambia frente a su base.
+    const l = /^(?:(main)|wt\/([^/]+))(\/diff)?$/.exec(resto);
+    if (!l) {
       sendJson(res, 404, { error: 'no encontrado' });
       return;
     }
     if (!soloMetodo('GET')) return;
-    // Sin caché: el cliente quiere ver los worktrees y ramas recién creados.
-    const actual = (await sesiones.projectList(true)).find((p) => p.id === proyecto.id) ?? proyecto;
-    sendJson(res, 200, await worktreeDetails(actual, await sesiones.refresh()));
+    let lugar: Place;
+    try {
+      lugar = l[1] ? { kind: 'main' } : { kind: 'wt', name: decodeURIComponent(l[2]!) };
+    } catch {
+      sendJson(res, 400, { error: 'nombre de worktree no válido' });
+      return;
+    }
+    try {
+      if (l[3]) sendJson(res, 200, await placeFileDiff(actual, lugar, url.searchParams.get('path') ?? ''));
+      else sendJson(res, 200, await placeChanges(actual, lugar));
+    } catch (err) {
+      if (!(err instanceof PlaceError)) throw err;
+      if (err.status >= 500) console.error('Error leyendo los cambios de un proyecto:', err.message);
+      sendJson(res, err.status, { error: err.message });
+    }
   }
 
   // /api/history[/:project/:file[/pending]]: lista filtrada, detalle y marca de
@@ -1278,6 +1301,17 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       }
       const ajustes = readSettings(opts.configDir);
       sendJson(res, 200, { projects: await listProjects(opts.harnessRoot, ajustes.projects) });
+      return;
+    }
+    if (pathname === '/api/changes') {
+      if (metodo !== 'GET') {
+        res.setHeader('Allow', 'GET');
+        sendJson(res, 405, { error: 'método no permitido' });
+        return;
+      }
+      // Resumen para la barra lateral de Cambios: archivos cambiados por proyecto visible.
+      const visibles = (await sesiones.projectList(true)).filter((p) => p.visible);
+      sendJson(res, 200, { projects: await changesSummary(visibles) });
       return;
     }
     if (pathname.startsWith('/api/projects/')) {

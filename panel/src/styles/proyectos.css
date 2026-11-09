@@ -1,4 +1,4 @@
-/* ---------- Pantallas de proyecto: Backlog, Worktrees y Guías (Proyecto.dc.html) ---------- */
+/* ---------- Pantallas de proyecto: Backlog, Cambios y Guías (Proyecto.dc.html) ---------- */
 .screen--proyectos {
   position: relative;
 }
@@ -59,6 +59,9 @@
   font-family: var(--font-term);
   font-size: var(--text-xs);
   color: var(--fg-muted);
+}
+.prow__short {
+  display: none;
 }
 
 /* Zona principal */
@@ -949,43 +952,7 @@
   color: var(--fg);
 }
 
-/* Worktrees */
-.wt {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.wt__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.wt__item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--bg-surface);
-}
-.wt__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  color: var(--fg-muted);
-}
-.wt__branch {
-  font-family: var(--font-term);
-  font-size: var(--text-sm2);
-  color: var(--fg);
-}
-.wt__name,
-.wt__ab {
-  font-family: var(--font-term);
-  font-size: var(--text-xs);
-}
+/* Etiquetas y sesiones de un lugar (franja del Backlog y barra de Cambios) */
 .wt__dirty {
   padding: 1px 6px;
   border-radius: 4px;
@@ -993,14 +960,14 @@
   color: var(--waiting-text);
   font-size: var(--text-xs);
 }
-.wt__new {
-  margin-left: auto;
-}
 .wt__sessions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   padding-left: 24px;
+}
+.wchg__bar .wt__sessions {
+  padding-left: 0;
 }
 .wt__session {
   display: inline-flex;
@@ -1110,6 +1077,13 @@
     flex: 0 0 64px;
     min-width: 0;
   }
+  /* El recuento largo («13 cambios») se reduce al número. */
+  .prow__long {
+    display: none;
+  }
+  .prow__short {
+    display: inline;
+  }
   /* El nombre sigue disponible para lectores de pantalla. */
   .prow__name {
     position: absolute;
@@ -1208,4 +1182,668 @@
   margin: 8px 0 0;
   word-break: normal;
   overflow-wrap: anywhere;
+}
+
+/* ---------- Cambios: pestañas de lugar, árbol de archivos y diff ---------- */
+/* Pestañas de lugar: checkout principal y worktrees */
+.ptabs {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.ptabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 38px;
+  padding: 0 14px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+  white-space: nowrap;
+}
+.ptabs__tab--wt {
+  font-family: var(--font-term);
+  font-size: var(--text-sm2);
+}
+.ptabs__tab:hover {
+  color: var(--fg);
+  text-decoration: none;
+}
+.ptabs__tab[aria-selected='true'] {
+  border-bottom-color: var(--link);
+  color: var(--fg);
+}
+.ptabs__count {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--line);
+  color: var(--fg);
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  text-align: center;
+}
+.ptabs__count[data-zero='true'] {
+  background: transparent;
+  color: var(--fg-muted);
+}
+.ptabs__work {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--working);
+}
+.ptabs__note {
+  align-self: center;
+  margin-left: 10px;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+/* Color de estado de un archivo: A añadido, M modificado, D borrado, R renombrado, U sin seguimiento. */
+[data-status='A'] {
+  --st: var(--diff-st-a);
+}
+[data-status='M'],
+[data-status='T'] {
+  --st: var(--diff-st-m);
+}
+[data-status='D'] {
+  --st: var(--diff-st-d);
+}
+[data-status='R'] {
+  --st: var(--diff-st-r);
+}
+[data-status='U'] {
+  --st: var(--diff-st-u);
+}
+
+.wchg {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Contenedor de la query de ancho estrecho: tiene que ser un antecesor de .wchg__box para poder apilarla. */
+  container: wchg / inline-size;
+}
+.wchg__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+}
+.wchg__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg-soft);
+}
+.wchg__back:hover {
+  color: var(--fg);
+  background: var(--bg-raised);
+  text-decoration: none;
+}
+.wchg__branch {
+  font-family: var(--font-term);
+  font-size: var(--text-sm2);
+  color: var(--fg);
+}
+.wchg__since,
+.wchg__ab {
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+}
+.wchg__new {
+  color: var(--fg-soft);
+}
+.wchg__new:hover {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+.wchg__note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm2);
+  line-height: 1.5;
+}
+.wchg__tools {
+  margin-left: auto;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.wchg__lines {
+  font-family: var(--font-term);
+  font-size: var(--text-sm);
+}
+.wchg__box {
+  flex: 1;
+  min-height: min(640px, 80vh);
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+.wchg__tree {
+  flex: 0 1 300px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--line);
+}
+.wchg__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* La barra que despliega el árbol solo existe en ancho estrecho. */
+.wchg__treebar {
+  display: none;
+}
+.wchg__chev {
+  flex: none;
+  color: var(--fg-muted);
+  transition: transform 0.12s;
+}
+.wchg__chev--open {
+  transform: rotate(90deg);
+}
+.wchg__notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--waiting-line);
+  background: var(--waiting-bg);
+  color: var(--waiting-text);
+  font-size: var(--text-sm2);
+  line-height: 1.5;
+}
+.wchg__notice code,
+.wchg__statebox code,
+.diff__emptybox code {
+  font-family: var(--font-term);
+}
+.wchg__notice .link-btn {
+  flex: none;
+  color: inherit;
+}
+.wchg__state {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.wchg__statebox,
+.diff__emptybox {
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+.wchg__statebox strong,
+.diff__emptybox strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.wchg__statebox code,
+.diff__emptybox code {
+  color: var(--fg-soft);
+}
+.wchg__statebox strong.wchg__errtitle,
+.diff__emptybox strong.diff__errtitle {
+  color: var(--danger-text);
+}
+.wchg__loading {
+  flex: 1;
+  display: flex;
+}
+.wchg__loading p {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+}
+.wchg__skeleton {
+  flex: 0 0 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--line);
+}
+.wchg__skeleton span {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: var(--line-soft);
+}
+
+/* Árbol de archivos */
+.ftree {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ftree__head {
+  flex: none;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.ftree__title {
+  font-size: var(--text-xs);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.ftree__list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 0;
+  overflow: auto;
+}
+.ftree__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding-right: 12px;
+  color: var(--fg);
+  font-size: var(--text-md);
+  cursor: pointer;
+  user-select: none;
+}
+.ftree__row:hover {
+  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
+}
+.ftree__row:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+}
+.ftree__row[aria-selected='true'] {
+  background: var(--diff-sel-bg);
+  box-shadow: inset 0 0 0 1px var(--diff-sel-line);
+}
+.ftree__row--dir {
+  color: var(--fg-soft);
+}
+.ftree__icon,
+.ftree__chev {
+  flex: none;
+  color: var(--fg-muted);
+}
+.ftree__chev {
+  transition: transform 0.12s;
+}
+.ftree__chev--open {
+  transform: rotate(90deg);
+}
+.ftree__gap {
+  flex: none;
+  width: 12px;
+}
+.ftree__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ftree__row[data-status='D'] .ftree__name {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+.ftree__stat {
+  flex: none;
+  display: inline-flex;
+  gap: 4px;
+  font-family: var(--font-term);
+  font-size: var(--text-2xs);
+}
+.ftree__add {
+  color: var(--diff-add);
+}
+.ftree__del {
+  color: var(--diff-del);
+}
+.ftree__bin {
+  color: var(--fg-muted);
+}
+.ftree__st {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--st);
+}
+.ftree__more {
+  flex: none;
+  margin: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--waiting-text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+/* Diff del archivo */
+.diffpanel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.diffpanel__head {
+  flex: none;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-surface);
+}
+.diffpanel__path {
+  font-family: var(--font-term);
+  font-size: var(--text-sm2);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+.diffpanel__path strong {
+  color: var(--fg);
+  font-weight: 500;
+}
+.diffpanel__old {
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+.diffpanel__badge {
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--st) 40%, transparent);
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  color: var(--st);
+}
+.diffpanel__stat {
+  margin-left: auto;
+  font-size: var(--text-sm);
+}
+.diffsw {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bg-input);
+}
+.diffsw__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+.diffsw__btn:hover {
+  color: var(--fg);
+}
+.diffsw__btn[aria-pressed='true'] {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+.diffpanel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-term);
+  font-size: var(--text-sm2);
+  line-height: 20px;
+  tab-size: 4;
+}
+.diff__empty {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 40px 24px;
+  font-family: var(--font-ui);
+}
+.diff__loading {
+  margin: 0;
+  padding: 24px;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+}
+.diff__num {
+  text-align: right;
+  padding-right: 8px;
+  color: var(--diff-num);
+  user-select: none;
+}
+.diff__num[data-kind='add'] {
+  background: var(--diff-add-num-bg);
+  color: var(--diff-num-add);
+}
+.diff__num[data-kind='del'] {
+  background: var(--diff-del-num-bg);
+  color: var(--diff-num-del);
+}
+.diff__sign {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  user-select: none;
+}
+[data-kind='add'] .diff__sign {
+  color: var(--diff-add);
+}
+[data-kind='del'] .diff__sign {
+  color: var(--diff-del);
+}
+.diff__hunkrow {
+  margin: 6px 0 2px;
+  padding: 0 12px;
+  background: var(--diff-hunk-bg);
+  color: var(--diff-hunk-fg);
+  white-space: pre;
+}
+.diff__noeol {
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-style: italic;
+  user-select: none;
+}
+/* Lado a lado: las líneas largas se parten dentro de su columna. */
+.diffs {
+  --num-w: calc(var(--digitos, 3) * 1ch + 16px);
+  padding-bottom: 24px;
+}
+.diffs__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+}
+.diffs__head > span {
+  padding: 6px 12px;
+  overflow-wrap: anywhere;
+}
+.diffs__head--right {
+  border-left: 1px solid var(--line);
+}
+.diffs__row {
+  display: grid;
+  grid-template-columns: var(--num-w) minmax(0, 1fr) var(--num-w) minmax(0, 1fr);
+}
+.diffs__code {
+  padding-right: 12px;
+  color: var(--fg-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diffs__code[data-kind='add'] {
+  background: var(--diff-add-bg);
+  color: var(--fg);
+}
+.diffs__code[data-kind='del'] {
+  background: var(--diff-del-bg);
+  color: var(--fg);
+}
+.diffs__cell--right {
+  border-left: 1px solid var(--line);
+}
+/* Hueco del lado más corto de un tramo: fondo rayado. */
+.diff__num--gap,
+.diffs__code--gap {
+  background: repeating-linear-gradient(135deg, var(--diff-gap-a) 0 5px, var(--diff-gap-b) 5px 10px);
+}
+/* Unificado: las líneas largas se desplazan en horizontal. */
+.diffu {
+  --num-w: calc(var(--digitos, 3) * 1ch + 14px);
+}
+.diffu__inner {
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  padding: 6px 0 24px;
+}
+.diffu__hunk {
+  display: grid;
+}
+.diffu__row {
+  display: grid;
+  grid-template-columns: var(--num-w) var(--num-w) 22px minmax(0, 1fr);
+  color: var(--fg-soft);
+}
+.diffu__row[data-kind='add'] {
+  background: var(--diff-add-bg);
+  color: var(--fg);
+}
+.diffu__row[data-kind='del'] {
+  background: var(--diff-del-bg);
+  color: var(--fg);
+}
+.diffu__row[data-kind='add'] .diff__num {
+  background: var(--diff-add-num-bg);
+  color: var(--diff-num-add);
+}
+.diffu__row[data-kind='del'] .diff__num {
+  background: var(--diff-del-num-bg);
+  color: var(--diff-num-del);
+}
+.diffu__row .diff__sign {
+  width: auto;
+}
+.diffu__code {
+  white-space: pre;
+  padding-right: 16px;
+}
+
+/* Ancho estrecho: el árbol se pliega en una barra sobre el diff, que va siempre unificado. */
+@container wchg (max-width: 700px) {
+  .wchg__box {
+    flex-direction: column;
+  }
+  .wchg__treebar {
+    flex: none;
+    order: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-panel);
+    color: var(--fg);
+    text-align: left;
+  }
+  .wchg__treefile {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-term);
+    font-size: var(--text-sm);
+  }
+  .wchg__treecount {
+    flex: none;
+    font-size: var(--text-xs);
+    color: var(--fg-muted);
+  }
+  .wchg__tree {
+    order: 2;
+    display: none;
+    flex: none;
+    max-height: 45%;
+    min-width: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .wchg__tree[data-open='true'] {
+    display: flex;
+  }
+  .wchg__main {
+    order: 3;
+  }
+  .ftree__row {
+    height: 36px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ftree__chev,
+  .wchg__chev {
+    transition: none;
+  }
 }

@@ -16,7 +16,7 @@ const REAL_HARNESS = resolve(import.meta.dirname, '..', '..');
 
 type Json = Record<string, any>;
 
-describe('API de proyectos: backlog, guías y worktrees', () => {
+describe('API de proyectos: backlog, guías y cambios', () => {
   const token = 'd'.repeat(64);
   const sock = `jdev-test-proj-${process.pid}-${Date.now().toString(36)}`;
   const auth = { Authorization: `Bearer ${token}` };
@@ -114,7 +114,11 @@ describe('API de proyectos: backlog, guías y worktrees', () => {
       ['POST', '/api/projects/foo/backlog/BL-20261024-1145-a/move'],
       ['GET', '/api/projects/foo/guides'],
       ['GET', '/api/projects/foo/guides/content?path=uso.md'],
-      ['GET', '/api/projects/foo/worktrees'],
+      ['GET', '/api/projects/foo/changes'],
+      ['GET', '/api/projects/foo/changes/main'],
+      ['GET', '/api/projects/foo/changes/wt/uno'],
+      ['GET', '/api/projects/foo/changes/wt/uno/diff?path=nuevo.txt'],
+      ['GET', '/api/changes'],
     ] as const) {
       expect((await fetch(`${base}${ruta}`, { method: metodo })).status, ruta).toBe(401);
     }
@@ -232,17 +236,96 @@ describe('API de proyectos: backlog, guías y worktrees', () => {
     expect(await json(await api('GET', '/api/projects/harness/guides'))).toEqual({ guides: [] });
   });
 
-  it('worktrees con ahead, behind, dirty y sesiones del panel', async () => {
+  it('lugares con ahead, behind, dirty, cambios y sesiones del panel', async () => {
     const creada = await api('POST', '/api/sessions', { project: 'foo', agent: 'codex', location: 'existing-worktree', feature: 'uno' });
     expect(creada.status).toBe(201);
     const nombre = (await json(creada)).session.name as string;
-    const c = await json(await api('GET', '/api/projects/foo/worktrees'));
+    const r = await api('GET', '/api/projects/foo/changes');
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    const c = await json(r);
     expect(c.base).toBe('main');
+    // El checkout principal no tiene rama remota; los tests anteriores del backlog le dejaron cambios sin commit.
+    const enPrincipal = git(proy, 'status', '--porcelain', '-uall').split('\n').filter(Boolean).length;
+    expect(enPrincipal).toBeGreaterThan(0);
+    expect(c.main).toEqual({ branch: 'main', upstream: null, ahead: null, behind: null, dirty: true, changes: enPrincipal, sessions: [] });
     const por = Object.fromEntries(c.worktrees.map((w: Json) => [w.name, w]));
-    expect(por.uno).toMatchObject({ branch: 'feat/uno', ahead: 2, behind: 1, dirty: true, sessions: [nombre] });
-    expect(por.dos).toMatchObject({ branch: 'feat/dos', ahead: 0, behind: 1, dirty: false, sessions: [] });
+    expect(por.uno).toMatchObject({ branch: 'feat/uno', ahead: 2, behind: 1, dirty: true, sessions: [nombre], changes: 1 });
+    expect(por.dos).toMatchObject({ branch: 'feat/dos', ahead: 0, behind: 1, dirty: false, sessions: [], changes: 0 });
     // El contrato de /api/projects no cambia.
     const proyectos = await json(await api('GET', '/api/projects'));
     expect(Object.keys(proyectos.projects[1].worktrees[0]).sort()).toEqual(['branch', 'name', 'path']);
+    // El harness solo tiene su checkout principal.
+    const h = await json(await api('GET', '/api/projects/harness/changes'));
+    expect(h.worktrees).toEqual([]);
+    // El harness del test no es un repositorio git: sus datos son null, pero el lugar existe.
+    expect(h.main).toMatchObject({ branch: null, changes: null, sessions: [] });
+  });
+
+  it('resumen de cambios por proyecto visible', async () => {
+    const r = await api('GET', '/api/changes');
+    expect(r.status).toBe(200);
+    const c = await json(r);
+    // foo: los archivos sin commit de su checkout principal más el sin seguimiento de «uno».
+    const enPrincipal = git(proy, 'status', '--porcelain', '-uall').split('\n').filter(Boolean).length;
+    expect(c.projects.foo).toBe(enPrincipal + 1);
+    expect(Object.keys(c.projects)).toContain('harness');
+    expect((await api('POST', '/api/changes', {})).status).toBe(405);
+  });
+
+  it('cambios de un lugar y diff de un archivo', async () => {
+    const r = await api('GET', '/api/projects/foo/changes/wt/uno');
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    const c = await json(r);
+    expect(c).toMatchObject({ base: 'main', upstream: null, truncated: false, total: 1 });
+    expect(c.mergeBase).toBe(git(proy, 'rev-parse', 'HEAD~1').trim());
+    expect(c.files).toEqual([{ path: 'nuevo.txt', oldPath: null, status: 'U', added: 1, deleted: 0, binary: false }]);
+    expect((await json(await api('GET', '/api/projects/foo/changes/wt/dos'))).files).toEqual([]);
+
+    const d = await api('GET', '/api/projects/foo/changes/wt/uno/diff?path=nuevo.txt');
+    expect(d.status).toBe(200);
+    expect(await json(d)).toMatchObject({ path: 'nuevo.txt', status: 'U', binary: false, tooLarge: false, patch: expect.stringContaining('+x') });
+  });
+
+  it('cambios del checkout principal: sin commit y sin seguimiento, y su diff', async () => {
+    writeFileSync(join(proy, 'docs', 'user-guides', 'uso.md'), '# Cómo se usa\n\nTexto cambiado.\n');
+    writeFileSync(join(proy, 'suelto.txt'), 'hola\n');
+    try {
+      const c = await json(await api('GET', '/api/projects/foo/changes/main'));
+      expect(c).toMatchObject({ base: 'main', upstream: null });
+      const propios = c.files.filter((f: Json) => f.path === 'suelto.txt' || f.path.startsWith('docs/user-guides/'));
+      expect(propios.map((f: Json) => [f.path, f.status])).toEqual([['docs/user-guides/uso.md', 'M'], ['suelto.txt', 'U']]);
+      const d = await json(await api('GET', `/api/projects/foo/changes/main/diff?path=${encodeURIComponent('docs/user-guides/uso.md')}`));
+      expect(d.patch).toContain('+Texto cambiado.');
+      const resumen = await json(await api('GET', '/api/projects/foo/changes'));
+      expect(resumen.main).toMatchObject({ dirty: true, changes: c.total });
+    } finally {
+      git(proy, 'checkout', '--', 'docs/user-guides/uso.md');
+      rmSync(join(proy, 'suelto.txt'));
+    }
+  });
+
+  it('cambios: validación del lugar, del archivo y del método', async () => {
+    expect((await api('GET', '/api/projects/foo/changes/wt/no-existe')).status).toBe(404);
+    expect((await api('GET', '/api/projects/foo/changes/wt/no-existe/diff?path=a')).status).toBe(404);
+    // Un nombre con ruta o con codificación rota nunca llega a git.
+    expect((await api('GET', '/api/projects/foo/changes/wt/..%2Funo')).status).toBe(404);
+    expect((await api('GET', '/api/projects/foo/changes/wt/%E0%A4%A')).status).toBe(400);
+    expect((await api('GET', '/api/projects/harness/changes/wt/uno')).status).toBe(404);
+    expect((await api('GET', '/api/projects/nada/changes/main')).status).toBe(404);
+    // Archivos fuera de la lista, también con `../` o sin parámetro, en los dos lugares.
+    for (const lugar of ['wt/uno', 'main']) {
+      for (const ruta of ['../../.ssh/id_rsa', '%2E%2E/foo/nuevo.txt', '/etc/passwd', 'otro.txt', '']) {
+        expect((await api('GET', `/api/projects/foo/changes/${lugar}/diff?path=${ruta}`)).status, `${lugar} ${ruta}`).toBe(404);
+      }
+      expect((await api('GET', `/api/projects/foo/changes/${lugar}/diff`)).status).toBe(404);
+    }
+    expect((await api('GET', '/api/projects/foo/changes/otra')).status).toBe(404);
+    expect((await api('GET', '/api/projects/foo/changes/wt')).status).toBe(404);
+    expect((await api('GET', '/api/projects/foo/worktrees')).status).toBe(404);
+    const post = await api('POST', '/api/projects/foo/changes/wt/uno', {});
+    expect(post.status).toBe(405);
+    expect(post.headers.get('allow')).toBe('GET');
   });
 });

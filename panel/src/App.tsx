@@ -12,7 +12,7 @@ import { HistorialScreen } from './screens/HistorialScreen.tsx';
 import { InicioScreen } from './screens/InicioScreen.tsx';
 import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { TerminalesScreen } from './screens/TerminalesScreen.tsx';
-import { WorktreesScreen } from './screens/WorktreesScreen.tsx';
+import { CambiosScreen } from './screens/CambiosScreen.tsx';
 import { ImagesProvider } from './state/ImagesContext.tsx';
 import { SessionsProvider } from './state/SessionsContext.tsx';
 import { SettingsProvider, useSettings } from './state/SettingsContext.tsx';
@@ -60,7 +60,7 @@ function Shell() {
       <TerminalesScreen hidden={pendiente || ruta !== 'terminales'} />
       {!pendiente && ruta === 'inicio' && <InicioScreen onGoToTerminal={irATerminales} />}
       {ruta === 'backlog' && <BacklogScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
-      {ruta === 'worktrees' && <WorktreesScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
+      {ruta === 'cambios' && <CambiosScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
       {ruta === 'guias' && <GuiasScreen project={proyecto} item={elemento} onReplaceHash={reemplazar} />}
       {ruta === 'historial' && <HistorialScreen project={proyecto} file={elemento} onReplaceHash={reemplazar} />}
       {ruta === 'ajustes' && <SettingsScreen />}

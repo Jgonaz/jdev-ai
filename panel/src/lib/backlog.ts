@@ -230,6 +230,26 @@ export function saveLastProject(id: string, storage: Pick<Storage, 'setItem'> | 
   }
 }
 
+const LAST_CAMBIOS_KEY = 'jdev-panel:cambios:last';
+
+/** Último proyecto que la persona eligió en Cambios (aparte del compartido por Backlog y Guías). */
+export function loadLastCambios(storage: Pick<Storage, 'getItem'> | null = safeStorage()): string | null {
+  try {
+    const v = storage?.getItem(LAST_CAMBIOS_KEY);
+    return typeof v === 'string' && v !== '' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastCambios(id: string, storage: Pick<Storage, 'setItem'> | null = safeStorage()): void {
+  try {
+    storage?.setItem(LAST_CAMBIOS_KEY, id);
+  } catch {
+    // Almacenamiento bloqueado: solo se pierde el recuerdo.
+  }
+}
+
 /** Proyecto a mostrar: el pedido si existe; si no, el último usado o el primero. */
 export function pickProject(ids: readonly string[], pedido: string | null, ultimo: string | null): string | null {
   if (pedido && ids.includes(pedido)) return pedido;
@@ -239,7 +259,7 @@ export function pickProject(ids: readonly string[], pedido: string | null, ultim
 
 /**
  * ¿Hay que recordar `mostrado` como último proyecto usado? Solo si la persona lo
- * eligió (ruta con proyecto o clic). El proyecto que Worktrees escoge solo por
+ * eligió (ruta con proyecto o clic). El proyecto que Cambios escoge solo por
  * defecto no se recuerda, ni cuando la pantalla lo pone después en la URL:
  * `automatico` es el que la pantalla escogió así y se devuelve actualizado.
  */
@@ -249,7 +269,7 @@ export function rememberDecision(
   mostrado: string,
   automatico: string | null,
 ): { remember: boolean; automatico: string | null } {
-  if (pantalla !== 'worktrees') return { remember: true, automatico: null };
+  if (pantalla !== 'cambios') return { remember: true, automatico: null };
   // Sin proyecto en la ruta (o con uno que no existe): lo escoge la pantalla.
   if (pedido !== mostrado) return { remember: false, automatico: mostrado };
   // La ruta lleva el proyecto que la propia pantalla acaba de poner.
@@ -258,13 +278,21 @@ export function rememberDecision(
 }
 
 /**
- * Proyecto de Worktrees: el pedido si existe; si no, el primero con worktrees
- * abiertos o, si ninguno tiene, el primero. No usa el último proyecto usado
- * (Backlog y Guías sí, con `pickProject`): se abre en el que tiene trabajo en curso.
+ * Proyecto de Cambios: el pedido si existe; si no, el primero con cambios (según
+ * el resumen del servidor), si ninguno tiene, el último que la persona usó en Cambios y,
+ * si no lo hay, el primero. Con `conCambios` null (el resumen aún no ha llegado) y
+ * sin proyecto pedido no se escoge ninguno: la pantalla espera en lugar de saltar de
+ * proyecto cuando llega.
  */
-export function pickWorktreesProject(ids: readonly string[], pedido: string | null, conWorktrees: ReadonlySet<string>): string | null {
+export function pickCambiosProject(
+  ids: readonly string[],
+  pedido: string | null,
+  conCambios: ReadonlySet<string> | null,
+  ultimo: string | null,
+): string | null {
   if (pedido && ids.includes(pedido)) return pedido;
-  return ids.find((id) => conWorktrees.has(id)) ?? ids[0] ?? null;
+  if (conCambios === null) return null;
+  return ids.find((id) => conCambios.has(id)) ?? (ultimo && ids.includes(ultimo) ? ultimo : null) ?? ids[0] ?? null;
 }
 
 /**

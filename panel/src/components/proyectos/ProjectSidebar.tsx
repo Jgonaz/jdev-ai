@@ -27,7 +27,7 @@ export function useSidebarWidth(): { panel: PanelWidth; compact: boolean; width:
 }
 
 /**
- * Barra lateral común a Backlog, Worktrees y Guías. Cada enlace lleva al otro
+ * Barra lateral común a Backlog, Cambios y Guías. Cada enlace lleva al otro
  * proyecto en la misma pantalla, y el recuento (si lo hay) es el de la pantalla:
  * `counts[id]` es null mientras no se conoce o no aplica, y entonces no se pinta.
  */
@@ -39,6 +39,8 @@ export function ProjectSidebar(props: {
   counts: Readonly<Record<string, number | null | undefined>>;
   /** Texto accesible del recuento: «3 elementos abiertos». */
   countLabel: (n: number) => string;
+  /** Texto visible del recuento si no es solo el número («13 cambios»); con la barra reducida a monogramas se ve el número. */
+  countText?: (n: number) => string;
   /** Ancho que ocupan otros paneles en línea del mismo contenedor (el detalle del Backlog). */
   reserved?: number;
 }) {
@@ -57,7 +59,14 @@ export function ProjectSidebar(props: {
                   <span className="prow__name">{p.name}</span>
                   {n !== null && (
                     <span className="prow__count" aria-label={props.countLabel(n)}>
-                      {n}
+                      {props.countText ? (
+                        <>
+                          <span className="prow__long" aria-hidden="true">{props.countText(n)}</span>
+                          <span className="prow__short" aria-hidden="true">{n > 0 ? n : ''}</span>
+                        </>
+                      ) : (
+                        n
+                      )}
                     </span>
                   )}
                 </a>

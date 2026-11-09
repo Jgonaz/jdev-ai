@@ -14,7 +14,9 @@ import {
   NO_FILTERS,
   openCount,
   pendingLabel,
-  pickWorktreesProject,
+  pickCambiosProject,
+  loadLastCambios,
+  saveLastCambios,
   rememberDecision,
   pickProject,
   resolveLocalPath,
@@ -193,53 +195,66 @@ describe('proyecto elegido', () => {
     expect(pickProject([], null, null)).toBeNull();
   });
 
-  it('Worktrees prefiere el pedido, luego el primero con worktrees y luego el primero', () => {
-    const conWt = new Set(['b', 'c']);
-    // La ruta manda, aunque no tenga worktrees.
-    expect(pickWorktreesProject(['a', 'b', 'c'], 'a', conWt)).toBe('a');
-    expect(pickWorktreesProject(['a', 'b', 'c'], null, conWt)).toBe('b');
+  it('Cambios prefiere el pedido, luego el primero con cambios, luego el último usado en Cambios y luego el primero', () => {
+    const con = new Set(['b', 'c']);
+    // La ruta manda, aunque no tenga cambios.
+    expect(pickCambiosProject(['a', 'b', 'c'], 'a', con, null)).toBe('a');
+    expect(pickCambiosProject(['a', 'b', 'c'], null, con, 'c')).toBe('b');
     // Un proyecto pedido que no existe (u oculto) se ignora.
-    expect(pickWorktreesProject(['a', 'b', 'c'], 'zz', conWt)).toBe('b');
-    expect(pickWorktreesProject(['a', 'b', 'c'], null, new Set(['c']))).toBe('c');
-    // Un proyecto con worktrees que no es visible no cuenta.
-    expect(pickWorktreesProject(['a', 'b'], null, new Set(['oculto']))).toBe('a');
-    expect(pickWorktreesProject(['a', 'b'], null, new Set())).toBe('a');
-    expect(pickWorktreesProject([], null, conWt)).toBeNull();
+    expect(pickCambiosProject(['a', 'b', 'c'], 'zz', con, null)).toBe('b');
+    expect(pickCambiosProject(['a', 'b', 'c'], null, new Set(['c']), null)).toBe('c');
+    // Un proyecto con cambios que no es visible no cuenta.
+    expect(pickCambiosProject(['a', 'b'], null, new Set(['oculto']), null)).toBe('a');
+    // Sin cambios en ninguno: el último usado en Cambios si sigue visible; si no, el primero.
+    expect(pickCambiosProject(['a', 'b', 'c'], null, new Set(), 'c')).toBe('c');
+    expect(pickCambiosProject(['a', 'b', 'c'], null, new Set(), 'zz')).toBe('a');
+    expect(pickCambiosProject(['a', 'b'], null, new Set(), null)).toBe('a');
+    expect(pickCambiosProject([], null, con, null)).toBeNull();
   });
 
-  it('Worktrees no recuerda el proyecto que escoge solo: abrir #/backlog/ccc, #/worktrees (abre bbb) y #/backlog muestra ccc', () => {
+  it('Cambios espera al resumen si no hay proyecto en la ruta, pero no si la ruta lo trae', () => {
+    expect(pickCambiosProject(['a', 'b'], null, null, 'b')).toBeNull();
+    expect(pickCambiosProject(['a', 'b'], 'zz', null, 'b')).toBeNull();
+    expect(pickCambiosProject(['a', 'b'], 'b', null, null)).toBe('b');
+  });
+
+  it('Cambios no recuerda el proyecto que escoge solo: abrir #/backlog/ccc, #/cambios (abre bbb) y #/backlog muestra ccc', () => {
     const mapa = new Map<string, string>();
     const almacen = { getItem: (k: string) => mapa.get(k) ?? null, setItem: (k: string, v: string) => void mapa.set(k, v) };
     const ids = ['aaa', 'bbb', 'ccc'];
-    const conWt = new Set(['bbb']);
+    const conCambios = new Set(['bbb']);
     // Lo que hace useProjectScreen en cada render con efecto.
     let automatico: string | null = null;
-    const abrir = (pantalla: 'backlog' | 'worktrees', pedido: string | null) => {
+    const abrir = (pantalla: 'backlog' | 'cambios', pedido: string | null) => {
       const mostrado =
-        pantalla === 'worktrees' ? pickWorktreesProject(ids, pedido, conWt)! : pickProject(ids, pedido, loadLastProject(almacen))!;
+        pantalla === 'cambios' ? pickCambiosProject(ids, pedido, conCambios, loadLastCambios(almacen))! : pickProject(ids, pedido, loadLastProject(almacen))!;
       const d = rememberDecision(pantalla, pedido, mostrado, automatico);
       automatico = d.automatico;
-      if (d.remember) saveLastProject(mostrado, almacen);
+      if (d.remember) {
+        saveLastProject(mostrado, almacen);
+        if (pantalla === 'cambios') saveLastCambios(mostrado, almacen);
+      }
       return mostrado;
     };
     expect(abrir('backlog', 'ccc')).toBe('ccc');
-    // Worktrees sin proyecto abre bbb y la URL se corrige a #/worktrees/bbb.
-    expect(abrir('worktrees', null)).toBe('bbb');
-    expect(abrir('worktrees', 'bbb')).toBe('bbb');
+    // Cambios sin proyecto abre bbb y la URL se corrige a #/cambios/bbb.
+    expect(abrir('cambios', null)).toBe('bbb');
+    expect(abrir('cambios', 'bbb')).toBe('bbb');
+    expect(loadLastCambios(almacen)).toBeNull();
     expect(loadLastProject(almacen)).toBe('ccc');
     expect(abrir('backlog', null)).toBe('ccc');
   });
 
-  it('rememberDecision: recuerda lo que elige la persona y no lo que escoge Worktrees', () => {
+  it('rememberDecision: recuerda lo que elige la persona y no lo que escoge Cambios', () => {
     expect(rememberDecision('backlog', null, 'a', null)).toEqual({ remember: true, automatico: null });
     expect(rememberDecision('guias', 'b', 'b', null)).toEqual({ remember: true, automatico: null });
-    expect(rememberDecision('worktrees', null, 'b', null)).toEqual({ remember: false, automatico: 'b' });
+    expect(rememberDecision('cambios', null, 'b', null)).toEqual({ remember: false, automatico: 'b' });
     // Un proyecto pedido que no existe: lo escoge la pantalla.
-    expect(rememberDecision('worktrees', 'zz', 'b', null)).toEqual({ remember: false, automatico: 'b' });
-    expect(rememberDecision('worktrees', 'b', 'b', 'b')).toEqual({ remember: false, automatico: 'b' });
+    expect(rememberDecision('cambios', 'zz', 'b', null)).toEqual({ remember: false, automatico: 'b' });
+    expect(rememberDecision('cambios', 'b', 'b', 'b')).toEqual({ remember: false, automatico: 'b' });
     // Otro proyecto elegido en la ruta o con un clic.
-    expect(rememberDecision('worktrees', 'c', 'c', 'b')).toEqual({ remember: true, automatico: null });
-    expect(rememberDecision('worktrees', 'b', 'b', null)).toEqual({ remember: true, automatico: null });
+    expect(rememberDecision('cambios', 'c', 'c', 'b')).toEqual({ remember: true, automatico: null });
+    expect(rememberDecision('cambios', 'b', 'b', null)).toEqual({ remember: true, automatico: null });
   });
 
   it('recuerda el último proyecto y tolera un almacenamiento que lanza', () => {
@@ -258,5 +273,26 @@ describe('proyecto elegido', () => {
     expect(loadLastProject(roto)).toBeNull();
     expect(() => saveLastProject('x', roto)).not.toThrow();
     expect(loadLastProject(null)).toBeNull();
+  });
+
+  it('recuerda aparte el último proyecto de Cambios', () => {
+    const mapa = new Map<string, string>();
+    const almacen = { getItem: (k: string) => mapa.get(k) ?? null, setItem: (k: string, v: string) => void mapa.set(k, v) };
+    expect(loadLastCambios(almacen)).toBeNull();
+    saveLastProject('a', almacen);
+    saveLastCambios('b', almacen);
+    expect(loadLastCambios(almacen)).toBe('b');
+    expect(loadLastProject(almacen)).toBe('a');
+    const roto = {
+      getItem: () => {
+        throw new Error('bloqueado');
+      },
+      setItem: () => {
+        throw new Error('bloqueado');
+      },
+    };
+    expect(loadLastCambios(roto)).toBeNull();
+    expect(() => saveLastCambios('x', roto)).not.toThrow();
+    expect(loadLastCambios(null)).toBeNull();
   });
 });

@@ -88,6 +88,27 @@
   --ansi-bright-magenta: #dcbcff;
   --ansi-bright-cyan: #9be3f0;
   --ansi-bright-white: #ffffff;
+  /* Pantalla Cambios: diff, árbol y estado de cada archivo (todos con 4,5:1 sobre su fondo). */
+  --diff-add: #6cc3b5;
+  --diff-del: #ff7b6b;
+  --diff-add-bg: #212f30;
+  --diff-add-num-bg: #1f2a2b;
+  --diff-del-bg: #322525;
+  --diff-del-num-bg: #2b2223;
+  --diff-hunk-bg: #242c36;
+  --diff-hunk-fg: #8ab4f8;
+  --diff-gap-a: #16191c;
+  --diff-gap-b: #1e2124;
+  --diff-num: #7d848c;
+  --diff-num-add: #9aa1a9;
+  --diff-num-del: #9aa1a9;
+  --diff-sel-bg: #242c38;
+  --diff-sel-line: #3d5a85;
+  --diff-st-a: #6cc3b5;
+  --diff-st-m: #f0b25a;
+  --diff-st-d: #ff7b6b;
+  --diff-st-r: #8ab4f8;
+  --diff-st-u: #c79bff;
 }
 
 /* ---------- Fósforo: oscuro cálido, papel y tinta ---------- */
@@ -145,6 +166,27 @@
   --ansi-bright-magenta: #e1bff2;
   --ansi-bright-cyan: #9be3f0;
   --ansi-bright-white: #fffaf0;
+  /* Pantalla Cambios: diff, árbol y estado de cada archivo (todos con 4,5:1 sobre su fondo). */
+  --diff-add: #7cc4a8;
+  --diff-del: #ff8466;
+  --diff-add-bg: #283028;
+  --diff-add-num-bg: #262b24;
+  --diff-del-bg: #37271f;
+  --diff-del-num-bg: #30241c;
+  --diff-hunk-bg: #342d1f;
+  --diff-hunk-fg: #e6b866;
+  --diff-gap-a: #1c1a15;
+  --diff-gap-b: #24221d;
+  --diff-num: #8b8374;
+  --diff-num-add: #a39b8b;
+  --diff-num-del: #a39b8b;
+  --diff-sel-bg: #352d1e;
+  --diff-sel-line: #7a5c28;
+  --diff-st-a: #7cc4a8;
+  --diff-st-m: #f0b25a;
+  --diff-st-d: #ff8466;
+  --diff-st-r: #8fb6ee;
+  --diff-st-u: #cfa0e8;
 }
 
 /* ---------- Papel: claro, tinta sobre crema ---------- */
@@ -205,6 +247,27 @@
   --ansi-bright-magenta: #7d4cc4;
   --ansi-bright-cyan: #0b6f82;
   --ansi-bright-white: #2a2f35;
+  /* Pantalla Cambios: diff, árbol y estado de cada archivo (todos con 4,5:1 sobre su fondo). */
+  --diff-add: #17695a;
+  --diff-del: #9a2c18;
+  --diff-add-bg: #d7e0d6;
+  --diff-add-num-bg: #e0e6dc;
+  --diff-del-bg: #eddbd0;
+  --diff-del-num-bg: #f1e1d7;
+  --diff-hunk-bg: #e0e4e7;
+  --diff-hunk-fg: #1a56b0;
+  --diff-gap-a: #fbf7ee;
+  --diff-gap-b: #f2efe6;
+  --diff-num: #5f656c;
+  --diff-num-add: #565c63;
+  --diff-num-del: #565c63;
+  --diff-sel-bg: #dcdad1;
+  --diff-sel-line: #1a56b0;
+  --diff-st-a: #17695a;
+  --diff-st-m: #7a4e00;
+  --diff-st-d: #9a2c18;
+  --diff-st-r: #1a56b0;
+  --diff-st-u: #6f3fb0;
 }
 
 /* ---------- Alto contraste: negro puro, bordes marcados ---------- */
@@ -262,6 +325,27 @@
   --ansi-bright-magenta: #e8ccff;
   --ansi-bright-cyan: #b0f2fa;
   --ansi-bright-white: #ffffff;
+  /* Pantalla Cambios: diff, árbol y estado de cada archivo (todos con 4,5:1 sobre su fondo). */
+  --diff-add: #5fe0cc;
+  --diff-del: #ff8a7a;
+  --diff-add-bg: #1b3531;
+  --diff-add-num-bg: #162825;
+  --diff-del-bg: #3b2420;
+  --diff-del-num-bg: #291a18;
+  --diff-hunk-bg: #1a2027;
+  --diff-hunk-fg: #8cc4ff;
+  --diff-gap-a: #0a0a0a;
+  --diff-gap-b: #141414;
+  --diff-num: #b8b8b8;
+  --diff-num-add: #cfcfcf;
+  --diff-num-del: #cfcfcf;
+  --diff-sel-bg: #1c242c;
+  --diff-sel-line: #8cc4ff;
+  --diff-st-a: #5fe0cc;
+  --diff-st-m: #ffc247;
+  --diff-st-d: #ff8a7a;
+  --diff-st-r: #8cc4ff;
+  --diff-st-u: #d8aaff;
 }
 
 /* ---------- Acentos ---------- */

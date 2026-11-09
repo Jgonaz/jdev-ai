@@ -6,6 +6,8 @@ import type {
   BacklogState,
   CommitPreview,
   Done,
+  ChangesOverview,
+  FileDiff,
   Guide,
   GuideContent,
   HistoryDetail,
@@ -17,7 +19,7 @@ import type {
   SessionInfo,
   SessionRequest,
   Settings,
-  WorktreeList,
+  PlaceChanges,
 } from './types.ts';
 import type { ActivityAgent, ActivityRange, ActivityResponse } from '../shared/activity.ts';
 import type { ChatSendResponse } from '../shared/chat.ts';
@@ -25,6 +27,7 @@ import type { ConversationResponse, FollowKind, FollowResponse } from '../shared
 import type { SettingsPatch } from './lib/settingsPatch.ts';
 import { parseImageHeaders } from './lib/imageZoom.ts';
 import type { ImageMeta } from './lib/imageZoom.ts';
+import type { PlaceRef } from './lib/route.ts';
 import type { ScrollState } from './lib/scrollbar.ts';
 
 /** Orden de scroll por el historial de tmux (ver POST /api/sessions/:name/scroll). `line` es la posición, en líneas sobre el final. */
@@ -145,7 +148,14 @@ export const api = {
     request<{ guides: Guide[] }>(`${projectBase(proyecto)}/guides`, { signal }).then((r) => r.guides),
   guide: (proyecto: string, ruta: string, signal?: AbortSignal) =>
     request<GuideContent>(`${projectBase(proyecto)}/guides/content?${new URLSearchParams({ path: ruta }).toString()}`, { signal }),
-  worktrees: (proyecto: string, signal?: AbortSignal) => request<WorktreeList>(`${projectBase(proyecto)}/worktrees`, { signal }),
+  /** Lugares del proyecto (checkout principal y worktrees) con sus datos. */
+  changes: (proyecto: string, signal?: AbortSignal) => request<ChangesOverview>(`${projectBase(proyecto)}/changes`, { signal }),
+  placeChanges: (proyecto: string, lugar: PlaceRef, signal?: AbortSignal) =>
+    request<PlaceChanges>(`${projectBase(proyecto)}/changes/${placePath(lugar)}`, { signal }),
+  placeDiff: (proyecto: string, lugar: PlaceRef, ruta: string, signal?: AbortSignal) =>
+    request<FileDiff>(`${projectBase(proyecto)}/changes/${placePath(lugar)}/diff?${new URLSearchParams({ path: ruta }).toString()}`, { signal }),
+  /** Archivos cambiados por proyecto visible (barra lateral de Cambios); null si no se pudo calcular. */
+  changesSummary: (signal?: AbortSignal) => request<{ projects: Record<string, number | null> }>('/api/changes', { signal }).then((r) => r.projects),
   overview: (signal?: AbortSignal) => request<Overview>('/api/overview', { signal }),
   activity: (range: ActivityRange, agent: ActivityAgent, signal?: AbortSignal) =>
     request<ActivityResponse>(`/api/activity?${new URLSearchParams({ range, agent }).toString()}`, { signal }),
@@ -154,6 +164,7 @@ export const api = {
     request<{ entry: HistoryDetail }>(historyBase(proyecto, archivo), { signal }).then((r) => r.entry),
 };
 
+const placePath = (l: PlaceRef) => (l.kind === 'main' ? 'main' : `wt/${encodeURIComponent(l.name)}`);
 const historyBase = (proyecto: string, archivo: string) => `/api/history/${encodeURIComponent(proyecto)}/${encodeURIComponent(archivo)}`;
 
 /** Resultado de marcar un pendiente: el 409 trae la versión actual de la entrada. */
