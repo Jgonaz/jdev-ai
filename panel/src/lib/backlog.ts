@@ -128,20 +128,6 @@ export function priorityRank(p: string | null): number {
   }
 }
 
-/** Barras del diseño: ▂▁▁ baja, ▂▄▁ media, ▂▄▆ alta; null si no hay prioridad conocida. */
-export function priorityBars(p: string | null): string | null {
-  switch (priorityRank(p)) {
-    case 3:
-      return '▂▄▆';
-    case 2:
-      return '▂▄▁';
-    case 1:
-      return '▂▁▁';
-    default:
-      return null;
-  }
-}
-
 /** «≈ 40 s de lectura», «≈ 1 min 30 s de lectura»; '' si no hay resumen. */
 export function formatReadTime(segundos: number): string {
   if (!(segundos > 0)) return '';

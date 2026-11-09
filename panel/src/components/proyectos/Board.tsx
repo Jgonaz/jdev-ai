@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { STATE_HINTS, STATE_LABELS, emptyColumnText, priorityBars, shortDate } from '../../lib/backlog.ts';
+import { STATE_HINTS, STATE_LABELS, emptyColumnText, priorityRank, shortDate } from '../../lib/backlog.ts';
 import type { Grouped } from '../../lib/backlog.ts';
 import { projectHref } from '../../lib/route.ts';
 import { useSettings } from '../../state/SettingsContext.tsx';
@@ -10,22 +10,37 @@ const ASCII = '  ( -_-)  zZ\n  /|___|\\';
 /** Elementos hechos que se ven con la columna plegada. */
 const DONE_PREVIEW = 5;
 
-const MARCAS: Partial<Record<BacklogState, string>> = { todo: '●', 'in-progress': '◐', done: '✓', discarded: '✕' };
+/** Las etiquetas van en minúscula porque también se usan dentro de frases; en las cabeceras, con mayúscula inicial. */
+const cabecera = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const MARCAS: Partial<Record<BacklogState, string>> = { backlog: '○', todo: '●', 'in-progress': '◐', done: '✓', discarded: '✕' };
+
+/** Tipos con color propio; el resto usa el color neutro. */
+const TIPOS_CON_COLOR = new Set(['feature', 'fix', 'todo', 'finding']);
 
 function Priority({ value }: { value: string | null }) {
-  const barras = priorityBars(value);
   if (!value) return null;
+  const rank = priorityRank(value);
+  // «baja» es lo habitual: basta con las barras; el texto queda para lectores de pantalla y el tooltip.
+  const conTexto = rank !== 1;
   return (
-    <span className="bcard__prio">
-      {barras && <span aria-hidden="true">{barras} </span>}
+    <span className={`bcard__prio bcard__prio--${rank}`} title={`prioridad ${value}`}>
+      {rank > 0 && (
+        <span className="bprio" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+      )}
       <span className="sr-only">prioridad </span>
-      {value}
+      {conTexto ? value : <span className="sr-only">{value}</span>}
     </span>
   );
 }
 
 function Card({ item, project, selected }: { item: BacklogItem; project: string; selected: boolean }) {
   const legacy = item.warnings.includes('legacy');
+  const tipo = item.type?.toLowerCase() ?? '';
   return (
     <li>
       <a
@@ -33,8 +48,10 @@ function Card({ item, project, selected }: { item: BacklogItem; project: string;
         href={projectHref('backlog', project, item.id)}
         aria-current={selected ? 'true' : undefined}
         data-item={item.id}
+        data-type={TIPOS_CON_COLOR.has(tipo) ? tipo : undefined}
       >
         <span className="bcard__title">{item.title}</span>
+        {item.summary && <span className="bcard__summary">{item.summary}</span>}
         <span className="bcard__meta">
           {item.type && <span className="bcard__type">{item.type}</span>}
           <Priority value={item.priority} />
@@ -55,7 +72,7 @@ function ClosedRow({ item, project, selected }: { item: BacklogItem; project: st
   return (
     <li>
       <a
-        className={`bdone${selected ? ' bdone--selected' : ''}`}
+        className={`bdone bdone--${item.status}${selected ? ' bdone--selected' : ''}`}
         href={projectHref('backlog', project, item.id)}
         aria-current={selected ? 'true' : undefined}
         data-item={item.id}
@@ -74,7 +91,7 @@ function ColumnHead({ state, count, idBase }: { state: BacklogState; count: numb
           {MARCAS[state]}
         </span>
       )}
-      {STATE_LABELS[state]}
+      {cabecera(STATE_LABELS[state])}
       <span className="bcol__count">
         <span className="sr-only">, </span>
         {count}
@@ -161,7 +178,7 @@ function ClosedColumn(props: {
             <span className="bcol__mark" aria-hidden="true">
               {MARCAS.discarded}
             </span>
-            {STATE_LABELS.discarded}
+            {cabecera(STATE_LABELS.discarded)}
             <span className="bcol__count">
               <span className="sr-only">, </span>
               {props.discarded.length}

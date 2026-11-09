@@ -17,7 +17,6 @@ import {
   pickWorktreesProject,
   rememberDecision,
   pickProject,
-  priorityBars,
   resolveLocalPath,
   saveLastProject,
   shortDate,
@@ -125,14 +124,6 @@ describe('allowedTargets', () => {
 });
 
 describe('formatos', () => {
-  it('pinta las barras de prioridad del diseño', () => {
-    expect(priorityBars('baja')).toBe('▂▁▁');
-    expect(priorityBars('media')).toBe('▂▄▁');
-    expect(priorityBars('Alta')).toBe('▂▄▆');
-    expect(priorityBars('urgente')).toBeNull();
-    expect(priorityBars(null)).toBeNull();
-  });
-
   it('formatea el tiempo de lectura', () => {
     expect(formatReadTime(0)).toBe('');
     expect(formatReadTime(40)).toBe('≈ 40 s de lectura');
