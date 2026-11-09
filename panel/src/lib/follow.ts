@@ -81,9 +81,10 @@ export function applyAgentEvents(previo: AgentTrack, eventos: readonly AgentEven
       const i = indice.get(e.id);
       const paso = i === undefined ? undefined : steps[i];
       if (paso?.kind === 'tool') steps[i!] = { ...paso, result: { error: e.error, summary: e.summary, lines: e.lines } };
-    } else {
+    } else if (e.type === 'message') {
       steps.push({ kind: 'message', text: e.text, at: e.at });
     }
+    // Los mensajes de la persona y los comandos solo salen en la conversación de una sesión, no en la de un subagente.
     if (steps.length > FOLLOW_MAX_ITEMS) {
       steps.splice(0, steps.length - FOLLOW_MAX_ITEMS);
       reindexa();

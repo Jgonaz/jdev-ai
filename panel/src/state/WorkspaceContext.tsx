@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import { followKey, isFollowKey } from '../lib/follow.ts';
 import type { FollowKind } from '../lib/follow.ts';
+import { forgetBtw } from '../lib/btw.ts';
 import { forgetConversation } from '../lib/useConversation.ts';
 import { forgetFollow } from '../lib/useFollow.ts';
 import { visualState } from '../lib/sessions.ts';
@@ -136,7 +137,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const setView = useCallback((name: string, view: PaneView) => dispatch({ type: 'view', name, view }), []);
   const closeTab = useCallback((name: string) => {
     if (isFollowKey(name)) forgetFollow(name);
-    else forgetConversation(name);
+    else {
+      forgetConversation(name);
+      forgetBtw(name);
+    }
     dispatch({ type: 'close', name });
   }, []);
   const move = useCallback((delta: number) => dispatch({ type: 'move', delta }), []);

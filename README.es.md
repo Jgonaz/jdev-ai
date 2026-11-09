@@ -353,6 +353,46 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   la shell en la ruta que Claude anunció bajo `/tmp/claude-<uid>/`. Depende de
   formatos internos de Claude Code (2.1.316), que pueden cambiar; lo que no
   entiende lo ignora y, si falta un archivo, la pestaña lo explica.
+- **Vista chat.** La cabecera de cada terminal de Claude tiene un conmutador
+  «Terminal / Chat», que se recuerda por pestaña. La vista chat se construye con
+  el transcript de la sesión. Muestra:
+  - tus mensajes, como texto plano;
+  - las respuestas de Claude, en Markdown saneado;
+  - las herramientas que se ejecutan seguidas, agrupadas en un desplegable
+    cerrado con su resultado y sus errores en rojo;
+  - los comandos de Claude Code (`/goal close`, `/compact`, `/clear`…) como un
+    mensaje tuyo en monoespaciado, con su salida local atenuada debajo y entran
+    en la búsqueda (el contexto interno que algunos añaden no se muestra).
+
+  No muestra el razonamiento interno. Al entrar, carga la conversación entera
+  para que la búsqueda la cubra toda. La lupa o Ctrl+F abren la búsqueda, que no
+  distingue mayúsculas ni tildes, busca también en los resultados de las
+  herramientas y abre los desplegables con coincidencias; se navega con Enter,
+  ↑ y ↓.
+
+  La caja de abajo pega tu mensaje en la sesión de tmux entre corchetes, así que
+  los saltos de línea no lo envían antes de tiempo, y después pulsa Enter. El
+  límite es de 64 KiB. Enter envía y Shift+Enter hace un salto de línea. Los
+  permisos y los menús se responden en la terminal: si Claude espera una
+  respuesta así, el chat lo avisa con un botón «Ir a la terminal».
+
+  Los comandos se escriben en la misma caja. `/btw pregunta` abre en la terminal
+  una ventana con la respuesta y Claude no la guarda en la transcripción: el
+  panel lee el texto de esa ventana (si no cabe, la desplaza con la flecha
+  abajo y une las pantallas; si no llega a confirmar que ha llegado al final,
+  lo avisa), la cierra con Escape y la muestra en el chat, como texto
+  preformateado (la TUI ya la maqueta), en un bloque aparte, «Pregunta al margen», que no forma parte de la conversación. Ese
+  bloque solo vive en el navegador: desaparece al recargar el panel. El panel
+  nunca pulsa `c` en la ventana (Claude copiaría también con la herramienta del
+  sistema y pisaría tu portapapeles), así que este no se toca. Si Claude tiene abierta una
+  ventana o un menú (la de `/btw`, un selector como `/model`, un diálogo de
+  permiso), el chat no envía el mensaje, porque se perdería o respondería al
+  diálogo: conserva el texto y avisa de que hay que cerrarla en la terminal. Un
+  comando que abre un menú se envía y el chat avisa de que espera en la
+  terminal.
+
+  La terminal sigue conectada mientras ves el chat. En las sesiones de Codex y
+  en las terminales sin agente el conmutador está desactivado y explica por qué.
 - **Conversaciones anteriores.** Dentro de cada proyecto de la barra lateral,
   bajo sus sesiones en marcha, un apartado plegado «Anteriores (N)» lista (tres,
   con «Ver más») las conversaciones de Claude Code que no están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de

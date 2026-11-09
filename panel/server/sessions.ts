@@ -13,6 +13,7 @@ import { ACTIVITY_MAX_BYTES, STATUSLINE_MAX_BYTES, accountFrom, deriveActivity, 
 import type { Account, ActivityEvent, SessionActivity, SessionUsage, Statusline } from './usage.ts';
 import type { Project } from './projects.ts';
 import type { FollowContext } from './follow.ts';
+import type { ChatInfo } from '../shared/follow.ts';
 
 export type SessionInfo = {
   name: string;
@@ -53,6 +54,8 @@ export type SessionInfo = {
   archived: boolean;
   /** Comando de arranque del proyecto si es su terminal de arranque (botón ▶ de la barra lateral); null si no lo es. */
   run: string | null;
+  /** Si la vista chat (la conversación del transcript) está disponible y, si no, por qué. */
+  chat: ChatInfo;
   /** Comando equivalente de bin/agent, si se conoce (solo en la respuesta de creación). */
   command?: string;
 };
@@ -68,6 +71,16 @@ export type SessionInfo = {
  */
 export function lastChange(created: number, file: { updatedAt: number } | undefined): number {
   return file && file.updatedAt > 0 ? file.updatedAt : created;
+}
+
+export const CHAT_ONLY_CLAUDE = 'La vista chat solo está disponible en sesiones de Claude, de momento.';
+export const CHAT_NO_TRANSCRIPT = 'Aún no hay transcripción: la vista chat estará disponible cuando Claude empiece a trabajar.';
+
+/** Disponibilidad de la vista chat: solo Claude, y con la transcripción que anuncia su archivo de estado. */
+export function chatInfo(agent: string, file: { transcriptPath: string } | undefined): ChatInfo {
+  if (agent !== 'claude') return { available: false, reason: CHAT_ONLY_CLAUDE };
+  if (!file || file.transcriptPath === '') return { available: false, reason: CHAT_NO_TRANSCRIPT };
+  return { available: true, reason: null };
 }
 
 /** Agente de las terminales sin agente (una shell normal): no tienen estado de hooks, statusline ni seguimiento. */
@@ -212,6 +225,18 @@ export class SessionService {
       cwd: file.cwd,
       targets: followTargets(this.activities.snapshot().get(file.sessionId) ?? [], this.restarted.get(file.sessionId) ?? 0),
     };
+  }
+
+  /**
+   * Contexto para leer la conversación de una sesión de Claude: null si la sesión no existe;
+   * `{ reason }` si existe pero no tiene chat (no es de Claude o aún no hay transcripción).
+   */
+  conversationContext(name: string): { context: FollowContext } | { reason: string } | null {
+    const sesion = this.current.find((s) => s.name === name);
+    if (!sesion) return null;
+    if (!sesion.chat.available) return { reason: sesion.chat.reason ?? CHAT_NO_TRANSCRIPT };
+    const contexto = this.followContext(name);
+    return contexto && contexto.transcriptPath !== '' ? { context: contexto } : { reason: CHAT_NO_TRANSCRIPT };
   }
 
   /** Estado de las conversaciones (última lectura), por clave. */
@@ -431,6 +456,7 @@ export class SessionService {
             : null,
         archived: this.opts.archive?.hasSession(s.name, s.created) ?? false,
         run: s.agent === SHELL_AGENT && s.run !== '' ? s.run : null,
+        chat: chatInfo(s.agent, file),
       });
     }
     lista.sort((a, b) => a.created - b.created || a.name.localeCompare(b.name));

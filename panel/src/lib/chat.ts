@@ -21,6 +21,8 @@ export type ChatStep = {
 export type ChatItem =
   | { kind: 'user'; key: string; text: string; at: number | null; images: number }
   | { kind: 'agent'; key: string; text: string; at: number | null }
+  /** Comando de Claude Code (`/goal close`) con su salida local, si la tuvo. `name` va sin la barra. */
+  | { kind: 'command'; key: string; name: string; args: string; at: number | null; output?: { text: string; error: boolean } }
   /** Herramientas ejecutadas seguidas, entre dos mensajes. */
   | { kind: 'tools'; key: string; steps: ChatStep[]; errors: number; at: number | null };
 
@@ -31,6 +33,9 @@ export type ChatModel = {
 };
 
 export const EMPTY_CHAT: ChatModel = { items: [], next: 0 };
+
+/** El comando tal como se escribe: «/goal close». */
+export const commandLine = (c: { name: string; args: string }): string => `/${c.name}${c.args !== '' ? ` ${c.args}` : ''}`;
 
 /** Texto que se pinta de un resultado: la salida, si la hay, y si no su primera línea. */
 export const resultText = (r: ChatResult): string => r.output ?? r.summary;
@@ -72,6 +77,13 @@ export function applyChatEvents(previo: ChatModel, eventos: readonly AgentEvent[
       items.push({ kind: 'user', key: `u${next++}`, text: e.text, at: e.at, images: e.images ?? 0 });
     } else if (e.type === 'message') {
       items.push({ kind: 'agent', key: `a${next++}`, text: e.text, at: e.at });
+    } else if (e.type === 'command') {
+      items.push({ kind: 'command', key: `c${next++}`, name: e.name, args: e.args, at: e.at });
+    } else if (e.type === 'command-output') {
+      // La salida local va justo tras su comando (aunque llegue en otra respuesta): se une a él.
+      const ultimo = items.length - 1;
+      const it = items[ultimo];
+      if (it && it.kind === 'command' && !it.output) items[ultimo] = { ...it, output: { text: e.text, error: e.error } };
     } else if (e.type === 'tool') {
       const paso: ChatStep = { id: e.id, tool: e.tool, verb: e.verb, target: e.target, detail: e.detail, at: e.at };
       const ultimo = items.length - 1;
@@ -119,7 +131,8 @@ export function stepLabel(paso: Pick<ChatStep, 'verb' | 'target'>): string {
   const verbo = INFINITIVO[paso.verb] ?? paso.verb;
   if (paso.target === '') return verbo;
   if (DE_ARCHIVO.has(paso.verb)) return `${verbo} ${paso.target.split('/').pop() || paso.target}`;
-  if (paso.verb === 'Busco') return `${verbo} «${recorta(paso.target, 28)}»`;
+  // El servidor ya entrecomilla el patrón de un Grep («send-keys» en panel); el de un Glob llega sin comillas.
+  if (paso.verb === 'Busco') return `${verbo} ${paso.target.startsWith('«') ? recorta(paso.target, 32) : `«${recorta(paso.target, 28)}»`}`;
   return `${verbo} ${recorta(paso.target, 32)}`;
 }
 
@@ -137,8 +150,10 @@ export const errorsLabel = (n: number): string => `${n} ${n === 1 ? 'error' : 'e
 
 // ---------------------------------------------------------------------- Búsqueda
 
-/** Una letra sin tildes ni mayúsculas. */
-const pliega = (s: string): string => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const SOLO_ASCII = /^[\x00-\x7f]*$/;
+
+/** Un texto sin tildes ni mayúsculas. El texto ASCII (casi todo en un transcript) no necesita normalizar. */
+const pliega = (s: string): string => (SOLO_ASCII.test(s) ? s.toLowerCase() : s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase());
 
 /** Texto normalizado para comparar: sin mayúsculas ni tildes. */
 export function normalizeText(s: string): string {
@@ -154,18 +169,29 @@ export function normalizeText(s: string): string {
 export function findRanges(texto: string, consulta: string): Array<[number, number]> {
   const q = pliega(consulta.trim());
   if (q === '' || texto === '') return [];
-  let normal = '';
-  const origen: number[] = []; // posición en `texto` de cada carácter de `normal`
-  for (let i = 0; i < texto.length; ) {
-    const cp = texto.codePointAt(i)!;
-    const ch = String.fromCodePoint(cp);
-    const f = pliega(ch);
-    for (let k = 0; k < f.length; k++) origen.push(i);
-    normal += f;
-    i += ch.length;
+  let normal: string;
+  let origen: number[] | null = null; // posición en `texto` de cada carácter de `normal`; null si coinciden (ASCII)
+  if (SOLO_ASCII.test(texto)) {
+    normal = texto.toLowerCase();
+  } else {
+    const trozos: string[] = [];
+    origen = [];
+    for (let i = 0; i < texto.length; ) {
+      const cp = texto.codePointAt(i)!;
+      const ch = String.fromCodePoint(cp);
+      const f = cp < 128 ? ch.toLowerCase() : pliega(ch);
+      for (let k = 0; k < f.length; k++) origen.push(i);
+      trozos.push(f);
+      i += ch.length;
+    }
+    normal = trozos.join('');
   }
   const rangos: Array<[number, number]> = [];
   for (let pos = normal.indexOf(q); pos !== -1; pos = normal.indexOf(q, pos + q.length)) {
+    if (origen === null) {
+      rangos.push([pos, pos + q.length]);
+      continue;
+    }
     const desde = origen[pos]!;
     const ultimo = origen[pos + q.length - 1]!;
     const hasta = ultimo + String.fromCodePoint(texto.codePointAt(ultimo)!).length;
@@ -267,6 +293,7 @@ function pajares(it: ChatItem): Pajar[] {
   let r: Pajar[];
   if (it.kind === 'user') r = [{ key: it.key, step: null, textos: [pliega(it.text)] }];
   else if (it.kind === 'agent') r = [{ key: it.key, step: null, textos: markdownPieces(it.text).map(pliega) }];
+  else if (it.kind === 'command') r = [{ key: it.key, step: null, textos: [commandLine(it), it.output?.text ?? ''].filter((t) => t !== '').map(pliega) }];
   else {
     r = it.steps.map((s, j) => ({
       key: stepKey(it.key, j),
@@ -276,6 +303,22 @@ function pajares(it: ChatItem): Pajar[] {
   }
   PAJAR.set(it, r);
   return r;
+}
+
+/**
+ * Normaliza los textos buscables de los elementos que aún no lo están, de los últimos a los primeros, durante a lo sumo
+ * `ms` milisegundos. Devuelve true si no queda ninguno. Se llama en ratos libres para que la primera búsqueda no
+ * tenga que hacerlo todo de golpe.
+ */
+export function warmSearch(items: readonly ChatItem[], ms: number): boolean {
+  const limite = performance.now() + ms;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (PAJAR.has(it)) continue;
+    pajares(it);
+    if (performance.now() > limite) return false;
+  }
+  return true;
 }
 
 /**
@@ -294,6 +337,39 @@ export function searchChat(items: readonly ChatItem[], consulta: string): ChatMa
   return salida;
 }
 
+/** Coincidencias que se resaltan como mucho (las más cercanas a la actual): resaltar decenas de miles de `<mark>` bloquea la página. */
+export const MAX_RESALTADAS = 2000;
+
+/**
+ * Qué coincidencias se resaltan: hasta `max`, las más cercanas a la actual en el orden de aparición
+ * (la actual siempre entra). Devuelve el intervalo `[desde, hasta)` dentro de `coincidencias`.
+ */
+export function highlightRange(total: number, actual: number, max = MAX_RESALTADAS): [number, number] {
+  if (total <= max) return [0, total];
+  const desde = Math.max(0, Math.min(actual - Math.floor(max / 2), total - max));
+  return [desde, desde + max];
+}
+
+/** Las claves de las coincidencias agrupadas por posición del elemento (una sola pasada: cada elemento recibe su conjunto). */
+export function groupMatches(coincidencias: readonly ChatMatch[]): Map<number, Set<string>> {
+  const m = new Map<number, Set<string>>();
+  for (const c of coincidencias) {
+    const s = m.get(c.item);
+    if (s) s.add(c.key);
+    else m.set(c.item, new Set([c.key]));
+  }
+  return m;
+}
+
+/** Un entero con separador de miles a la española: «3.482», «12.000». */
+const miles = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+/** El contador de la búsqueda: «3 de 12», «1 de 3.482 · resalte parcial» si hay más coincidencias de las que se resaltan. */
+export function hitCountLabel(indice: number, total: number): string {
+  if (total === 0) return 'Sin coincidencias';
+  return `${miles(indice + 1)} de ${miles(total)}${total > MAX_RESALTADAS ? ' · resalte parcial' : ''}`;
+}
+
 // ---------------------------------------------------------------------- Mensajes nuevos
 
 /** Mensajes (de la persona o del agente) añadidos tras los primeros `vistos` elementos. */
@@ -305,6 +381,71 @@ export function countNewMessages(items: readonly ChatItem[], vistos: number): nu
 
 /** «1 mensaje nuevo», «2 mensajes nuevos». */
 export const newMessagesLabel = (n: number): string => `${n} ${n === 1 ? 'mensaje nuevo' : 'mensajes nuevos'}`;
+
+/**
+ * Lo que anuncia el lector de pantalla cuando llegan elementos tras los primeros `anunciados`: solo las respuestas de
+ * Claude (lo que la persona escribe ya lo sabe) y de forma agregada, nunca el texto. Cadena vacía si no hay nada que decir.
+ */
+export function newRepliesAnnouncement(items: readonly ChatItem[], anunciados: number): string {
+  let n = 0;
+  for (let i = Math.max(0, anunciados); i < items.length; i++) if (items[i]!.kind === 'agent') n++;
+  if (n === 0) return '';
+  return n === 1 ? 'Nueva respuesta de Claude' : newMessagesLabel(n);
+}
+
+/** Aviso de que Claude espera en la terminal: una frase propia y, aparte, el detalle que dio el hook. */
+export type WaitingNotice = { text: string; detail: string | null; translated: boolean };
+
+/**
+ * El mensaje del hook de Claude Code suele venir en inglés: se traducen solo los patrones conocidos
+ * («needs your permission to use X») y el resto se enseña tal cual, como cita, sin traducirlo.
+ */
+export function waitingNotice(notice: string): WaitingNotice {
+  const text = 'Claude espera tu respuesta en la terminal.';
+  const crudo = notice.trim();
+  if (crudo === '') return { text, detail: null, translated: false };
+  const permiso = /^Claude needs your permission to use (.+?)\.?$/i.exec(crudo);
+  if (permiso) return { text, detail: `Pide permiso para usar ${permiso[1]}`, translated: true };
+  if (/^Claude is waiting for your input\.?$/i.test(crudo)) return { text, detail: null, translated: true };
+  return { text, detail: crudo, translated: false };
+}
+
+// ---------------------------------------------------------------------- Ventana de render
+
+/** Elementos que se pintan de una conversación larga: los últimos, y se cargan más al subir. */
+export const VENTANA = 400;
+/** Cuántos más se cargan cada vez que se pide ver los anteriores o los siguientes. */
+export const PASO_VENTANA = 300;
+
+/** Tramo pintado de la conversación; `to: null` es «hasta el último», aunque lleguen elementos nuevos. `null` es «los últimos». */
+export type ChatWindow = { from: number; to: number | null } | null;
+
+/** El tramo `[desde, hasta)` que se pinta. */
+export function windowRange(v: ChatWindow, total: number): [number, number] {
+  if (v === null) return [Math.max(0, total - VENTANA), total];
+  const hasta = v.to === null ? total : Math.min(v.to, total);
+  return [Math.min(v.from, hasta), hasta];
+}
+
+/** Un tramo alrededor del elemento `i` (para saltar a una coincidencia antigua). */
+export function windowAround(i: number, total: number): ChatWindow {
+  const desde = Math.max(0, i - VENTANA / 2);
+  const hasta = desde + VENTANA;
+  return hasta >= total ? null : { from: desde, to: hasta };
+}
+
+/** Amplía el tramo hacia arriba `PASO_VENTANA` elementos. */
+export function windowUp(v: ChatWindow, total: number): ChatWindow {
+  const [desde, hasta] = windowRange(v, total);
+  return { from: Math.max(0, desde - PASO_VENTANA), to: v === null || v.to === null || hasta >= total ? null : hasta };
+}
+
+/** Amplía el tramo hacia abajo; al llegar al último vuelve a «los últimos» (si cabe). */
+export function windowDown(v: ChatWindow, total: number): ChatWindow {
+  const [desde, hasta] = windowRange(v, total);
+  const nuevo = hasta + PASO_VENTANA;
+  return nuevo >= total ? { from: desde, to: null } : { from: desde, to: nuevo };
+}
 
 // ---------------------------------------------------------------------- Carga y sondeo
 

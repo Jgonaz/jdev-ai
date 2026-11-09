@@ -36,8 +36,9 @@
   color: var(--fg);
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
+/* «Chat» no disponible: más tenue que «Terminal» pero con contraste de texto (>= 4,5:1 sobre el fondo del conmutador en todos los temas; --fg-dim no llegaba). */
 .viewsw__btn[aria-disabled='true'] {
-  color: var(--fg-dim);
+  color: var(--fg-faint);
   cursor: not-allowed;
 }
 .viewsw__tip {
@@ -60,6 +61,10 @@
 .viewsw__btn[aria-disabled='true']:hover + .viewsw__tip,
 .viewsw__btn[aria-disabled='true']:focus-visible + .viewsw__tip {
   display: block;
+}
+/* Esc descarta el tooltip sin mover el foco (WCAG 1.4.13); vuelve a salir al entrar de nuevo. */
+.viewsw__btn[aria-disabled='true'] + .viewsw__tip[data-dismissed='true'] {
+  display: none;
 }
 .viewsw--full {
   flex: 1;
@@ -92,6 +97,23 @@
 .pane__head--chat.pane__head--narrow .icon-btn {
   min-width: 44px;
   min-height: 44px;
+}
+
+/* Estado de la sesión como punto de 8 px (cabecera de un pane estrecho en vista chat). */
+.pane__statedot {
+  margin-left: auto;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+}
+.pane__statedot--working,
+.pane__statedot--alive {
+  background: var(--working);
+}
+.pane__statedot--waiting {
+  background: var(--waiting);
 }
 
 /* ---------- Contenedor ---------- */
@@ -139,6 +161,29 @@
 }
 .chat__item {
   min-width: 0;
+}
+/* Ventana de render de las conversaciones largas: cargar más elementos por arriba o por abajo. */
+.chat__more {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.chat__morebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  font-size: var(--text-sm);
+  color: var(--fg-soft);
+}
+.chat__morebtn:hover {
+  color: var(--fg);
+  background: var(--bg-raised);
 }
 
 /* ---------- Mensajes ---------- */
@@ -204,6 +249,102 @@
 }
 .chat .chat__md a:hover {
   color: var(--link-hover);
+}
+
+/* ---------- Comandos (/goal close) con su salida local ---------- */
+.chat__bubble--cmd {
+  font-family: var(--font-term);
+  font-size: var(--text-sm2);
+  border-radius: 8px;
+  color: var(--fg-soft);
+}
+.chat__cmdout {
+  max-width: 78%;
+  max-height: 200px;
+  margin: 0;
+  padding: 6px 10px;
+  overflow: auto;
+  border-left: 2px solid var(--line-strong);
+  font-family: var(--font-term);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--fg-faint);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat__cmdout--error {
+  border-left-color: var(--danger);
+  color: var(--danger-text);
+}
+
+/* ---------- Pregunta al margen (/btw): fuera de la conversación ---------- */
+.chat__btw {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+.chat__btwhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat__btwtag {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.chat__btwcmd {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+}
+.chat__btwq {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* La respuesta ya viene maquetada por la TUI de Claude: se pinta tal cual, sin Markdown, con su sangría y sus saltos de línea. */
+.chat__btwans {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+  color: var(--fg);
+}
+.chat__btwstate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-md);
+  color: var(--fg-muted);
+}
+.chat__btwstate--warn {
+  flex-wrap: wrap;
+  color: var(--waiting-text);
+}
+.chat__btwwarn {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--waiting-text);
+}
+.chat__btwnote {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
 }
 
 /* ---------- Coincidencias de la búsqueda ---------- */
@@ -414,11 +555,16 @@
   font-size: var(--text-sm);
   color: var(--waiting-text);
 }
-.chat__newpill {
+/* Región «status» fija: el lector de pantalla anuncia la pastilla cuando aparece y cuando cambia su cuenta. */
+.chat__pillslot {
   position: absolute;
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
+  pointer-events: none;
+}
+.chat__newpill {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -437,10 +583,13 @@
 
 /* ---------- Aviso: Claude espera en la terminal ---------- */
 .chat__wait {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 14px 10px;
+  /* Misma columna que la caja de entrada (820 px, centrada, con el mismo margen lateral que su pie). */
+  width: min(820px, calc(100% - 28px));
+  margin: 0 auto 10px;
   padding: 10px 14px;
   border: 1px solid var(--waiting-line);
   border-radius: var(--radius);
@@ -459,6 +608,13 @@
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+/* Lo que dijo el hook de Claude Code, en una segunda línea y atenuado. */
+.chat__waitdetail {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: color-mix(in srgb, var(--waiting-text) 80%, var(--waiting-bg));
 }
 .chat__waitbtn {
   flex: none;
@@ -587,6 +743,8 @@
 .chat__input {
   flex: 1;
   min-width: 0;
+  /* Empieza en 2 filas (1 fila + el crecimiento automático); en un pane estrecho, en 1. */
+  min-height: calc(3em + 4px);
   resize: none;
   border: 0;
   outline: 0;
@@ -616,6 +774,10 @@
   opacity: 0.45;
 }
 .chat__senderr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
   font-size: var(--text-sm);
   color: var(--danger-text);
 }
@@ -657,7 +819,23 @@
   }
   .chat__wait {
     flex-wrap: wrap;
-    margin-inline: 12px;
+    width: calc(100% - 24px);
+  }
+  /* La caja empieza en 1 fila y la nota «Enter envía…» deja de verse (el lector de pantalla la sigue leyendo por aria-describedby). */
+  .chat__input {
+    min-height: 0;
+    padding-block: 6px;
+  }
+  .chat__hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .chat__cmdout {
+    max-width: 88%;
   }
   .chat__waitbtn {
     height: 44px;

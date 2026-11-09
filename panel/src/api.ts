@@ -20,6 +20,7 @@ import type {
   WorktreeList,
 } from './types.ts';
 import type { ActivityAgent, ActivityRange, ActivityResponse } from '../shared/activity.ts';
+import type { ChatSendResponse } from '../shared/chat.ts';
 import type { ConversationResponse, FollowKind, FollowResponse } from '../shared/follow.ts';
 import type { SettingsPatch } from './lib/settingsPatch.ts';
 import { parseImageHeaders } from './lib/imageZoom.ts';
@@ -31,23 +32,30 @@ export type ScrollRequest = { action: 'top' | 'bottom' | 'page-up' | 'page-down'
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /** Código de máquina del `error` (`code` del JSON del servidor), si lo trae: p. ej. `tui-busy`. */
+  readonly code: string | null;
+  constructor(status: number, message: string, code: string | null = null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
-// Mensaje de error de una respuesta no satisfactoria: el `error` del JSON del servidor, si lo hay.
+// Mensaje (y código, si lo hay) de una respuesta no satisfactoria: el `error` del JSON del servidor.
 async function errorMessage(res: Response): Promise<string> {
-  if (res.status === 401) return 'Acceso no autorizado: abre de nuevo la URL con el token que imprime bin/panel.';
+  return (await errorInfo(res)).message;
+}
+
+async function errorInfo(res: Response): Promise<{ message: string; code: string | null }> {
+  if (res.status === 401) return { message: 'Acceso no autorizado: abre de nuevo la URL con el token que imprime bin/panel.', code: null };
   try {
-    const cuerpo = (await res.json()) as { error?: unknown };
-    if (typeof cuerpo.error === 'string') return cuerpo.error;
+    const cuerpo = (await res.json()) as { error?: unknown; code?: unknown };
+    if (typeof cuerpo.error === 'string') return { message: cuerpo.error, code: typeof cuerpo.code === 'string' ? cuerpo.code : null };
   } catch {
     // Cuerpo no JSON: se queda el mensaje genérico.
   }
-  return `Error ${res.status}`;
+  return { message: `Error ${res.status}`, code: null };
 }
 
 async function request<T>(ruta: string, init: RequestInit = {}): Promise<T> {
@@ -60,7 +68,10 @@ async function request<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError(0, 'No se pudo contactar con el panel.');
   }
-  if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
+  if (!res.ok) {
+    const { message, code } = await errorInfo(res);
+    throw new ApiError(res.status, message, code);
+  }
   return (await res.json()) as T;
 }
 
@@ -119,7 +130,7 @@ export const api = {
     request<ConversationResponse>(`/api/sessions/${encodeURIComponent(sesion)}/conversation?from=${from}`, { signal }),
   /** Envía un mensaje (de una o varias líneas) a la sesión de Claude, como si se escribiera en su terminal. */
   sendInput: (sesion: string, text: string) =>
-    request<{ sent: boolean }>(`/api/sessions/${encodeURIComponent(sesion)}/input`, { method: 'POST', body: JSON.stringify({ text }) }),
+    request<ChatSendResponse>(`/api/sessions/${encodeURIComponent(sesion)}/input`, { method: 'POST', body: JSON.stringify({ text }) }),
   /** Sonidos de Windows disponibles para los avisos ([] fuera de WSL). */
   windowsSounds: () => request<{ windows: string[] }>('/api/sounds'),
   scrollState: (nombre: string, signal?: AbortSignal) =>

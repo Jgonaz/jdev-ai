@@ -11,7 +11,8 @@ La terminal de una sesión mezcla los mensajes con las herramientas, los diffs y
   - búsqueda dentro de toda la conversación, con resaltado y navegación entre coincidencias;
   - se actualiza en directo mientras el agente trabaja;
   - una caja para escribir al agente sin salir de la vista;
-  - si el agente espera una respuesta que solo se puede dar en la terminal (un permiso o un menú), un aviso con un enlace a esa vista.
+  - los comandos de Claude Code (`/goal close`) con su salida local, y la respuesta de `/btw` como un bloque aparte que no forma parte de la conversación;
+  - si el agente espera una respuesta que solo se puede dar en la terminal (un permiso o un menú), un aviso con un enlace a esa vista; con una ventana o un menú abiertos no se envían mensajes, para no perderlos.
 - **Codex y las terminales sin agente:** el conmutador sale desactivado y explica por qué. La primera versión solo cubre Claude.
 
 ## Capabilities

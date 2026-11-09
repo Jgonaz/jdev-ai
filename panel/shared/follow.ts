@@ -8,9 +8,18 @@ export type FollowState = 'running' | 'finished';
 export type AgentEvent =
   | { type: 'task'; text: string }
   | { type: 'tool'; id: string; tool: string; verb: string; target: string; detail?: string; at: number | null }
-  /** Resultado de una herramienta: se asocia por `id` (puede llegar en otra respuesta). `lines` cuenta las líneas con texto. */
-  | { type: 'result'; id: string; error: boolean; summary: string; lines: number }
-  | { type: 'message'; text: string; at: number | null };
+  /**
+   * Resultado de una herramienta: se asocia por `id` (puede llegar en otra respuesta). `lines` cuenta las
+   * líneas con texto. `output` (solo en la conversación de una sesión) es el texto, recortado, para buscar en él.
+   */
+  | { type: 'result'; id: string; error: boolean; summary: string; lines: number; output?: string }
+  | { type: 'message'; text: string; at: number | null }
+  /** Mensaje de la persona (solo en la conversación de una sesión). `images` cuenta las imágenes adjuntas, si hay. */
+  | { type: 'user'; text: string; at: number | null; images?: number }
+  /** Comando de Claude Code (`/goal close`) escrito por la persona (solo en la conversación). `name` va sin la barra. */
+  | { type: 'command'; name: string; args: string; at: number | null }
+  /** Salida local del último comando (`<local-command-stdout>`), sin secuencias ANSI y recortada. Se empareja por orden. */
+  | { type: 'command-output'; text: string; error: boolean; at: number | null };
 
 type Common = {
   state: FollowState;
@@ -35,6 +44,24 @@ export type ShellFollow = Common & {
 };
 
 export type FollowResponse = AgentFollow | ShellFollow;
+
+/** Lo que el servidor sirve en GET /api/sessions/:name/conversation: la conversación principal de una sesión de Claude. */
+export type ConversationResponse = {
+  /** Id de la sesión de Claude a la que pertenece la transcripción: si cambia, el cliente empieza de cero. */
+  sessionId: string;
+  /** Byte desde el que pedir lo siguiente. */
+  from: number;
+  /** Tamaño actual de la transcripción en bytes. */
+  size: number;
+  /** El archivo encogió: se descarta lo que había (y esta respuesta empieza en el byte 0). */
+  reset: boolean;
+  /** Queda más por leer: se pide enseguida. `false` equivale a «al día». */
+  more: boolean;
+  events: AgentEvent[];
+};
+
+/** Disponibilidad de la vista chat de una sesión. */
+export type ChatInfo = { available: boolean; reason: string | null };
 
 /** Ids de subagentes y tareas en segundo plano que se aceptan para seguirlos. */
 export const FOLLOW_ID = /^[a-z0-9]{1,64}$/;

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FOLLOW_CHUNK, FollowError, Follower, SHELL_TAIL_LINES, buscarSalida, describeTool, leerLineas, parseAgentLines } from './follow.ts';
 import type { AgentEvent, FollowContext } from './follow.ts';
-import { encargo, interno, lanzamientoShell, resultado, subagenteMuestra, texto, usar } from './follow-fixtures.ts';
+import { comandos, comandosDeSistema, conversacionMuestra, encargo, interno, lanzamientoShell, persona, personaConImagen, resultado, sinteticos, subagenteMuestra, texto, usar } from './follow-fixtures.ts';
 
 describe('parseAgentLines', () => {
   const eventos = () => parseAgentLines(subagenteMuestra(), { primero: true, cwd: null });
@@ -80,6 +80,161 @@ describe('parseAgentLines', () => {
     expect(describeTool('mcp__playwright__browser_click', { a: 1 }, cwd)).toEqual({ verb: 'Uso', target: 'playwright · browser_click' });
     expect(describeTool('Desconocida', { a: 1 }, cwd)).toEqual({ verb: 'Desconocida', target: '' });
     expect(describeTool('Read', null, cwd)).toEqual({ verb: 'Leo', target: '' });
+  });
+});
+
+describe('parseAgentLines en modo conversación', () => {
+  const eventos = (t = conversacionMuestra()) => parseAgentLines(t, { primero: true, cwd: null, conversacion: true });
+  const delTipo = <T extends AgentEvent['type']>(t: T) => eventos().filter((x): x is Extract<AgentEvent, { type: T }> => x.type === t);
+
+  it('emite cada mensaje real de la persona, con su marca de tiempo y sus saltos de línea, y no hay encargo', () => {
+    const u = delTipo('user');
+    expect(u.map((x) => x.text)).toEqual(['Revisa el login\ny dime qué falla', '[Image #1] ¿y esta captura?', 'Gracias']);
+    expect(u[0]!.at).toBe(Date.parse('2026-11-02T10:00:01.000Z'));
+    expect(eventos().some((x) => x.type === 'task')).toBe(false);
+  });
+
+  it('descarta los user sintéticos: recordatorios, meta, comandos locales, bash, notificaciones, interrupciones y resúmenes', () => {
+    expect(eventos(sinteticos().join('\n'))).toEqual([]);
+    const json = JSON.stringify(eventos());
+    for (const ajeno of ['Recordatorio', 'inyectado', 'Caveat', 'ls -la', 'total 0', 'task-id', 'interrupted', 'Resumen de la conversación', 'otro origen', 'en cola']) {
+      expect(json).not.toContain(ajeno);
+    }
+  });
+
+  it('un comando es un evento con su nombre sin la barra y sus argumentos, y su salida local otro, sin ANSI', () => {
+    const e = eventos(comandos().join('\n'));
+    expect(e).toEqual([
+      { type: 'command', name: 'goal', args: 'close', at: expect.any(Number) },
+      { type: 'command-output', text: 'Goal cleared', error: false, at: expect.any(Number) },
+      { type: 'command', name: 'compact', args: '', at: expect.any(Number) },
+      { type: 'command-output', text: 'Compacted (ctrl+o to see full summary)', error: false, at: expect.any(Number) },
+      { type: 'command', name: 'clear', args: '', at: expect.any(Number) },
+      { type: 'command', name: 'mi-skill', args: 'a b', at: expect.any(Number) },
+    ]);
+    expect(JSON.stringify(e)).not.toContain('\\u001b');
+  });
+
+  it('oculta lo isMeta de un comando: el aviso local y las instrucciones internas de una skill', () => {
+    const json = JSON.stringify(eventos(comandos().join('\n')));
+    expect(json).not.toContain('Caveat');
+    expect(json).not.toContain('Instrucciones internas');
+    expect(json).not.toContain('Base directory');
+  });
+
+  it('la salida con stderr es un error, se une a la de stdout y una salida vacía o «(no content)» no se emite', () => {
+    const l = (c: string) => JSON.stringify({ type: 'user', message: { role: 'user', content: c }, timestamp: '2026-11-02T10:00:00.000Z' });
+    const out = eventos(
+      [
+        l('<local-command-stdout>uno</local-command-stdout><local-command-stderr>\u001b[31mfalló\u001b[39m</local-command-stderr>'),
+        l('<local-command-stdout>(no content)</local-command-stdout>'),
+        l('<local-command-stdout>  </local-command-stdout>'),
+      ].join('\n'),
+    );
+    expect(out).toEqual([{ type: 'command-output', text: 'uno\nfalló', error: true, at: expect.any(Number) }]);
+  });
+
+  it('el contenido del comando también llega como bloques de texto, y su salida se recorta', () => {
+    const bloques = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: '<command-name>/rename</command-name><command-args>mi sesión</command-args>' }] } });
+    const salida = JSON.stringify({ type: 'user', message: { role: 'user', content: `<local-command-stdout>${'x'.repeat(9000)}</local-command-stdout>` } });
+    const e = eventos([bloques, salida].join('\n'));
+    expect(e[0]).toMatchObject({ type: 'command', name: 'rename', args: 'mi sesión' });
+    expect((e[1] as { text: string }).text).toHaveLength(4000);
+  });
+
+  it('sin modo conversación (subagente) no emite comandos', () => {
+    expect(parseAgentLines(comandos().join('\n'), { primero: false, cwd: null })).toEqual([]);
+    expect(parseAgentLines(comandosDeSistema().join('\n'), { primero: false, cwd: null })).toEqual([]);
+  });
+
+  it('los comandos escritos como system/local_command emiten los mismos eventos que los de tipo user', () => {
+    expect(eventos(comandosDeSistema().join('\n'))).toEqual([
+      { type: 'command', name: 'rename', args: 'mi sesión', at: expect.any(Number) },
+      { type: 'command-output', text: 'Session renamed to: mi sesión', error: false, at: expect.any(Number) },
+      { type: 'command', name: 'resume', args: '', at: expect.any(Number) },
+      { type: 'command-output', text: 'Resume cancelled', error: false, at: expect.any(Number) },
+    ]);
+  });
+
+  it('los comandos system se intercalan en orden con el resto de la conversación', () => {
+    const e = eventos([persona('hola'), ...comandosDeSistema().slice(0, 2), persona('adiós')].join('\n'));
+    expect(e.map((x) => x.type)).toEqual(['user', 'command', 'command-output', 'user']);
+  });
+
+  it('quita el envoltorio de un pegado largo cuando abre y cierra con el mismo id, y no toca el resto', () => {
+    const msg = (t: string) => JSON.stringify({ type: 'user', message: { role: 'user', content: t }, timestamp: '2026-11-02T10:00:00.000Z' });
+    const e = eventos(
+      [
+        msg('¿por qué falla? \n\n<pasted_content id="2a51">\n{\n  "error": true\n}\n</pasted_content id="2a51">\n'),
+        msg('\n\n<pasted_content id="7">\nsolo el pegado\n</pasted_content id="7">\n'),
+        msg('uno <pasted_content id="1">\na\n</pasted_content id="1"> y <pasted_content id="2">\nb\n</pasted_content id="2">\n'),
+        msg('ids distintos <pasted_content id="1">\nx\n</pasted_content id="2">\n'),
+        msg('sin cerrar <pasted_content id="3">\nx'),
+      ].join('\n'),
+    );
+    expect(e.map((x) => (x as { text: string }).text)).toEqual([
+      '¿por qué falla? \n\n{\n  "error": true\n}',
+      'solo el pegado',
+      'uno a y b',
+      'ids distintos <pasted_content id="1">\nx\n</pasted_content id="2">',
+      'sin cerrar <pasted_content id="3">\nx',
+    ]);
+  });
+
+  it('el envoltorio de un pegado también se quita en los bloques de texto de un mensaje con imagen', () => {
+    const l = JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'image', source: {} }, { type: 'text', text: 'mira\n\n<pasted_content id="9">\nlog\n</pasted_content id="9">\n' }] },
+      timestamp: '2026-11-02T10:00:00.000Z',
+    });
+    expect(eventos(l)).toEqual([{ type: 'user', text: 'mira\n\nlog', at: expect.any(Number), images: 1 }]);
+  });
+
+  it('quita un recordatorio pegado a un mensaje real y conserva el resto', () => {
+    const l = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'Haz esto' }, { type: 'text', text: '<system-reminder>reglas</system-reminder>' }] }, timestamp: '2026-11-02T10:00:00.000Z' });
+    expect(eventos(l)).toEqual([{ type: 'user', text: 'Haz esto', at: Date.parse('2026-11-02T10:00:00.000Z') }]);
+    const m = JSON.stringify({ type: 'user', message: { role: 'user', content: 'Haz esto\n<system-reminder>reglas</system-reminder>' } });
+    expect(eventos(m)).toEqual([{ type: 'user', text: 'Haz esto', at: null }]);
+  });
+
+  it('un mensaje con imagen lleva su texto y cuántas imágenes trae; solo imagen también cuenta', () => {
+    expect(delTipo('user')[1]).toMatchObject({ text: '[Image #1] ¿y esta captura?', images: 1 });
+    expect(delTipo('user')[2]).not.toHaveProperty('images');
+    const solo = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'image', source: {} }] } });
+    expect(eventos(solo)).toEqual([{ type: 'user', text: '', at: null, images: 1 }]);
+    // Los datos de la imagen nunca viajan.
+    expect(JSON.stringify(eventos())).not.toContain('AAAA');
+  });
+
+  it('las herramientas, sus resultados con error y los mensajes del agente siguen igual, y los resultados llevan su texto para buscar', () => {
+    const e = eventos();
+    expect(e.filter((x) => x.type === 'tool').map((x) => (x as { verb: string; target: string }).verb + ' ' + (x as { target: string }).target)).toEqual(['Leo login.ts', 'Ejecuto pnpm test']);
+    const r = delTipo('result');
+    expect(r.find((x) => x.id === 'm2')).toMatchObject({ error: true, summary: 'FAIL login.test.ts', lines: 2, output: 'FAIL login.test.ts\n  esperaba 2' });
+    expect(r.find((x) => x.id === 'm1')).toMatchObject({ error: false });
+    expect(delTipo('message').map((x) => x.text)).toEqual(['Miro el archivo del login.', 'Falla el test: **esperaba 2**.', 'De nada.']);
+    expect(JSON.stringify(e)).not.toContain('signature');
+  });
+
+  it('el orden de la conversación se conserva', () => {
+    expect(eventos().map((x) => x.type)).toEqual(['user', 'message', 'tool', 'result', 'tool', 'result', 'message', 'user', 'user', 'message']);
+  });
+
+  it('ignora lo de los subagentes (isSidechain) y los tipos desconocidos', () => {
+    const l = JSON.stringify({ type: 'user', isSidechain: true, message: { role: 'user', content: 'encargo del subagente' } });
+    expect(eventos(['{"type":"mensaje-futuro"}', 'no es json', l, persona('hola')].join('\n'))).toEqual([{ type: 'user', text: 'hola', at: expect.any(Number) }]);
+  });
+
+  it('el modo subagente no cambia: sigue sin emitir mensajes de usuario', () => {
+    const e = parseAgentLines([persona('hola'), personaConImagen('x')].join('\n'), { primero: false, cwd: null });
+    expect(e).toEqual([]);
+  });
+
+  it('recorta el texto de un resultado y el de un mensaje de la persona', () => {
+    const res = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'x', content: 'b'.repeat(9000) }] } });
+    const e = eventos([persona('a'.repeat(30000)), res].join('\n'));
+    expect((e[0] as { text: string }).text).toHaveLength(20000);
+    expect((e[1] as { output: string }).output).toHaveLength(4000);
   });
 });
 
@@ -314,6 +469,101 @@ describe('Follower', () => {
 
     it('un session_id con barras o puntos no se usa para construir la ruta', async () => {
       await rechazado(seguidor().agent(contexto({ sessionId: '../x' }), 'a0c02c875dad9fa1e', 0));
+    });
+  });
+
+  describe('conversación', () => {
+    const archivo = () => join(proyectos, '-proj', `${sid}.jsonl`);
+    const ctxConversacion = () => contexto();
+
+    it('sirve los eventos de la conversación principal, con el tamaño y sin más por leer', async () => {
+      writeFileSync(archivo(), conversacionMuestra());
+      const r = await seguidor().conversation(ctxConversacion(), 0);
+      expect(r).toMatchObject({ sessionId: sid, reset: false, more: false });
+      expect(r.size).toBe(r.from);
+      expect(r.events.filter((e) => e.type === 'user')).toHaveLength(3);
+      expect(r.events.filter((e) => e.type === 'tool')).toHaveLength(2);
+    });
+
+    it('es incremental: lo nuevo llega desde `from`, y una línea a medio escribir espera', async () => {
+      writeFileSync(archivo(), conversacionMuestra());
+      const primera = await seguidor().conversation(ctxConversacion(), 0);
+      const nueva = persona('Otra cosa');
+      appendFileSync(archivo(), nueva.slice(0, 30));
+      expect(await seguidor().conversation(ctxConversacion(), primera.from)).toMatchObject({ events: [], from: primera.from });
+      appendFileSync(archivo(), nueva.slice(30) + '\n');
+      const siguiente = await seguidor().conversation(ctxConversacion(), primera.from);
+      expect(siguiente.events).toEqual([{ type: 'user', text: 'Otra cosa', at: expect.any(Number) }]);
+      expect(siguiente.from).toBe(siguiente.size);
+    });
+
+    it('en un archivo mayor que el trozo avisa de que hay más y se pide hasta el final', async () => {
+      const relleno = Array.from({ length: 4000 }, (_, i) => persona(`mensaje ${i} ${'x'.repeat(100)}`)).join('\n') + '\n';
+      writeFileSync(archivo(), relleno);
+      let desde = 0;
+      let total = 0;
+      let peticiones = 0;
+      for (;;) {
+        const r = await seguidor().conversation(ctxConversacion(), desde);
+        peticiones++;
+        total += r.events.length;
+        desde = r.from;
+        if (!r.more) break;
+      }
+      expect(peticiones).toBeGreaterThan(1);
+      expect(total).toBe(4000);
+    });
+
+    it('si el archivo encoge, empieza de cero y lo avisa', async () => {
+      writeFileSync(archivo(), conversacionMuestra());
+      const r = await seguidor().conversation(ctxConversacion(), 0);
+      writeFileSync(archivo(), persona("Nuevo") + '\n');
+      const otra = await seguidor().conversation(ctxConversacion(), r.from);
+      expect(otra).toMatchObject({ reset: true });
+      expect(otra.events).toHaveLength(1);
+    });
+
+    it('404 si no hay transcript, no existe o queda fuera de los proyectos de Claude; no lee enlaces ni tuberías', async () => {
+      expect(await rechazado(seguidor().conversation(contexto({ transcriptPath: '' }), 0))).toMatch(/aún no tiene transcript/);
+      // Un transcript que no existe NO es «todavía no» si es un enlace roto o su ruta se sale de los proyectos.
+      symlinkSync(join(tmp, 'nada.jsonl'), join(proyectos, '-proj', 'roto.jsonl'));
+      expect(await rechazado(seguidor().conversation(contexto({ transcriptPath: join(proyectos, '-proj', 'roto.jsonl') }), 0))).toMatch(/no existe/);
+      expect(await rechazado(seguidor().conversation(contexto({ transcriptPath: join(tmp, 'ausente.jsonl') }), 0))).toMatch(/no existe/);
+      expect(await rechazado(seguidor().conversation(contexto({ transcriptPath: join(proyectos, '-proj', '..', '..', 'ausente.jsonl') }), 0))).toMatch(/no existe/);
+      expect(await rechazado(seguidor().conversation(contexto({ transcriptPath: join(proyectos, '-proj', 'ausente.txt') }), 0))).toMatch(/no existe/);
+      const fuera = join(tmp, 'fuera.jsonl');
+      writeFileSync(fuera, conversacionMuestra());
+      expect(await rechazado(seguidor().conversation(contexto({ transcriptPath: fuera }), 0))).toMatch(/fuera del directorio de proyectos/);
+      symlinkSync(fuera, join(proyectos, '-proj', 'enlace.jsonl'));
+      expect(await rechazado(seguidor().conversation(contexto({ transcriptPath: join(proyectos, '-proj', 'enlace.jsonl') }), 0))).toMatch(/fuera del directorio de proyectos/);
+      execFileSync('mkfifo', [join(proyectos, '-proj', 'tuberia.jsonl')]);
+      await rechazado(seguidor().conversation(contexto({ transcriptPath: join(proyectos, '-proj', 'tuberia.jsonl') }), 0));
+    });
+
+    it('con la ruta del transcript válida pero el archivo sin crear, responde vacío y empieza a servir en cuanto aparece', async () => {
+      const aun = join(proyectos, '-proj', 'aun-no.jsonl');
+      const ctx = contexto({ transcriptPath: aun });
+      expect(await seguidor().conversation(ctx, 0)).toEqual({ sessionId: sid, from: 0, size: 0, reset: false, more: false, events: [] });
+      // Si el cliente ya había leído algo y el archivo desaparece, se le dice que empiece de cero.
+      expect(await seguidor().conversation(ctx, 500)).toMatchObject({ from: 0, reset: true, more: false, events: [] });
+      writeFileSync(aun, persona('Primer mensaje') + '\n');
+      const r = await seguidor().conversation(ctx, 0);
+      expect(r.events).toEqual([{ type: 'user', text: 'Primer mensaje', at: expect.any(Number) }]);
+    });
+
+    it('también si falta la carpeta del proyecto, siempre que cuelgue del directorio de proyectos de Claude', async () => {
+      const ctx = contexto({ transcriptPath: join(proyectos, '-proyecto-nuevo', 'x.jsonl') });
+      expect(await seguidor().conversation(ctx, 0)).toMatchObject({ from: 0, more: false, events: [] });
+      // Un enlace en la ruta que sale de los proyectos no vale, exista o no el final.
+      symlinkSync(tmp, join(proyectos, 'salida'));
+      await rechazado(seguidor().conversation(contexto({ transcriptPath: join(proyectos, 'salida', 'nuevo', 'x.jsonl') }), 0));
+    });
+
+    it('no sirve nada sin uid o con un id de sesión raro', async () => {
+      writeFileSync(archivo(), conversacionMuestra());
+      await rechazado(seguidor({ uid: null }).conversation(ctxConversacion(), 0));
+      await rechazado(seguidor().conversation(contexto({ sessionId: '../x' }), 0));
+      await rechazado(seguidor({ uid: uid + 1 }).conversation(ctxConversacion(), 0));
     });
   });
 

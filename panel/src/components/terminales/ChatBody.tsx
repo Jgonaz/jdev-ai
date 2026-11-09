@@ -1,13 +1,20 @@
-import { memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, startTransition, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { ApiError, api } from '../../api.ts';
-import { checkChatMessage } from '../../../shared/chat.ts';
+import { checkChatMessage, parseBtw } from '../../../shared/chat.ts';
+import type { ChatSendResponse } from '../../../shared/chat.ts';
 import {
   actionsLabel,
+  commandLine,
   countNewMessages,
   errorsLabel,
   findRanges,
+  MAX_RESALTADAS,
+  groupMatches,
+  highlightRange,
+  hitCountLabel,
   newMessagesLabel,
+  newRepliesAnnouncement,
   progressLabel,
   progressPercent,
   resultText,
@@ -15,8 +22,17 @@ import {
   splitHighlight,
   stepKey,
   toolsSummary,
+  waitingNotice,
+  warmSearch,
+  windowAround,
+  windowDown,
+  windowRange,
+  windowUp,
 } from '../../lib/chat.ts';
+import type { ChatWindow } from '../../lib/chat.ts';
 import type { ChatItem, ChatStep } from '../../lib/chat.ts';
+import { addBtw, btwOutcome, groupBtwByAnchor, removeBtw, updateBtw, useBtwBlocks } from '../../lib/btw.ts';
+import type { BtwBlock } from '../../lib/btw.ts';
 import { atBottom, followAfterScroll, resultNote } from '../../lib/follow.ts';
 import { visualState } from '../../lib/sessions.ts';
 import { formatClock } from '../../lib/statusline.ts';
@@ -25,9 +41,13 @@ import type { SessionInfo } from '../../types.ts';
 import { IconArrowDown, IconChat, IconChevron, IconChevronDown, IconChevronUp, IconClose, IconSearch, IconSend } from '../Icons.tsx';
 import { Markdown } from '../Markdown.tsx';
 
-/** A partir de tantos elementos se deja que el navegador se salte el pintado de lo que queda fuera de pantalla. */
+/** A partir de tantos elementos pintados se deja que el navegador se salte el pintado de lo que queda fuera de pantalla. */
 const LISTA_LARGA = 1500;
 const ALTO_MAX_CAJA = 200;
+/** Espera tras la última tecla antes de buscar: en una conversación enorme cada búsqueda cuesta. */
+export const RETARDO_BUSQUEDA = 200;
+/** Cada cuánto se anuncian a un lector de pantalla las respuestas nuevas (se agrupan, no se lee cada una). */
+const RETARDO_ANUNCIO = 1500;
 
 const SIN_COINCIDENCIAS: ReadonlySet<string> = new Set();
 
@@ -46,6 +66,35 @@ function useAbreSi(ref: { current: HTMLDetailsElement | null }, abrir: boolean, 
   useLayoutEffect(() => {
     if (abrir && ref.current) ref.current.open = true;
   }, [abrir, ...dependencias]);
+}
+
+/**
+ * ¿Está el elemento en pantalla o cerca (600 px)? Sin `IntersectionObserver` se da por visto. Solo observa si `activo`:
+ * se usa para no pintar `<mark>` en las coincidencias lejanas.
+ */
+function useCerca(ref: { current: Element | null }, activo: boolean): boolean {
+  const [cerca, setCerca] = useState(typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    const el = ref.current;
+    if (!activo || !el || typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver((es) => es.forEach((e) => setCerca(e.isIntersecting)), { rootMargin: '600px 0px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [ref, activo]);
+  return cerca;
+}
+
+/** Llama a `alVer` cada vez que el elemento entra en la zona visible del contenedor (con 400 px de margen). Se vuelve a observar al cambiar `dependencia`. */
+function useAlVer(ref: { current: Element | null }, contenedor: { current: Element | null }, alVer: () => void, dependencia: unknown): void {
+  const ultimo = useRef(alVer);
+  ultimo.current = alVer;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && ultimo.current(), { root: contenedor.current, rootMargin: '400px 0px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [ref, contenedor, dependencia]);
 }
 
 // ---------------------------------------------------------------------- Elementos
@@ -81,10 +130,23 @@ function StepView({ paso, clave, consulta, hit, actual }: { paso: ChatStep; clav
   );
 }
 
-function ToolsView({ item, consulta, hits, curKey }: { item: Extract<ChatItem, { kind: 'tools' }>; consulta: string; hits: ReadonlySet<string>; curKey: string | null }) {
+function ToolsView({
+  item,
+  consulta,
+  hits,
+  curKey,
+  cerca,
+}: {
+  item: Extract<ChatItem, { kind: 'tools' }>;
+  consulta: string;
+  hits: ReadonlySet<string>;
+  curKey: string | null;
+  cerca: boolean;
+}) {
   const caja = useRef<HTMLDetailsElement>(null);
   const [abierto, setAbierto] = useState(false);
-  const hay = hits.size > 0;
+  // Un grupo con coincidencias se abre al acercarse (o si tiene la actual); los lejanos no se pintan hasta entonces.
+  const hay = hits.size > 0 && (cerca || curKey !== null);
   // Las acciones solo se pintan con el grupo abierto (o con una coincidencia dentro): una conversación larga tiene miles.
   const pinta = abierto || hay;
   useAbreSi(caja, hay, curKey);
@@ -100,7 +162,7 @@ function ToolsView({ item, consulta, hits, curKey }: { item: Extract<ChatItem, {
         <div className="chat__steps">
           {item.steps.map((s, j) => {
             const k = stepKey(item.key, j);
-            return <StepView key={s.id} paso={s} clave={k} consulta={consulta} hit={hits.has(k)} actual={curKey === k} />;
+            return <StepView key={s.id} paso={s} clave={k} consulta={hay ? consulta : ''} hit={hits.has(k)} actual={curKey === k} />;
           })}
         </div>
       )}
@@ -108,15 +170,18 @@ function ToolsView({ item, consulta, hits, curKey }: { item: Extract<ChatItem, {
   );
 }
 
-function ItemViewBase({ item, consulta, curKey }: { item: ChatItem; consulta: string; curKey: string | null }) {
-  // Qué mensajes o acciones de este elemento contienen la búsqueda (comparte la normalización de la búsqueda general).
-  const hits = useMemo(() => (consulta.trim() === '' ? SIN_COINCIDENCIAS : new Set(searchChat([item], consulta).map((m) => m.key))), [item, consulta]);
+function ItemViewBase({ item, consulta: consultaItem, hits, curKey }: { item: ChatItem; consulta: string; hits: ReadonlySet<string>; curKey: string | null }) {
+  // `hits` son las coincidencias de este elemento que se resaltan (las calcula ChatBody de una vez para toda la conversación).
+  const raiz = useRef<HTMLDivElement>(null);
+  const cerca = useCerca(raiz, hits.size > 0);
+  // Los `<mark>` solo se pintan cerca de la pantalla (y siempre en la coincidencia actual): miles de marcas bloquean la página.
+  const consulta = hits.size > 0 && (cerca || curKey !== null) ? consultaItem : '';
   const resaltador = useCallback((t: string) => resalta(t, consulta), [consulta]);
 
   if (item.kind === 'tools') {
     return (
-      <div className="chat__item">
-        <ToolsView item={item} consulta={consulta} hits={hits} curKey={curKey} />
+      <div className="chat__item" ref={raiz}>
+        <ToolsView item={item} consulta={consulta} hits={hits} curKey={curKey} cerca={cerca} />
       </div>
     );
   }
@@ -125,15 +190,24 @@ function ItemViewBase({ item, consulta, curKey }: { item: ChatItem; consulta: st
   const hora = item.at !== null ? ` · ${formatClock(item.at)}` : '';
   if (item.kind === 'user') {
     return (
-      <div className={`chat__item chat__user${claseHit(hit, actual)}`} data-hit={hit ? item.key : undefined}>
+      <div ref={raiz} className={`chat__item chat__user${claseHit(hit, actual)}`} data-hit={hit ? item.key : undefined}>
         {item.text !== '' && <div className="chat__bubble">{resalta(item.text, consulta)}</div>}
         {item.images > 0 && <div className="chat__imgs">{item.images === 1 ? '1 imagen adjunta' : `${item.images} imágenes adjuntas`}</div>}
         <span className="chat__meta">Tú{hora}</span>
       </div>
     );
   }
+  if (item.kind === 'command') {
+    return (
+      <div ref={raiz} className={`chat__item chat__user chat__cmd${claseHit(hit, actual)}`} data-hit={hit ? item.key : undefined}>
+        <div className="chat__bubble chat__bubble--cmd">{resalta(commandLine(item), consulta)}</div>
+        {item.output && <pre className={`chat__cmdout${item.output.error ? ' chat__cmdout--error' : ''}`}>{resalta(item.output.text, consulta)}</pre>}
+        <span className="chat__meta">Tú{hora}</span>
+      </div>
+    );
+  }
   return (
-    <div className={`chat__item chat__agent${claseHit(hit, actual)}`} data-hit={hit ? item.key : undefined}>
+    <div ref={raiz} className={`chat__item chat__agent${claseHit(hit, actual)}`} data-hit={hit ? item.key : undefined}>
       <span className="chat__meta chat__meta--agent">
         <span className="chat__dot" aria-hidden="true" />
         Claude{hora}
@@ -146,15 +220,66 @@ function ItemViewBase({ item, consulta, curKey }: { item: ChatItem; consulta: st
 // Los elementos son inmutables: solo se repinta el que cambia (o todos, si cambia la búsqueda).
 const ItemView = memo(ItemViewBase);
 
+// ---------------------------------------------------------------------- Pregunta al margen (/btw)
+
+/** La respuesta de /btw: aparte de la conversación (Claude no la guarda en su transcripción). */
+function BtwView({ bloque, onTerminal }: { bloque: BtwBlock; onTerminal: () => void }) {
+  return (
+    <section className={`chat__item chat__btw chat__btw--${bloque.state}`} aria-label="Pregunta al margen">
+      <div className="chat__btwhead">
+        <span className="chat__btwtag">Pregunta al margen</span>
+        <span className="chat__btwcmd">/btw</span>
+      </div>
+      <p className="chat__btwq">{bloque.question !== '' ? bloque.question : '(sin pregunta)'}</p>
+      {bloque.state === 'waiting' && (
+        <div className="chat__btwstate" role="status">
+          <span className="chat__waitdot" aria-hidden="true" />
+          Esperando la respuesta de /btw…
+        </div>
+      )}
+      {/* Texto preformateado: la TUI de Claude ya lo maqueta (títulos, listas, código, sangría) y pasarlo por Markdown le quitaría los saltos de línea. */}
+      {bloque.state === 'done' && <pre className="chat__btwans">{bloque.answer}</pre>}
+      {bloque.state === 'done' && bloque.truncated && (
+        <p className="chat__btwwarn">Puede estar incompleta: solo se pudo leer lo que mostraba la ventana de la terminal.</p>
+      )}
+      {bloque.state === 'pending' && (
+        <div className="chat__btwstate chat__btwstate--warn" role="status">
+          <span>No se pudo leer la respuesta a tiempo: la ventana de /btw sigue abierta en la terminal.</span>
+          <button type="button" className="chat__waitbtn" onClick={onTerminal}>
+            Ir a la terminal
+          </button>
+        </div>
+      )}
+      {bloque.state === 'empty' && (
+        <div className="chat__btwstate chat__btwstate--warn" role="status">
+          No se obtuvo respuesta de /btw. Escribe la pregunta detrás del comando, por ejemplo «/btw ¿qué archivo estábamos tocando?».
+        </div>
+      )}
+      <p className="chat__btwnote">No forma parte de la conversación: Claude no la guarda y desaparece al recargar el panel.</p>
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------------- Caja de entrada
 
 /** Lo escrito y no enviado de cada sesión: sobrevive a pasar a la terminal y volver. */
 const borradores = new Map<string, string>();
 
-function Composer({ nombre, onSent }: { nombre: string; onSent: () => void }) {
+type ComposerProps = {
+  nombre: string;
+  onSent: (r: ChatSendResponse) => void;
+  onTerminal: () => void;
+  /** Dónde va la respuesta de un /btw: la sesión de Claude y los elementos que hay ahora en la conversación. */
+  btwContext: () => { sessionId: string | null; anchor: number };
+};
+
+/** Un fallo de envío; `terminal` ofrece ir a la terminal (hay una ventana de Claude abierta). */
+type SendError = { text: string; terminal: boolean };
+
+function Composer({ nombre, onSent, onTerminal, btwContext }: ComposerProps) {
   const [texto, setTexto] = useState(() => borradores.get(nombre) ?? '');
   const [enviando, setEnviando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SendError | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const idArea = useId();
   const idNota = useId();
@@ -178,19 +303,24 @@ function Composer({ nombre, onSent }: { nombre: string; onSent: () => void }) {
     if (enviando) return;
     const c = checkChatMessage(texto);
     if (!c.ok) {
-      setError(c.error);
+      setError({ text: c.error, terminal: false });
       return;
     }
     setEnviando(true);
     setError(null);
+    // /btw tarda en responder (Claude lo contesta en una ventana de la terminal): su bloque aparece ya, esperando.
+    const btw = parseBtw(c.text);
+    const bloque = btw ? addBtw(nombre, { question: btw.question, ...btwContext() }) : null;
     try {
-      await api.sendInput(nombre, c.text);
+      const r = await api.sendInput(nombre, c.text);
       setTexto('');
       borradores.delete(nombre);
-      onSent();
+      if (bloque !== null) updateBtw(nombre, bloque, btwOutcome(r));
+      onSent(r);
     } catch (e) {
+      if (bloque !== null) removeBtw(nombre, bloque);
       const motivo = e instanceof ApiError ? e.message : 'No se pudo contactar con el panel.';
-      setError(`No se envió el mensaje. ${motivo.replace(/\.?\s*$/, '.')} El texto sigue en la caja.`);
+      setError({ text: `No se envió el mensaje. ${motivo.replace(/\.?\s*$/, '.')} El texto sigue en la caja.`, terminal: e instanceof ApiError && e.code === 'tui-busy' });
     } finally {
       setEnviando(false);
       area.current?.focus();
@@ -216,7 +346,7 @@ function Composer({ nombre, onSent }: { nombre: string; onSent: () => void }) {
             id={idArea}
             ref={area}
             className="chat__input"
-            rows={2}
+            rows={1}
             placeholder="Escribe a Claude…"
             value={texto}
             // Mientras envía no se puede editar, pero la caja conserva el foco (con `disabled` lo perdería).
@@ -233,11 +363,16 @@ function Composer({ nombre, onSent }: { nombre: string; onSent: () => void }) {
         </div>
         {error !== null && (
           <div className="chat__senderr" role="alert">
-            {error}
+            <span>{error.text}</span>
+            {error.terminal && (
+              <button type="button" className="link-btn" onClick={onTerminal}>
+                Ir a la terminal
+              </button>
+            )}
           </div>
         )}
         <span className="chat__hint" id={idNota}>
-          Enter envía · Shift+Enter, salto de línea · permisos, menús y /comandos, en la terminal
+          Enter envía · Shift+Enter, salto de línea · permisos y menús, en la terminal
         </span>
       </div>
     </div>
@@ -267,10 +402,38 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
   const conv = useConversation(session.name, active, estado === 'working');
   const items = conv.chat.items;
   const esperando = estado === 'waiting';
+  const aviso = waitingNotice(session.notice);
+  // Respuestas de /btw: no están en la transcripción, van aparte, en el punto donde se preguntó.
+  const btwTodos = useBtwBlocks(session.name);
+  const btwPorPunto = useMemo(() => groupBtwByAnchor(btwTodos, conv.sessionId, items.length), [btwTodos, conv.sessionId, items.length]);
+  const contextoBtw = useRef({ sessionId: conv.sessionId, anchor: items.length });
+  contextoBtw.current = { sessionId: conv.sessionId, anchor: items.length };
+  const [comandoEspera, setComandoEspera] = useState(false);
 
   const [seguir, setSeguir] = useState(true);
+  const siguiendo = useRef(seguir);
+  siguiendo.current = seguir;
   const cuerpo = useRef<HTMLDivElement>(null);
   const lista = useRef<HTMLDivElement>(null);
+  const marcaArriba = useRef<HTMLDivElement>(null);
+  const marcaAbajo = useRef<HTMLDivElement>(null);
+
+  // Ventana de render: una conversación de miles de elementos pinta solo los últimos y va cargando más al subir.
+  const [ventana, setVentana] = useState<ChatWindow>(null);
+  const [desde, hasta] = windowRange(ventana, items.length);
+  const enCola = hasta >= items.length;
+  const rango = useRef<[number, number]>([desde, hasta]);
+  rango.current = [desde, hasta];
+  // Altura y posición del scroll antes de añadir elementos por arriba: se restituye para que el contenido no salte.
+  const anclaje = useRef<{ alto: number; top: number } | null>(null);
+  const cambiaVentana = (f: (v: ChatWindow) => ChatWindow, arriba: boolean) => {
+    const el = cuerpo.current;
+    if (arriba && el) anclaje.current = { alto: el.scrollHeight, top: el.scrollTop };
+    setVentana(f);
+  };
+  // Al acercarse al principio (o al final de un tramo) se cargan más elementos sin pulsar el botón.
+  useAlVer(marcaArriba, cuerpo, () => cambiaVentana((v) => windowUp(v, items.length), true), desde);
+  useAlVer(marcaAbajo, cuerpo, () => cambiaVentana((v) => windowDown(v, items.length), false), hasta);
 
   // Con «seguir» activo baja hasta el final cuando el contenido crece; sus propios scrolls se ignoran un instante
   // en onScroll para no confundirlos con los de la persona (como en el seguimiento de subagentes).
@@ -280,6 +443,12 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
   useLayoutEffect(() => {
     const el = cuerpo.current;
     if (!el) return;
+    if (anclaje.current) {
+      const { alto, top } = anclaje.current;
+      anclaje.current = null;
+      programatico.current = performance.now() + 150;
+      el.scrollTop = top + (el.scrollHeight - alto);
+    }
     const creció = el.scrollHeight !== alturaVista.current;
     alturaVista.current = el.scrollHeight;
     if (seguir) {
@@ -295,13 +464,43 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
   const idBusca = useId();
   const campo = useRef<HTMLInputElement>(null);
   const [consulta, setConsulta] = useState('');
-  const diferida = useDeferredValue(consulta);
-  const activa = searching ? diferida : '';
+  // Lo que se busca va con retraso y en una transición: escribir nunca espera a una búsqueda en una conversación enorme.
+  const [buscada, setBuscada] = useState('');
+  useEffect(() => {
+    if (consulta === buscada) return;
+    if (consulta.trim() === '') {
+      setBuscada(consulta);
+      return;
+    }
+    const id = window.setTimeout(() => startTransition(() => setBuscada(consulta)), RETARDO_BUSQUEDA);
+    return () => window.clearTimeout(id);
+  }, [consulta, buscada]);
+  const pendiente = consulta.trim() !== '' && consulta !== buscada;
+  const activa = searching ? buscada : '';
   const coincidencias = useMemo(() => searchChat(items, activa), [items, activa]);
   const [claveActual, setClaveActual] = useState<string | null>(null);
   const indice = Math.max(0, coincidencias.findIndex((m) => m.key === claveActual));
   const actual = coincidencias[indice]?.key ?? null;
   const itemActual = coincidencias[indice]?.item ?? -1;
+  // Coincidencias por elemento (se cuentan todas) y tramo de elementos que se resalta: solo las más cercanas a la actual.
+  const porElemento = useMemo(() => groupMatches(coincidencias), [coincidencias]);
+  const [resaltaDesde, resaltaHasta] = useMemo(() => {
+    const [a, b] = highlightRange(coincidencias.length, indice);
+    return a === b ? [-1, -1] : [coincidencias[a]!.item, coincidencias[b - 1]!.item];
+  }, [coincidencias, indice]);
+
+  // Con la búsqueda abierta se normaliza el texto de la conversación en ratos libres: la primera búsqueda sale ya preparada.
+  useEffect(() => {
+    if (!searching || !conv.synced) return;
+    const pide = (window as { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback;
+    const quita = (window as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+    let id = 0;
+    const paso = () => {
+      id = pide ? pide(() => !warmSearch(items, 8) && paso()) : window.setTimeout(() => !warmSearch(items, 8) && paso(), 16);
+    };
+    paso();
+    return () => (pide && quita ? quita(id) : window.clearTimeout(id));
+  }, [searching, conv.synced, items]);
 
   useEffect(() => {
     if (!searching) return;
@@ -309,19 +508,78 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
     campo.current?.select();
   }, [searching, searchTick]);
 
-  // Salta a la coincidencia actual: sus desplegables ya se abrieron al pintarla.
+  // Salta a la coincidencia actual: sus desplegables ya se abrieron al pintarla. Si queda fuera de la ventana
+  // de render (una antigua), se pinta primero un tramo a su alrededor y el salto se hace en el pase siguiente.
+  const saltado = useRef<string | null>(null);
   useEffect(() => {
-    if (actual === null) return;
+    saltado.current = null;
+  }, [activa]);
+  useEffect(() => {
+    if (actual === null) {
+      saltado.current = null;
+      return;
+    }
+    if (saltado.current === actual) return;
+    if (itemActual < desde || itemActual >= hasta) {
+      setVentana((v) => {
+        const [d, h] = windowRange(v, items.length);
+        return itemActual >= d && itemActual < h ? v : windowAround(itemActual, items.length);
+      });
+      return;
+    }
     const el = lista.current?.querySelector(`[data-hit="${actual}"]`);
     if (!el) return;
-    setSeguir(false);
-    programatico.current = 0;
+    saltado.current = actual;
+    // Solo si hace falta: un setState en cada salto, aunque no cambie nada, encadenaba efectos pasivos.
+    if (siguiendo.current) setSeguir(false);
+    // El scroll del salto lo provoca el código: onScroll no debe tocar la ventana ni el seguimiento por él.
+    programatico.current = performance.now() + 150;
     el.scrollIntoView({ block: 'center' });
-  }, [actual]);
+  }, [actual, itemActual, desde, hasta, items.length]);
 
+  // Navegación por coincidencias agrupada: varias pulsaciones entre dos fotogramas (una ráfaga de Enter) solo
+  // avanzan un índice acumulado, y un único `requestAnimationFrame` aplica el salto (coincidencia, ventana de
+  // render y seguimiento en el mismo lote). Así una pulsación no encadena un render y un efecto por tecla
+  // (React #185 con transcripts enormes) ni salta a coincidencias intermedias que nadie llega a ver.
+  const nav = useRef<{ lista: typeof coincidencias; indice: number; total: number; pendiente: { lista: typeof coincidencias; indice: number } | null; raf: number }>({
+    lista: coincidencias,
+    indice,
+    total: items.length,
+    pendiente: null,
+    raf: 0,
+  });
+  nav.current.lista = coincidencias;
+  nav.current.indice = indice;
+  nav.current.total = items.length;
+  useEffect(
+    () => () => {
+      if (nav.current.raf !== 0) cancelAnimationFrame(nav.current.raf);
+      nav.current.raf = 0;
+    },
+    [],
+  );
+  const aplicaSalto = useCallback(() => {
+    const n = nav.current;
+    n.raf = 0;
+    const p = n.pendiente;
+    // Si la búsqueda cambió entre medias, el índice acumulado ya no vale.
+    if (!p || p.lista !== n.lista || p.lista.length === 0) return;
+    const destino = p.lista[p.indice]!;
+    setClaveActual(destino.key);
+    // Fuera de la ventana de render, esta se mueve a su alrededor; dentro, se deja el mismo objeto (sin render de más).
+    setVentana((v) => {
+      const [d, h] = windowRange(v, n.total);
+      return destino.item >= d && destino.item < h ? v : windowAround(destino.item, n.total);
+    });
+    setSeguir(false);
+  }, []);
   const ir = (delta: number) => {
-    if (coincidencias.length === 0) return;
-    setClaveActual(coincidencias[(indice + delta + coincidencias.length) % coincidencias.length]!.key);
+    const n = nav.current;
+    const largo = n.lista.length;
+    if (largo === 0) return;
+    const base = n.pendiente !== null && n.pendiente.lista === n.lista ? n.pendiente.indice : n.indice;
+    n.pendiente = { lista: n.lista, indice: (((base + delta) % largo) + largo) % largo };
+    if (n.raf === 0) n.raf = requestAnimationFrame(aplicaSalto);
   };
   const cerrar = () => {
     onSearching(false);
@@ -339,8 +597,46 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
   };
 
   const nuevos = seguir ? 0 : countNewMessages(items, vistos.current);
-  const alEnviar = () => {
+  const alFinal = () => {
+    setVentana(null);
     setSeguir(true);
+  };
+  // Al volver a seguir el final se deja la ventana en «los últimos», para que no crezca sin límite.
+  useEffect(() => {
+    if (seguir) setVentana((v) => (v !== null && v.to === null ? null : v));
+  }, [seguir]);
+
+  // Lo que se anuncia a un lector de pantalla: las respuestas nuevas de Claude, agrupadas cada poco, sin leer su texto.
+  // Con la pastilla visible (no se sigue el final) la anuncia ella misma.
+  const [anuncio, setAnuncio] = useState('');
+  const anunciados = useRef<number | null>(null);
+  const alAnunciar = useRef({ items, seguir });
+  alAnunciar.current = { items, seguir };
+  useEffect(() => {
+    if (!conv.synced || anunciados.current === null || items.length < anunciados.current) {
+      anunciados.current = conv.synced ? items.length : null;
+      return;
+    }
+    if (items.length === anunciados.current) return;
+    let aviso = 0;
+    const id = window.setTimeout(() => {
+      const { items: ahora, seguir: siguiendo } = alAnunciar.current;
+      const texto = newRepliesAnnouncement(ahora, anunciados.current ?? ahora.length);
+      anunciados.current = ahora.length;
+      if (texto === '' || !siguiendo) return;
+      // Se vacía antes: un lector no repite un texto idéntico al anterior.
+      setAnuncio('');
+      aviso = window.setTimeout(() => setAnuncio(texto), 50);
+    }, RETARDO_ANUNCIO);
+    return () => {
+      window.clearTimeout(id);
+      window.clearTimeout(aviso);
+    };
+  }, [items, conv.synced]);
+
+  const alEnviar = (r: ChatSendResponse) => {
+    setComandoEspera(r.awaitingTerminal === true);
+    alFinal();
     conv.refrescar();
     // El mensaje llega a la transcripción en cuanto Claude lo recibe: se pregunta una vez más enseguida.
     window.setTimeout(conv.refrescar, 700);
@@ -348,7 +644,7 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
 
   const cargando = !conv.synced && items.length === 0 && conv.error === null;
   const fallo = conv.error !== null && !conv.synced && items.length === 0;
-  const vacia = conv.synced && items.length === 0;
+  const vacia = conv.synced && items.length === 0 && btwPorPunto.size === 0;
 
   return (
     <div className="chat">
@@ -357,7 +653,7 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
           <label htmlFor={idBusca} className="sr-only">
             Buscar en la conversación
           </label>
-          <div className={`chat__searchbox${consulta.trim() !== '' && coincidencias.length === 0 ? ' chat__searchbox--none' : ''}`}>
+          <div className={`chat__searchbox${consulta.trim() !== '' && !pendiente && coincidencias.length === 0 ? ' chat__searchbox--none' : ''}`}>
             <IconSearch size={14} />
             <input
               id={idBusca}
@@ -372,8 +668,12 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
                 setClaveActual(null);
               }}
             />
-            <span className={`chat__count-hits${consulta.trim() !== '' && coincidencias.length === 0 ? ' chat__count-hits--none' : ''}`} role="status">
-              {consulta.trim() === '' ? '' : coincidencias.length === 0 ? 'Sin coincidencias' : `${indice + 1} de ${coincidencias.length}`}
+            <span
+              className={`chat__count-hits${consulta.trim() !== '' && !pendiente && coincidencias.length === 0 ? ' chat__count-hits--none' : ''}`}
+              role="status"
+              title={coincidencias.length > MAX_RESALTADAS ? `Se cuentan todas, pero solo se resaltan las ${MAX_RESALTADAS} más cercanas a la actual.` : undefined}
+            >
+              {consulta.trim() === '' ? '' : pendiente ? 'Buscando…' : hitCountLabel(indice, coincidencias.length)}
             </span>
           </div>
           <button type="button" className="chat__sbtn" aria-label="Coincidencia anterior" disabled={coincidencias.length === 0} onClick={() => ir(-1)}>
@@ -387,7 +687,7 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
           </button>
         </div>
       )}
-      {searching && consulta.trim() !== '' && coincidencias.length === 0 && (
+      {searching && consulta.trim() !== '' && !pendiente && coincidencias.length === 0 && (
         <p className="chat__searchtip">Busca en los mensajes, los nombres de las acciones y sus resultados, sin distinguir mayúsculas ni tildes.</p>
       )}
 
@@ -400,10 +700,13 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
           aria-label="Conversación"
           tabIndex={0}
           // Cualquier scroll que no termine abajo suelta el seguimiento (rueda, barra, táctil, teclado, scrollIntoView).
+          // Solo se vuelve a seguir al llegar abajo si la ventana de render llega al último elemento.
           onScroll={(ev) => {
             const abajo = atBottom(ev.currentTarget);
             const propio = performance.now() < programatico.current;
-            setSeguir((a) => followAfterScroll(a, abajo, propio));
+            // Al soltar el final, la ventana se fija para que los elementos nuevos no desplacen lo que se está leyendo.
+            if (!abajo && !propio) setVentana((v) => v ?? { from: rango.current[0], to: null });
+            setSeguir((a) => followAfterScroll(a, abajo && enCola, propio));
           }}
         >
           {cargando ? (
@@ -433,19 +736,53 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
               <p className="chat__statenote">Escribe abajo para empezar.</p>
             </div>
           ) : (
-            <div ref={lista} className={`chat__list${items.length > LISTA_LARGA ? ' chat__list--long' : ''}`}>
-              {items.map((it, i) => (
-                <ItemView key={it.key} item={it} consulta={activa} curKey={i === itemActual ? actual : null} />
-              ))}
+            <div ref={lista} className={`chat__list${hasta - desde > LISTA_LARGA ? ' chat__list--long' : ''}`}>
+              {desde > 0 && (
+                <div ref={marcaArriba} className="chat__more">
+                  <button type="button" className="chat__morebtn" onClick={() => cambiaVentana((v) => windowUp(v, items.length), true)}>
+                    <IconChevronUp size={13} />
+                    Mostrar anteriores ({desde.toLocaleString('es-ES')} más)
+                  </button>
+                </div>
+              )}
+              {items.slice(desde, hasta).map((it, k) => {
+                const i = desde + k;
+                const conCoincidencias = i >= resaltaDesde && i <= resaltaHasta;
+                return (
+                  <Fragment key={it.key}>
+                    {btwPorPunto.get(i)?.map((b) => <BtwView key={b.id} bloque={b} onTerminal={onTerminal} />)}
+                    <ItemView item={it} consulta={conCoincidencias ? activa : ''} hits={(conCoincidencias && porElemento.get(i)) || SIN_COINCIDENCIAS} curKey={i === itemActual ? actual : null} />
+                  </Fragment>
+                );
+              })}
+              {enCola && btwPorPunto.get(items.length)?.map((b) => <BtwView key={b.id} bloque={b} onTerminal={onTerminal} />)}
+              {!enCola && (
+                <div ref={marcaAbajo} className="chat__more">
+                  <button type="button" className="chat__morebtn" onClick={() => cambiaVentana((v) => windowDown(v, items.length), false)}>
+                    <IconChevronDown size={13} />
+                    Mostrar siguientes ({(items.length - hasta).toLocaleString('es-ES')} más)
+                  </button>
+                  <button type="button" className="chat__morebtn" onClick={alFinal}>
+                    <IconArrowDown size={13} />
+                    Ir al final
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
-        {nuevos > 0 && (
-          <button type="button" className="chat__newpill" onClick={() => setSeguir(true)}>
-            <IconArrowDown size={13} />
-            {newMessagesLabel(nuevos)}
-          </button>
-        )}
+        {/* La región existe siempre: así el lector de pantalla anuncia la pastilla cuando aparece o cambia su cuenta. */}
+        <div className="chat__pillslot" role="status">
+          {nuevos > 0 && (
+            <button type="button" className="chat__newpill" onClick={alFinal}>
+              <IconArrowDown size={13} />
+              {newMessagesLabel(nuevos)}
+            </button>
+          )}
+        </div>
+        <div className="sr-only" role="status" aria-atomic="true">
+          {anuncio}
+        </div>
       </div>
 
       {conv.error !== null && conv.synced && (
@@ -461,7 +798,8 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
         <div className="chat__wait" role="status">
           <span className="chat__waitdot" aria-hidden="true" />
           <span className="chat__waittext">
-            Claude espera tu respuesta en la terminal{session.notice !== '' ? `: ${session.notice}` : '.'}
+            {aviso.text}
+            {aviso.detail !== null && <span className="chat__waitdetail">{aviso.translated ? aviso.detail : `«${aviso.detail}»`}</span>}
           </span>
           <button type="button" className="chat__waitbtn" onClick={onTerminal}>
             Ir a la terminal
@@ -469,7 +807,20 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
         </div>
       )}
 
-      <Composer nombre={session.name} onSent={alEnviar} />
+      {comandoEspera && (
+        <div className="chat__wait" role="status">
+          <span className="chat__waitdot" aria-hidden="true" />
+          <span className="chat__waittext">El comando espera en la terminal: ábrela para responderlo. No se envían más mensajes hasta que se cierre.</span>
+          <button type="button" className="chat__waitbtn" onClick={onTerminal}>
+            Ir a la terminal
+          </button>
+          <button type="button" className="link-btn" onClick={() => setComandoEspera(false)}>
+            Descartar
+          </button>
+        </div>
+      )}
+
+      <Composer nombre={session.name} onSent={alEnviar} onTerminal={onTerminal} btwContext={() => contextoBtw.current} />
     </div>
   );
 }

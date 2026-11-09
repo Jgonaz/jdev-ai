@@ -57,6 +57,9 @@ import {
 import type { TmuxConfig } from './tmux.ts';
 import { MAX_UPLOAD_BYTES, UploadError, readUploadBody, saveUpload, startUploadCleanup, uploadType } from './uploads.ts';
 import { FollowError, Follower } from './follow.ts';
+import { checkChatMessage } from '../shared/chat.ts';
+import { sendChatMessage } from './chat-send.ts';
+import type { ChatSendTiming } from './chat-send.ts';
 import { FOLLOW_ID } from '../shared/follow.ts';
 import { DEFAULT_WINDOWS_MEDIA, SoundError, listWindowsSounds, openWindowsSound } from './winsounds.ts';
 
@@ -100,6 +103,8 @@ export type ServerOptions = {
   extraOrigins?: string[];
   /** tmux del panel; por defecto, socket JDEV_PANEL_TMUX_SOCKET o «jdev». */
   tmux?: TmuxConfig;
+  /** Esperas del envío desde el chat (comandos y /btw); solo las pruebas las cambian. */
+  chatTiming?: Partial<ChatSendTiming>;
   /** Directorio de estado de sesiones; por defecto, el de XDG_STATE_HOME. */
   stateDir?: string;
   /** Estado de las conversaciones (hecha o abierta); por defecto, `conversations/` junto a stateDir. */
@@ -155,13 +160,13 @@ function sendJson(res: ServerResponse, status: number, cuerpo: unknown): void {
   res.end(texto);
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, max = MAX_BODY): Promise<string> {
   return new Promise((ok, ko) => {
     const trozos: Buffer[] = [];
     let total = 0;
     req.on('data', (t: Buffer) => {
       total += t.length;
-      if (total > MAX_BODY) {
+      if (total > max) {
         ko(new Error('cuerpo demasiado grande'));
         req.destroy();
         return;
@@ -396,10 +401,10 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     for (const c of clientes) if (c.readyState === WebSocket.OPEN) c.send(texto);
   }
 
-  async function parseJsonBody(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | null> {
+  async function parseJsonBody(req: IncomingMessage, res: ServerResponse, max = MAX_BODY): Promise<Record<string, unknown> | null> {
     let cuerpo: unknown;
     try {
-      const texto = await readBody(req);
+      const texto = await readBody(req, max);
       cuerpo = texto.trim() === '' ? {} : JSON.parse(texto);
     } catch {
       sendJson(res, 400, { error: 'JSON no válido' });
@@ -548,6 +553,96 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         }
         console.error('Error leyendo el seguimiento:', e);
         sendJson(res, 500, { error: 'No se pudo leer el seguimiento.' });
+      }
+      return;
+    }
+
+    // GET: la conversación principal de una sesión de Claude (lo que escriben la persona y el
+    // agente, y las herramientas), por lectura incremental de su transcript desde el byte
+    // `from`. El archivo lo localiza y valida el servidor (no se acepta ninguna ruta).
+    const conv = /^\/api\/sessions\/([^/]+)\/conversation$/.exec(pathname);
+    if (conv) {
+      if (metodo !== 'GET') return noPermitido('GET');
+      let nombre: string;
+      try {
+        nombre = decodeURIComponent(conv[1]!);
+      } catch {
+        sendJson(res, 400, { error: 'nombre de sesión no válido' });
+        return;
+      }
+      if (!isPanelSessionName(nombre)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se admiten sesiones del panel (jdev-*)' });
+        return;
+      }
+      const crudo = url.searchParams.get('from');
+      const from = crudo === null ? 0 : /^\d{1,15}$/.test(crudo) ? Number(crudo) : NaN;
+      if (Number.isNaN(from)) {
+        sendJson(res, 400, { error: 'El parámetro «from» debe ser un número de bytes.' });
+        return;
+      }
+      const origen = sesiones.conversationContext(nombre);
+      if (!origen) {
+        sendJson(res, 404, { error: 'La sesión no existe.' });
+        return;
+      }
+      if ('reason' in origen) {
+        sendJson(res, 404, { error: origen.reason });
+        return;
+      }
+      try {
+        const cuerpo = await seguidor.conversation(origen.context, from);
+        res.setHeader('Cache-Control', 'no-store');
+        sendJson(res, 200, cuerpo);
+      } catch (e) {
+        if (e instanceof FollowError) {
+          sendJson(res, e.status, { error: e.message });
+          return;
+        }
+        console.error('Error leyendo la conversación:', e);
+        sendJson(res, 500, { error: 'No se pudo leer la conversación.' });
+      }
+      return;
+    }
+
+    // POST {text}: escribe un mensaje al agente de una sesión de Claude como un único pegado (ver chat-send.ts:
+    // 409 `tui-busy` con una ventana de Claude abierta, captura de la respuesta de /btw y aviso de comandos que abren un menú).
+    const entrada = /^\/api\/sessions\/([^/]+)\/input$/.exec(pathname);
+    if (entrada) {
+      if (metodo !== 'POST') return noPermitido('POST');
+      let nombre: string;
+      try {
+        nombre = decodeURIComponent(entrada[1]!);
+      } catch {
+        sendJson(res, 400, { error: 'nombre de sesión no válido' });
+        return;
+      }
+      if (!isPanelSessionName(nombre)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se admiten sesiones del panel (jdev-*)' });
+        return;
+      }
+      // El cuerpo admite el escapado JSON de un texto de 64 KiB; el texto se acota después.
+      const cuerpo = await parseJsonBody(req, res, 4 * MAX_BODY);
+      if (!cuerpo) return;
+      const mensaje = checkChatMessage(cuerpo.text);
+      if (!mensaje.ok) {
+        sendJson(res, mensaje.status, { error: mensaje.error });
+        return;
+      }
+      const sesion = sesiones.list().find((s) => s.name === nombre);
+      if (!sesion || !sesion.alive) {
+        sendJson(res, 404, { error: 'La sesión no existe.' });
+        return;
+      }
+      if (sesion.agent !== 'claude') {
+        sendJson(res, 409, { error: sesion.chat.reason ?? 'Solo se puede escribir desde el chat a sesiones de Claude.' });
+        return;
+      }
+      try {
+        const r = await sendChatMessage(tmux, nombre, mensaje.text, { timing: opts.chatTiming });
+        sendJson(res, r.status, r.body);
+      } catch (e) {
+        console.error('Error enviando el mensaje a la sesión:', e);
+        sendJson(res, 500, { error: 'No se pudo enviar el mensaje a la sesión.' });
       }
       return;
     }

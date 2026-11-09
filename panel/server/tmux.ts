@@ -343,9 +343,9 @@ export function tmuxBaseArgs(cfg: TmuxConfig): string[] {
   return ['-L', cfg.socket, '-f', cfg.confFile];
 }
 
-function runTmux(cfg: TmuxConfig, args: string[]): Promise<ExecResult> {
+function runTmux(cfg: TmuxConfig, args: string[], input?: string): Promise<ExecResult> {
   return new Promise((ok, ko) => {
-    execFile(
+    const hijo = execFile(
       'tmux',
       [...tmuxBaseArgs(cfg), ...args],
       { env: tmuxEnv(), timeout: 10000, maxBuffer: 4 * 1024 * 1024 },
@@ -357,6 +357,11 @@ function runTmux(cfg: TmuxConfig, args: string[]): Promise<ExecResult> {
         ok({ stdout, stderr });
       },
     );
+    // El texto entra por la entrada estándar (load-buffer -): sin pasar por argv ni por la shell.
+    if (input !== undefined) {
+      hijo.stdin?.on('error', () => {}); // si tmux muere antes de leer, ya falla execFile
+      hijo.stdin?.end(input);
+    }
   });
 }
 
@@ -760,6 +765,68 @@ export async function typeLine(cfg: TmuxConfig, name: string, texto: string): Pr
   try {
     await runTmux(cfg, ['send-keys', '-t', `=${name}:`, '-l', '--', arg(texto)]);
     await runTmux(cfg, ['send-keys', '-t', `=${name}:`, 'Enter']);
+  } catch (e) {
+    if (noSession(e)) return false;
+    throw e;
+  }
+  return true;
+}
+
+let pegados = 0;
+const PASTE_ENTER_DELAY_MS = 120;
+
+/**
+ * Envía un mensaje, también de varias líneas, a la terminal de la sesión como un
+ * único pegado entre corchetes (paste-buffer -p) y pulsa Enter: los saltos de línea
+ * no lo envían antes de tiempo, a diferencia de typeLine. El buffer de tmux es
+ * propio de la llamada (`-b`) y se borra al pegar (`-d`). Devuelve false si la sesión no existe.
+ */
+export async function pasteMessage(cfg: TmuxConfig, name: string, texto: string): Promise<boolean> {
+  if (!isPanelSessionName(name)) return false;
+  const buffer = `jdev-msg-${process.pid}-${++pegados}`;
+  const objetivo = `=${name}:`;
+  try {
+    await runTmux(cfg, ['load-buffer', '-b', buffer, '-'], texto);
+    try {
+      // -p: pegado entre corchetes si la aplicación lo pidió, así que los saltos de línea no pulsan Enter.
+      await runTmux(cfg, ['paste-buffer', '-p', '-d', '-b', buffer, '-t', objetivo]);
+    } catch (e) {
+      await runTmux(cfg, ['delete-buffer', '-b', buffer]).catch(() => {});
+      throw e;
+    }
+    // Un respiro para que la aplicación termine de procesar el pegado: con un Enter inmediato Claude
+    // Code puede tratarlo como un salto de línea más del mensaje en vez de enviarlo.
+    await new Promise((ok) => setTimeout(ok, PASTE_ENTER_DELAY_MS));
+    await runTmux(cfg, ['send-keys', '-t', objetivo, 'Enter']);
+  } catch (e) {
+    if (noSession(e)) return false;
+    throw e;
+  }
+  return true;
+}
+
+/**
+ * Lo que se ve ahora en la terminal de la sesión (capture-pane -p -J: líneas largas unidas y
+ * sin escapes). null si la sesión no existe.
+ */
+export async function capturePane(cfg: TmuxConfig, name: string): Promise<string | null> {
+  if (!isPanelSessionName(name)) return null;
+  try {
+    return (await runTmux(cfg, ['capture-pane', '-p', '-J', '-t', `=${name}:`])).stdout;
+  } catch (e) {
+    if (noSession(e)) return null;
+    throw e;
+  }
+}
+
+/**
+ * Pulsa una tecla (nombre de tecla de tmux: «Escape», «Down») en la terminal de la sesión.
+ * Devuelve false si no existe.
+ */
+export async function pressKey(cfg: TmuxConfig, name: string, tecla: string): Promise<boolean> {
+  if (!isPanelSessionName(name)) return false;
+  try {
+    await runTmux(cfg, ['send-keys', '-t', `=${name}:`, tecla]);
   } catch (e) {
     if (noSession(e)) return false;
     throw e;

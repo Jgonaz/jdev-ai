@@ -4,11 +4,19 @@ import {
   EMPTY_CHAT,
   actionsLabel,
   applyChatEvents,
+  commandLine,
   conversationDelay,
   countNewMessages,
   errorsLabel,
   findRanges,
+  groupMatches,
+  highlightRange,
+  hitCountLabel,
+  MAX_RESALTADAS,
+  PASO_VENTANA,
+  VENTANA,
   markdownPieces,
+  newRepliesAnnouncement,
   newMessagesLabel,
   normalizeText,
   progressLabel,
@@ -17,6 +25,12 @@ import {
   splitHighlight,
   stepLabel,
   toolsSummary,
+  waitingNotice,
+  warmSearch,
+  windowAround,
+  windowDown,
+  windowRange,
+  windowUp,
 } from './chat.ts';
 
 const user = (text: string, at: number | null = 1000): AgentEvent => ({ type: 'user', text, at });
@@ -78,12 +92,65 @@ describe('applyChatEvents', () => {
   });
 });
 
+describe('comandos en la conversación', () => {
+  const cmd = (name: string, args = ''): AgentEvent => ({ type: 'command', name, args, at: 4000 });
+  const salida = (text: string, error = false): AgentEvent => ({ type: 'command-output', text, error, at: 4000 });
+
+  it('un comando es un elemento propio y su salida se une a él, también si llega en otro trozo', () => {
+    const a = applyChatEvents(EMPTY_CHAT, [user('hola'), cmd('goal', 'close')]);
+    expect(a.items[1]).toMatchObject({ kind: 'command', name: 'goal', args: 'close' });
+    expect(a.items[1]).not.toHaveProperty('output');
+    const b = applyChatEvents(a, [salida('Goal cleared')]);
+    expect(b.items).toHaveLength(2);
+    expect(b.items[1]).toMatchObject({ kind: 'command', output: { text: 'Goal cleared', error: false } });
+    // El modelo anterior no cambia y el resto de elementos conservan su identidad.
+    expect(a.items[1]).not.toHaveProperty('output');
+    expect(b.items[0]).toBe(a.items[0]);
+  });
+
+  it('una salida sin comando justo antes, o una segunda salida, no crea elementos ni pisa la primera', () => {
+    expect(applyChatEvents(EMPTY_CHAT, [salida('huérfana')]).items).toEqual([]);
+    expect(applyChatEvents(EMPTY_CHAT, [user('x'), salida('huérfana')]).items).toHaveLength(1);
+    const m = applyChatEvents(EMPTY_CHAT, [cmd('compact'), salida('uno'), salida('dos', true)]);
+    expect(m.items[0]).toMatchObject({ output: { text: 'uno', error: false } });
+  });
+
+  it('se escribe como «/goal close» (sin espacio de más si no hay argumentos)', () => {
+    expect(commandLine({ name: 'goal', args: 'close' })).toBe('/goal close');
+    expect(commandLine({ name: 'compact', args: '' })).toBe('/compact');
+  });
+
+  it('entra en la búsqueda: por el comando, los argumentos y su salida', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [user('hola'), cmd('goal', 'close'), salida('Objetivo CERRADO'), msg('vale')]);
+    expect(searchChat(m.items, '/goal').map((x) => [x.item, x.step])).toEqual([[1, null]]);
+    expect(searchChat(m.items, 'goal close').map((x) => x.item)).toEqual([1]);
+    expect(searchChat(m.items, 'cerrado').map((x) => x.item)).toEqual([1]);
+    expect(searchChat(m.items, 'nada')).toEqual([]);
+  });
+
+  it('cuenta como mensaje nuevo', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [cmd('clear')]);
+    expect(countNewMessages(m.items, 0)).toBe(1);
+  });
+});
+
 describe('resumen de un grupo', () => {
   it('pone las acciones en infinitivo con su objetivo', () => {
     expect(stepLabel({ verb: 'Leo', target: 'panel/server/tmux.ts' })).toBe('Leer tmux.ts');
     expect(stepLabel({ verb: 'Busco', target: 'send-keys' })).toBe('Buscar «send-keys»');
     expect(stepLabel({ verb: 'Ejecuto', target: 'pnpm test' })).toBe('Ejecutar pnpm test');
     expect(stepLabel({ verb: 'Hago', target: '' })).toBe('Hago');
+  });
+
+  it('no duplica las comillas de un objetivo que el servidor ya entrecomilló (Grep)', () => {
+    // describeTool de Grep da «patrón» en panel; stepLabel no vuelve a envolverlo.
+    expect(stepLabel({ verb: 'Busco', target: '«send-keys» en panel' })).toBe('Buscar «send-keys» en panel');
+    expect(stepLabel({ verb: 'Busco', target: '«send-keys»' })).toBe('Buscar «send-keys»');
+    // Un Glob llega sin comillas y sí se entrecomilla.
+    expect(stepLabel({ verb: 'Busco', target: '**/*.ts en panel' })).toBe('Buscar «**/*.ts en panel»');
+    // Una etiqueta larga se recorta sin cambiar de forma.
+    expect(stepLabel({ verb: 'Busco', target: `«${'x'.repeat(60)}» en panel` })).toMatch(/^Buscar «x+…$/);
+    expect(toolsSummary([{ verb: 'Leo', target: 'a.ts' }, { verb: 'Busco', target: '«send-keys» en panel' }] as never)).toBe('Leer a.ts · Buscar «send-keys» en panel');
   });
 
   it('une las primeras y marca que hay más', () => {
@@ -198,5 +265,92 @@ describe('carga y sondeo', () => {
     expect(conversationDelay(true, false)).toBe(0);
     expect(conversationDelay(false, true)).toBe(1000);
     expect(conversationDelay(false, false)).toBe(3000);
+  });
+});
+
+describe('rendimiento con transcripts grandes', () => {
+  it('los elementos que no cambian conservan su identidad al llegar eventos nuevos', () => {
+    const a = applyChatEvents(EMPTY_CHAT, [user('hola'), msg('vale'), tool('a', 'Leo', 'x.ts')]);
+    const b = applyChatEvents(a, [msg('otra'), tool('b', 'Leo', 'y.ts')]);
+    expect(b.items[0]).toBe(a.items[0]);
+    expect(b.items[1]).toBe(a.items[1]);
+    expect(b.items[2]).toBe(a.items[2]);
+    expect(b.items).toHaveLength(5);
+  });
+
+  it('normaliza el texto buscable una vez por elemento y warmSearch lo deja preparado', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [user('Canción ÁRBOL'), msg('Se usa **send-keys**'), tool('a', 'Leo', 'x.ts'), result('a', { output: 'Línea ÚNICA' })]);
+    expect(warmSearch(m.items, 1000)).toBe(true);
+    // Con el texto ya normalizado, buscar con tildes o sin ellas da lo mismo.
+    expect(searchChat(m.items, 'arbol').map((c) => c.key)).toEqual(searchChat(m.items, 'ÁRBOL').map((c) => c.key));
+    expect(searchChat(m.items, 'unica')).toHaveLength(1);
+    expect(searchChat(m.items, 'send-keys')).toHaveLength(1);
+  });
+
+  it('findRanges: el camino ASCII y el normalizado dan las mismas posiciones', () => {
+    expect(findRanges('Server y server', 'SERVER')).toEqual([[0, 6], [9, 15]]);
+    expect(findRanges('Canción con ACCIÓN', 'accion')).toEqual([[12, 18]]);
+    expect(findRanges('añadir ñu', 'ñu')).toEqual([[7, 9]]);
+  });
+
+  it('highlightRange: resalta todo si cabe y, si no, una ventana de max alrededor de la actual', () => {
+    expect(highlightRange(10, 3, 2000)).toEqual([0, 10]);
+    expect(highlightRange(3000, 0)).toEqual([0, MAX_RESALTADAS]);
+    expect(highlightRange(3000, 1500)).toEqual([500, 2500]);
+    expect(highlightRange(3000, 2999)).toEqual([1000, 3000]);
+  });
+
+  it('groupMatches agrupa las claves por elemento', () => {
+    const g = groupMatches([
+      { key: 'a0', item: 0, step: null },
+      { key: 't1:0', item: 1, step: 0 },
+      { key: 't1:2', item: 1, step: 2 },
+    ]);
+    expect([...g.keys()]).toEqual([0, 1]);
+    expect([...g.get(1)!]).toEqual(['t1:0', 't1:2']);
+  });
+
+  it('el contador cuenta todas y avisa del resalte parcial al superar el límite', () => {
+    expect(hitCountLabel(0, 0)).toBe('Sin coincidencias');
+    expect(hitCountLabel(0, 3)).toBe('1 de 3');
+    expect(hitCountLabel(11, 2000)).toBe('12 de 2.000');
+    expect(hitCountLabel(0, 3482)).toBe('1 de 3.482 · resalte parcial');
+  });
+
+  it('ventana de render: los últimos, más hacia arriba o abajo, y alrededor de un elemento', () => {
+    expect(windowRange(null, 100)).toEqual([0, 100]);
+    expect(windowRange(null, 21000)).toEqual([21000 - VENTANA, 21000]);
+    const up = windowUp(null, 21000);
+    expect(windowRange(up, 21000)).toEqual([21000 - VENTANA - PASO_VENTANA, 21000]);
+    // Un tramo fijado hasta el final sigue el final aunque lleguen elementos.
+    expect(windowRange(up, 21010)).toEqual([21000 - VENTANA - PASO_VENTANA, 21010]);
+    const w = windowAround(100, 21000);
+    expect(windowRange(w, 21000)).toEqual([0, VENTANA]);
+    expect(windowRange(windowAround(10000, 21000), 21000)).toEqual([10000 - VENTANA / 2, 10000 + VENTANA / 2]);
+    // Cerca del final es «los últimos».
+    expect(windowAround(20990, 21000)).toBeNull();
+    const abajo = windowDown(windowAround(10000, 21000), 21000);
+    expect(windowRange(abajo, 21000)).toEqual([9800, 9800 + VENTANA + PASO_VENTANA]);
+    expect(windowRange(windowDown({ from: 20000, to: 20800 }, 21000), 21000)).toEqual([20000, 21000]);
+    expect(windowDown({ from: 20000, to: 20800 }, 21000)).toEqual({ from: 20000, to: null });
+  });
+});
+
+describe('avisos para lectores de pantalla', () => {
+  it('anuncia solo respuestas de Claude, agrupadas y sin su texto', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [user('hola'), msg('uno'), tool('a', 'Leo', 'x.ts'), msg('dos'), user('otra'), msg('tres')]);
+    expect(newRepliesAnnouncement(m.items, m.items.length)).toBe('');
+    expect(newRepliesAnnouncement(m.items, 0)).toBe('3 mensajes nuevos');
+    expect(newRepliesAnnouncement(m.items, 4)).toBe('Nueva respuesta de Claude'); // tras 'dos': la persona y 'tres'
+    expect(newRepliesAnnouncement(m.items, 5)).toBe('Nueva respuesta de Claude');
+    expect(newRepliesAnnouncement(m.items.slice(0, 5), 4)).toBe(''); // solo escribió la persona
+  });
+
+  it('el aviso de espera: frase propia y detalle aparte, traducido solo si se reconoce', () => {
+    expect(waitingNotice('')).toEqual({ text: 'Claude espera tu respuesta en la terminal.', detail: null, translated: false });
+    expect(waitingNotice('Claude needs your permission to use Bash')).toMatchObject({ detail: 'Pide permiso para usar Bash', translated: true });
+    expect(waitingNotice('Claude needs your permission to use mcp__x__y.')).toMatchObject({ detail: 'Pide permiso para usar mcp__x__y', translated: true });
+    expect(waitingNotice('Claude is waiting for your input')).toMatchObject({ detail: null, translated: true });
+    expect(waitingNotice('Algo raro')).toMatchObject({ detail: 'Algo raro', translated: false });
   });
 });

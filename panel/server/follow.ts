@@ -9,13 +9,13 @@
 // Los formatos son internos de Claude Code (2.1.316) y pueden cambiar: cada campo
 // se lee de forma opcional y lo que no se entienda se ignora.
 
-import { realpath } from 'node:fs/promises';
+import { lstat, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
-import { basename, dirname, join, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { openRegularFile } from './safefile.ts';
 import { resolveTranscript } from './titles.ts';
 import { FOLLOW_ID } from '../shared/follow.ts';
-import type { AgentEvent, AgentFollow, ShellFollow } from '../shared/follow.ts';
+import type { AgentEvent, AgentFollow, ConversationResponse, ShellFollow } from '../shared/follow.ts';
 import type { FollowTargets } from './usage.ts';
 
 /** Bytes que se leen como máximo por respuesta. */
@@ -29,6 +29,8 @@ const META_MAX_BYTES = 64 * 1024;
 const MAX_TASK = 8000;
 /** Los mensajes llegan hasta aquí; el cliente recorta a 4 000 los que no son el resultado final. */
 const MAX_MESSAGE = 20000;
+/** Texto de un resultado de herramienta que viaja en la conversación, para poder buscar en él. */
+const MAX_OUTPUT = 4000;
 const MAX_TARGET = 200;
 const MAX_SUMMARY = 200;
 
@@ -157,15 +159,86 @@ function fechaDe(valor: unknown): number | null {
   return Number.isNaN(f) ? null : f;
 }
 
+/** Etiquetas con las que Claude Code escribe en el transcript «mensajes de usuario» que no teclea la persona. */
+const SINTETICO = /^<(?:system-reminder|local-command-|command-|bash-|task-notification|artifact-content-authored)|^\[Request interrupted/;
+const RECORDATORIOS = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
+// Claude Code guarda un pegado largo (>~1000 caracteres) envuelto: `\n\n<pasted_content id="2a51">\n…\n</pasted_content id="2a51">\n`.
+// Solo se quita cuando abre y cierra con el mismo id; uno sin cerrar o con otro id se deja tal cual.
+const PEGADO = /<pasted_content id="([^"\s]+)">\n?([\s\S]*?)\n?<\/pasted_content id="\1">\n?/g;
+
 /**
- * Interpreta líneas completas de un transcript de subagente. `primero` indica
- * que el texto empieza en el byte 0: el encargo es el primer mensaje de usuario
- * con texto. Ignora el razonamiento (`thinking`), los tipos internos y las
- * líneas que no son JSON.
+ * Texto que de verdad escribió la persona en un bloque de texto de un mensaje de
+ * usuario; null si es sintético (recordatorios, comandos locales, notificaciones,
+ * interrupciones). Un recordatorio pegado al final de un mensaje real se quita.
  */
-export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd: string | null }): AgentEvent[] {
+function textoDePersona(bruto: string): string | null {
+  const limpio = bruto.replace(RECORDATORIOS, '').trim();
+  if (limpio === '' || SINTETICO.test(limpio)) return null;
+  const sinEnvoltorio = limpio.replace(PEGADO, '$2').trim();
+  return sinEnvoltorio === '' ? null : sinEnvoltorio;
+}
+
+const ANSI = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g;
+
+/** Texto sin secuencias de escape ANSI (colores, estilos, OSC). */
+export function stripAnsi(texto: string): string {
+  return texto.replace(ANSI, '');
+}
+
+const COMMAND_NAME = /<command-name>\s*([^<]*?)\s*<\/command-name>/;
+const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
+const LOCAL_OUTPUT = /<local-command-(stdout|stderr)>([\s\S]*?)<\/local-command-\1>/g;
+const MAX_COMMAND_ARGS = 4000;
+
+/** Texto de un mensaje de usuario: la cadena, o los bloques de texto unidos; null si trae otra cosa (resultados, imágenes). */
+function textoDeUsuario(contenido: unknown): string | null {
+  if (typeof contenido === 'string') return contenido;
+  if (!Array.isArray(contenido)) return null;
+  const partes: string[] = [];
+  for (const b of contenido) {
+    const bloque = objeto(b);
+    if (bloque?.type !== 'text' || typeof bloque.text !== 'string') return null;
+    partes.push(bloque.text);
+  }
+  return partes.join('\n');
+}
+
+/**
+ * Los mensajes `user` que Claude Code escribe al ejecutar un comando: `<command-name>` con sus
+ * argumentos (el comando que tecleó la persona) y `<local-command-stdout>`/`-stderr` (su salida
+ * local, sin ANSI y recortada). Una salida vacía o «(no content)» no se emite.
+ */
+function eventosDeComando(texto: string, at: number | null): AgentEvent[] | null {
+  const nombre = COMMAND_NAME.exec(texto)?.[1];
+  if (nombre !== undefined) {
+    const limpio = nombre.replace(/^\//, '').trim();
+    if (limpio === '') return [];
+    return [{ type: 'command', name: recorta(limpio, 80), args: recorta((COMMAND_ARGS.exec(texto)?.[1] ?? '').trim(), MAX_COMMAND_ARGS), at }];
+  }
+  if (!texto.includes('<local-command-std')) return null;
+  const salidas: string[] = [];
+  let error = false;
+  for (const m of texto.matchAll(LOCAL_OUTPUT)) {
+    const t = stripAnsi(m[2] ?? '').trim();
+    if (t === '' || t === '(no content)') continue;
+    salidas.push(t);
+    if (m[1] === 'stderr') error = true;
+  }
+  return salidas.length > 0 ? [{ type: 'command-output', text: recorta(salidas.join('\n'), MAX_OUTPUT), error, at }] : [];
+}
+
+/**
+ * Interpreta líneas completas de un transcript. Con `conversacion` es el de la
+ * sesión principal: se emiten también los mensajes reales de la persona
+ * (`user`) y no hay encargo (`task`). Sin ella es el de un subagente y `primero`
+ * indica que el texto empieza en el byte 0: el encargo es el primer mensaje de
+ * usuario con texto. Ignora el razonamiento (`thinking`), los tipos internos y
+ * las líneas que no son JSON.
+ */
+export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd: string | null; conversacion?: boolean }): AgentEvent[] {
   const eventos: AgentEvent[] = [];
-  let hayEncargo = !opciones.primero;
+  const conversacion = opciones.conversacion === true;
+  let hayEncargo = conversacion || !opciones.primero;
   let cwd = opciones.cwd;
   for (const linea of texto.split('\n')) {
     if (linea.trim() === '') continue;
@@ -178,16 +251,41 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
     const o = objeto(obj);
     if (!o) continue;
     if (typeof o.cwd === 'string' && o.cwd.startsWith('/')) cwd = o.cwd;
+    // Lo que hace un subagente (isSidechain) no es parte de la conversación de la sesión.
+    if (conversacion && o.isSidechain === true) continue;
     const mensaje = objeto(o.message);
     const contenido = mensaje?.content;
     const at = fechaDe(o.timestamp);
+    if (o.type === 'system') {
+      // Claude 2.1.319 escribe así algunos comandos locales (/rename, /resume, /fork, /login…) y su salida:
+      // líneas `system/local_command` con el mismo contenido que las de tipo `user`.
+      if (conversacion && o.subtype === 'local_command' && typeof o.content === 'string') eventos.push(...(eventosDeComando(o.content, at) ?? []));
+      continue;
+    }
     if (o.type === 'user') {
+      // Mensaje de usuario que no escribió la persona: metadatos, resúmenes de compactación o eventos de otro origen.
+      const origen = objeto(o.origin);
+      const ajeno = o.isMeta === true || o.isCompactSummary === true || (origen !== null && origen.kind !== 'human');
+      if (conversacion && o.isMeta !== true) {
+        // Comandos y su salida local (los isMeta, con instrucciones internas, no se muestran).
+        const t = textoDeUsuario(contenido);
+        const deComando = t === null ? null : eventosDeComando(t, at);
+        if (deComando !== null) {
+          eventos.push(...deComando);
+          continue;
+        }
+      }
       if (typeof contenido === 'string') {
-        if (!hayEncargo && contenido.trim() !== '') {
+        if (conversacion) {
+          const t = ajeno ? null : textoDePersona(contenido);
+          if (t !== null) eventos.push({ type: 'user', text: recorta(t, MAX_MESSAGE), at });
+        } else if (!hayEncargo && contenido.trim() !== '') {
           hayEncargo = true;
           eventos.push({ type: 'task', text: recorta(contenido.trim(), MAX_TASK) });
         }
       } else if (Array.isArray(contenido)) {
+        const partes: string[] = [];
+        let imagenes = 0;
         for (const b of contenido) {
           const bloque = objeto(b);
           if (!bloque) continue;
@@ -199,11 +297,24 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
               error: bloque.is_error === true,
               summary: primeraLinea(resultado, MAX_SUMMARY),
               lines: resultado.split('\n').filter((l) => l.trim() !== '').length,
+              ...(conversacion && resultado.trim() !== '' ? { output: recorta(resultado.trim(), MAX_OUTPUT) } : {}),
             });
+          } else if (conversacion) {
+            if (ajeno) continue;
+            if (bloque.type === 'text' && typeof bloque.text === 'string') {
+              const t = textoDePersona(bloque.text);
+              if (t !== null) partes.push(t);
+            } else if (bloque.type === 'image') {
+              imagenes++;
+            }
           } else if (!hayEncargo && bloque.type === 'text' && typeof bloque.text === 'string' && bloque.text.trim() !== '') {
             hayEncargo = true;
             eventos.push({ type: 'task', text: recorta(bloque.text.trim(), MAX_TASK) });
           }
+        }
+        // Una imagen sin texto sigue siendo un mensaje de la persona.
+        if (conversacion && (partes.length > 0 || imagenes > 0)) {
+          eventos.push({ type: 'user', text: recorta(partes.join('\n'), MAX_MESSAGE), at, ...(imagenes > 0 ? { images: imagenes } : {}) });
         }
       }
     } else if (o.type === 'assistant' && Array.isArray(contenido)) {
@@ -405,6 +516,34 @@ export class Follower {
     }
   }
 
+  /**
+   * Conversación principal de la sesión: eventos nuevos desde el byte `from` (0 en la primera
+   * petición) de su transcript. Mientras `more` sea true quedan trozos por pedir.
+   */
+  async conversation(ctx: FollowContext, from: number): Promise<ConversationResponse> {
+    if (this.uid === null || !SESSION_FILE.test(ctx.sessionId)) throw noHayDatos('no se pueden leer archivos de Claude en este sistema.');
+    const real = await this.transcript(ctx, true);
+    // Claude anuncia el transcript antes de crearlo: respuesta vacía válida hasta que aparezca.
+    if (real === null) return { sessionId: ctx.sessionId, from: 0, size: 0, reset: from > 0, more: false, events: [] };
+    const abierto = await abrirDelUsuario(real, this.uid);
+    if (!abierto) throw noHayDatos('el transcript de la sesión no existe o no es un archivo de Claude.');
+    try {
+      const reset = from > abierto.size;
+      const desde = reset ? 0 : from;
+      const v = await leerLineas(abierto.fh, desde, abierto.size);
+      return {
+        sessionId: ctx.sessionId,
+        from: v.next,
+        size: abierto.size,
+        reset,
+        more: v.more,
+        events: parseAgentLines(v.texto, { primero: desde === 0, cwd: ctx.cwd || null, conversacion: true }),
+      };
+    } finally {
+      await abierto.fh.close().catch(() => {});
+    }
+  }
+
   /** Shell: salida nueva desde el byte `from`; sin él, las últimas 2 000 líneas. */
   async shell(ctx: FollowContext, id: string, from: number | null): Promise<ShellFollow> {
     const destino = ctx.targets.shells.get(id);
@@ -462,7 +601,13 @@ export class Follower {
     }
   }
 
-  private async transcript(ctx: FollowContext): Promise<string> {
+  /**
+   * Ruta real del transcript. Con `ausenteOk`, null si aún no existe pero su ruta es válida (ver
+   * `pendienteValido`); en otro caso, o sin `ausenteOk`, un transcript que no existe es un error.
+   */
+  private async transcript(ctx: FollowContext, ausenteOk: true): Promise<string | null>;
+  private async transcript(ctx: FollowContext): Promise<string>;
+  private async transcript(ctx: FollowContext, ausenteOk = false): Promise<string | null> {
     if (ctx.transcriptPath === '') throw noHayDatos('la sesión aún no tiene transcript.');
     let real: string | null;
     try {
@@ -470,8 +615,44 @@ export class Follower {
     } catch {
       throw noHayDatos('el transcript de la sesión queda fuera del directorio de proyectos de Claude.');
     }
-    if (real === null) throw noHayDatos('el transcript de la sesión no existe.');
+    if (real === null) {
+      if (ausenteOk && (await this.pendienteValido(ctx.transcriptPath))) return null;
+      throw noHayDatos('el transcript de la sesión no existe.');
+    }
     return real;
+  }
+
+  /**
+   * Si `ruta` es la de un transcript que Claude aún no ha creado: acaba en `.jsonl`, no existe (ni como
+   * enlace roto) y, por mucho que falte, el primer directorio existente que la contiene, ya resuelto,
+   * es el de proyectos de Claude o cuelga de él. Así una ruta que sale de él (por `..` o enlaces) sigue
+   * rechazada, y solo se sirve «todavía no hay nada», nunca un archivo.
+   */
+  private async pendienteValido(ruta: string): Promise<boolean> {
+    if (!isAbsolute(ruta) || !ruta.endsWith('.jsonl')) return false;
+    try {
+      await lstat(ruta);
+      return false; // Existe (o es un enlace roto): no es «todavía no».
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') return false;
+    }
+    let base: string;
+    try {
+      base = await realpath(this.projectsDir);
+    } catch {
+      return false;
+    }
+    let carpeta = dirname(resolve(ruta));
+    for (;;) {
+      try {
+        const real = await realpath(carpeta);
+        return real === base || real.startsWith(base + sep);
+      } catch {
+        const arriba = dirname(carpeta);
+        if (arriba === carpeta) return false;
+        carpeta = arriba;
+      }
+    }
   }
 
   private async agentMeta(carpeta: string, id: string): Promise<{ description: string | null; agentType: string | null; finished: boolean } | null> {

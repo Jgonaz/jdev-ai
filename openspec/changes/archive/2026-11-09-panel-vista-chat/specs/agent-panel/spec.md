@@ -12,6 +12,9 @@ La vista chat SHALL construirse a partir de la transcripción de la sesión de C
 4. Se SHALL poder buscar texto en toda la conversación, con resaltado de las coincidencias y navegación entre ellas. Los desplegables que contienen una coincidencia se SHALL abrir.
 5. Se SHALL poder escribir y enviar un mensaje, también de varias líneas, a la sesión.
 6. Cuando el agente espere una respuesta en la terminal, se SHALL mostrar un aviso con un enlace a la vista terminal.
+7. Los comandos (`/nombre args`) enviados o escritos SHALL mostrarse como tales en la conversación, con su salida local si la tiene.
+8. La respuesta de `/btw`, que Claude no guarda en la transcripción, SHALL mostrarse en el chat como una respuesta aparte que no forma parte de la conversación, y la ventana que abre en la terminal SHALL cerrarse.
+9. Antes de enviar, si la terminal tiene abierta una ventana o un menú de Claude, el mensaje SHALL no enviarse y la vista SHALL explicar que hay que cerrarlo en la terminal, para que no se pierda.
 
 En las sesiones que no son de Claude, o que aún no tienen transcripción, el conmutador SHALL estar desactivado e indicar el motivo.
 
@@ -51,6 +54,21 @@ Lo que se muestra de la transcripción SHALL pintarse como texto o como Markdown
 
 - **WHEN** el agente pide un permiso
 - **THEN** la vista chat muestra un aviso con un enlace que cambia a la vista terminal
+
+#### Scenario: Pregunta al margen con /btw
+
+- **WHEN** la persona envía `/btw ¿qué archivo estábamos tocando?` desde el chat
+- **THEN** la respuesta aparece en el chat marcada como pregunta al margen, la ventana de la terminal se cierra y el siguiente mensaje se envía con normalidad y el portapapeles del sistema no cambia
+
+#### Scenario: Comando con salida
+
+- **WHEN** la persona envía `/goal close` o `/compact`
+- **THEN** el chat muestra el comando y su salida local
+
+#### Scenario: Comando que abre un menú
+
+- **WHEN** la persona envía un comando que abre un menú en la terminal, como `/model` sin argumentos
+- **THEN** el chat avisa de que el comando espera en la terminal, con un enlace a esa vista, y no envía más mensajes hasta que se cierre
 
 #### Scenario: Sesión de Codex
 

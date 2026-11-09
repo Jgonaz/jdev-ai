@@ -75,6 +75,7 @@ export function PaneHeader({
   const ancho = useElementWidth(raiz);
   const narrow = ancho > 0 && ancho < NARROW_BELOW_PX;
   const estado = visualState(session);
+  const estadoTexto = stateChip(session, formatRelative(session.updatedAt, ahora));
   const v = headerView(session, ahora);
   const trabajo = hasWork(v.counts) && session.activity !== null;
   const lugar = placeText(v.place);
@@ -84,7 +85,12 @@ export function PaneHeader({
       <div className="pane__row">
         <span className="pane__title">{session.title}</span>
         {narrow && trabajo && <WorkChips counts={v.counts} activity={session.activity!} compact session={session.name} />}
-        <span className={`chip chip--${estado}`}>{stateChip(session, formatRelative(session.updatedAt, ahora))}</span>
+        {/* En un pane estrecho en vista chat, el chip pasa a un punto de 8 px: el estado va en su nombre accesible y su título. */}
+        {narrow && view === 'chat' ? (
+          <span className={`pane__statedot pane__statedot--${estado}`} role="img" aria-label={estadoTexto} title={estadoTexto} />
+        ) : (
+          <span className={`chip chip--${estado}`}>{estadoTexto}</span>
+        )}
         {!narrow && <ViewSwitch view={view} onView={onView} chat={session.chat} full={false} />}
         {!narrow && view === 'chat' && <SearchButton active={searching} onClick={onSearch} full={false} />}
         <MoreMenu session={session} />

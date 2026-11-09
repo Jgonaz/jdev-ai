@@ -13,6 +13,15 @@ const resp = (over: Partial<ConversationResponse> = {}): ConversationResponse =>
 });
 
 describe('applyConversation', () => {
+  it('una respuesta vacía válida (transcript aún sin crear) deja la sesión sincronizada y sin mensajes, y los siguientes se leen desde el byte 0', () => {
+    const vacia = applyConversation(EMPTY_CONVERSATION, resp({ from: 0, size: 0, events: [] }), 10);
+    expect(vacia).toMatchObject({ synced: true, error: null, from: 0, size: 0 });
+    expect(vacia.chat.items).toEqual([]);
+    const luego = applyConversation(vacia, resp({ from: 120, size: 120, events: [{ type: 'user', text: 'primero', at: 5 }] }), 20);
+    expect(luego.chat.items).toHaveLength(1);
+    expect(luego.from).toBe(120);
+  });
+
   it('lee por trozos: hasta el último no está sincronizada y guarda el byte siguiente', () => {
     const a = applyConversation(EMPTY_CONVERSATION, resp({ from: 50, size: 100, more: true }), 10);
     expect(a).toMatchObject({ sessionId: 's1', from: 50, size: 100, synced: false, lastOk: 10, error: null, failures: 0 });
