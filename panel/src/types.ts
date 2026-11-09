@@ -1,5 +1,7 @@
 // Tipos de la API del panel (reflejan las respuestas de panel/server).
 export type { Settings, ProjectOverride } from '../shared/settings-schema.ts';
+import type { ChatInfo } from '../shared/follow.ts';
+export type { ChatInfo };
 
 export type SessionState = 'waiting' | 'working' | 'idle' | 'ended' | 'alive';
 
@@ -34,6 +36,8 @@ export type SessionInfo = {
   archived: boolean;
   /** Comando de arranque si es la terminal de arranque de su proyecto (botón ▶ / ■); null si no lo es. */
   run: string | null;
+  /** Si la vista chat (la conversación del transcript) está disponible y, si no, por qué. */
+  chat: ChatInfo;
 };
 
 export type ContextUsage = {

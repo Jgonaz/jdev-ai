@@ -22,6 +22,7 @@ function s(name: string, state: SessionInfo['state'], parche: Partial<SessionInf
     activity: null,
     archived: false,
     run: null,
+    chat: { available: false, reason: null },
     ...parche,
   };
 }

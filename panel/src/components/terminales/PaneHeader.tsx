@@ -5,8 +5,10 @@ import { formatRelative } from '../../lib/time.ts';
 import { useElementWidth } from '../../lib/useElementWidth.ts';
 import { useNow } from '../../lib/useNow.ts';
 import type { ProjectInfo, SessionInfo } from '../../types.ts';
+import type { PaneView } from '../../lib/workspace.ts';
 import { IconBranch, IconClock, IconSpark, IconWarning } from '../Icons.tsx';
 import { MoreMenu } from './MoreMenu.tsx';
+import { SearchButton, ViewSwitch } from './ViewSwitch.tsx';
 import { WorkChips } from './WorkChips.tsx';
 
 export function ContextBar({ vista, narrow, ago }: { vista: NonNullable<ReturnType<typeof headerView>['context']>; narrow: boolean; ago: string }) {
@@ -48,9 +50,26 @@ export function ContextBar({ vista, narrow, ago }: { vista: NonNullable<ReturnTy
  * línea con proyecto, rama o worktree, modelo y esfuerzo, tiempo de sesión y, a
  * la derecha, el contexto; y, solo si hay trabajo en curso, sus chips. En una
  * columna estrecha se ocultan el proyecto, el tiempo y los tokens, y el trabajo
- * en curso pasa a contadores junto al título.
+ * en curso pasa a contadores junto al título. En la fila del título va el
+ * conmutador Terminal / Chat (y, en chat, la lupa de la búsqueda); en una columna
+ * estrecha pasa a una fila propia, a todo el ancho.
  */
-export function PaneHeader({ session, project }: { session: SessionInfo; project: ProjectInfo }) {
+export function PaneHeader({
+  session,
+  project,
+  view,
+  onView,
+  searching,
+  onSearch,
+}: {
+  session: SessionInfo;
+  project: ProjectInfo;
+  view: PaneView;
+  onView: (v: PaneView) => void;
+  /** La barra de búsqueda de la vista chat está abierta. */
+  searching: boolean;
+  onSearch: () => void;
+}) {
   const ahora = useNow();
   const raiz = useRef<HTMLDivElement>(null);
   const ancho = useElementWidth(raiz);
@@ -61,13 +80,22 @@ export function PaneHeader({ session, project }: { session: SessionInfo; project
   const lugar = placeText(v.place);
 
   return (
-    <div className={`pane__head${narrow ? ' pane__head--narrow' : ''}`} ref={raiz}>
+    <div className={`pane__head${narrow ? ' pane__head--narrow' : ''}${view === 'chat' ? ' pane__head--chat' : ''}`} ref={raiz}>
       <div className="pane__row">
         <span className="pane__title">{session.title}</span>
         {narrow && trabajo && <WorkChips counts={v.counts} activity={session.activity!} compact session={session.name} />}
         <span className={`chip chip--${estado}`}>{stateChip(session, formatRelative(session.updatedAt, ahora))}</span>
+        {!narrow && <ViewSwitch view={view} onView={onView} chat={session.chat} full={false} />}
+        {!narrow && view === 'chat' && <SearchButton active={searching} onClick={onSearch} full={false} />}
         <MoreMenu session={session} />
       </div>
+      {/* En un pane estrecho el conmutador ocupa su propia fila, a todo el ancho, con objetivos táctiles de 44 px. */}
+      {narrow && (
+        <div className="pane__row pane__row--view">
+          <ViewSwitch view={view} onView={onView} chat={session.chat} full />
+          {view === 'chat' && <SearchButton active={searching} onClick={onSearch} full />}
+        </div>
+      )}
       <div className={`pane__data${v.stale ? ' pane__data--stale' : ''}`}>
         <div className="pane__facts">
           {!narrow && (

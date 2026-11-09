@@ -290,7 +290,7 @@ function ProjectCardView({ card, ahora, acciones }: { card: ProjectCard; ahora: 
 /** Pantalla Inicio: qué te necesita y dónde está el trabajo de todos los proyectos. Lee, y permite terminar una sesión ya hecha. */
 export function InicioScreen({ onGoToTerminal }: { onGoToTerminal: () => void }) {
   const { sessions: todas, projects, loaded } = useSessions();
-  const { settings } = useSettings();
+  const { settings, loaded: ajustesCargados } = useSettings();
   const { openSession, activate, openDialog } = useWorkspace();
   const { overview, error } = useOverview();
   const ahora = useNow();
@@ -426,8 +426,10 @@ export function InicioScreen({ onGoToTerminal }: { onGoToTerminal: () => void })
               )}
             </section>
 
-            {/* `?.`: un servidor anterior a este ajuste aún no lo envía. */}
-            {settings.inicio?.activity !== false && <ActivitySection />}
+            {/* Solo con los ajustes ya cargados: si no, con el valor por defecto se montaría
+                (y pediría /api/activity, que arranca el indexador) aunque esté apagada.
+                `?.`: un servidor anterior a este ajuste aún no lo envía. */}
+            {ajustesCargados && settings.inicio?.activity !== false && <ActivitySection />}
 
             <section className="inicio__section" aria-labelledby="h-proyectos">
               <div className="inicio__section-head">

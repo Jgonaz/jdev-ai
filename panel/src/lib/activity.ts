@@ -45,7 +45,8 @@ export function compact(n: number): string {
 export function hoursText(segundos: number): string {
   const min = segundos / 60;
   if (min < 1 && segundos > 0) return '< 1 min';
-  if (min < 60) return `${Math.round(min)} min`;
+  // Se compara ya redondeado: 59,7 min debe pasar a «1 h», no quedarse en «60 min».
+  if (Math.round(min) < 60) return `${Math.round(min)} min`;
   const h = min / 60;
   return h < 10 ? `${String(Math.round(h * 10) / 10).replace('.', ',')}${NBSP}h` : `${Math.round(h)}${NBSP}h`;
 }

@@ -12,9 +12,14 @@ type Props = {
   /** URL con la que abrir una imagen local (ruta relativa o absoluta), o null si no se puede. */
   imageHref?: (src: string) => string | null;
   className?: string;
+  /** Pinta un texto con sus coincidencias marcadas (búsqueda). Se llama con cada nodo de texto ya decodificado. */
+  highlight?: (texto: string) => ReactNode;
 };
 
-type Ctx = { imageHref?: (src: string) => string | null };
+type Ctx = { imageHref?: (src: string) => string | null; highlight?: (texto: string) => ReactNode };
+
+// Un texto tal cual, o marcado si hay una búsqueda en curso.
+const txt = (s: string, ctx: Ctx): ReactNode => (ctx.highlight ? ctx.highlight(s) : s);
 
 // marked no decodifica entidades en el lexer; se decodifican las habituales para mostrarlas como texto.
 const ENTIDADES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
@@ -44,10 +49,10 @@ function inlineToken(t: Token, ctx: Ctx): ReactNode {
   switch (t.type) {
     case 'text': {
       const tt = t as Tokens.Text;
-      return tt.tokens && tt.tokens.length > 0 ? inline(tt.tokens, ctx) : decodeEntities(tt.text);
+      return tt.tokens && tt.tokens.length > 0 ? inline(tt.tokens, ctx) : txt(decodeEntities(tt.text), ctx);
     }
     case 'escape':
-      return decodeEntities((t as Tokens.Escape).text);
+      return txt(decodeEntities((t as Tokens.Escape).text), ctx);
     case 'strong':
       return <strong>{inline((t as Tokens.Strong).tokens, ctx)}</strong>;
     case 'em':
@@ -55,7 +60,7 @@ function inlineToken(t: Token, ctx: Ctx): ReactNode {
     case 'del':
       return <del>{inline((t as Tokens.Del).tokens, ctx)}</del>;
     case 'codespan':
-      return <code>{decodeEntities((t as Tokens.Codespan).text)}</code>;
+      return <code>{txt(decodeEntities((t as Tokens.Codespan).text), ctx)}</code>;
     case 'br':
       return <br />;
     case 'link': {
@@ -95,11 +100,11 @@ function inlineToken(t: Token, ctx: Ctx): ReactNode {
     }
     case 'html':
       // HTML incrustado: se enseña tal cual, como texto.
-      return <span className="md__html">{(t as Tokens.HTML).text}</span>;
+      return <span className="md__html">{txt((t as Tokens.HTML).text, ctx)}</span>;
     case 'checkbox':
       return null;
     default:
-      return 'text' in t && typeof t.text === 'string' ? t.text : t.raw;
+      return 'text' in t && typeof t.text === 'string' ? txt(t.text, ctx) : t.raw;
   }
 }
 
@@ -121,13 +126,13 @@ function blockToken(t: Token, ctx: Ctx): ReactNode {
       return <p>{inline((t as Tokens.Paragraph).tokens, ctx)}</p>;
     case 'text': {
       const tt = t as Tokens.Text;
-      return <p>{tt.tokens ? inline(tt.tokens, ctx) : decodeEntities(tt.text)}</p>;
+      return <p>{tt.tokens ? inline(tt.tokens, ctx) : txt(decodeEntities(tt.text), ctx)}</p>;
     }
     case 'code': {
       const c = t as Tokens.Code;
       return (
         <pre className="md__pre">
-          <code>{c.text}</code>
+          <code>{txt(c.text, ctx)}</code>
         </pre>
       );
     }
@@ -171,7 +176,7 @@ function blockToken(t: Token, ctx: Ctx): ReactNode {
       );
     }
     case 'html':
-      return <pre className="md__pre md__html">{(t as Tokens.HTML).text}</pre>;
+      return <pre className="md__pre md__html">{txt((t as Tokens.HTML).text, ctx)}</pre>;
     default:
       return <p>{inlineToken(t, ctx)}</p>;
   }
@@ -195,7 +200,7 @@ function listItem(it: Tokens.ListItem, loose: boolean, ctx: Ctx): ReactNode {
 /** Tokens de un texto Markdown (GFM). */
 export const lex = (source: string): Token[] => marked.lexer(source, { gfm: true });
 
-export function Markdown({ source, imageHref, className }: Props) {
+export function Markdown({ source, imageHref, className, highlight }: Props) {
   const tokens = useMemo(() => lex(source), [source]);
-  return <div className={className ? `md ${className}` : 'md'}>{block(tokens, { imageHref })}</div>;
+  return <div className={className ? `md ${className}` : 'md'}>{block(tokens, { imageHref, highlight })}</div>;
 }

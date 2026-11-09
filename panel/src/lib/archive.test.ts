@@ -47,6 +47,7 @@ const sesion = (name: string, extra: Partial<SessionInfo> = {}): SessionInfo => 
   activity: null,
   archived: true,
   run: null,
+  chat: { available: false, reason: null },
   ...extra,
 });
 

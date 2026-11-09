@@ -34,7 +34,7 @@ function LiveRow({ item, ahora, menu }: { item: LiveItem; ahora: number; menu: L
         onContextMenu={(e) => menu.onContextMenu(e, s)}
         onKeyDown={(e) => menu.onKeyDown(e, s)}
       >
-        <StatusLight state={item.state} />
+        <StatusLight state={item.state} running={typeof s.run === 'string' && item.state === 'shell'} />
         <span className="lrow__text">
           <span className="lrow__title">{s.title}</span>
           <span className="lrow__meta">{sessionMeta(s)}</span>
@@ -98,7 +98,7 @@ function LiveSlRow({ item: i, menu }: { item: LiveItem; menu: LiveMenuHandlers }
         onContextMenu={(e) => menu.onContextMenu(e, i.session)}
         onKeyDown={(e) => menu.onKeyDown(e, i.session)}
       >
-        <StatusLight state={i.state} />
+        <StatusLight state={i.state} running={typeof i.session.run === 'string' && i.state === 'shell'} />
         <span className="slrow__title">{i.session.title}</span>
         <Monogram project={i.project} size="sm" />
       </button>

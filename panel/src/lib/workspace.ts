@@ -9,6 +9,9 @@ import { isFollowKey, ownerSession, parseFollowKey } from './follow.ts';
 
 export type Layout = 1 | 2 | 4;
 
+/** Vista de una pestaña de terminal: la terminal de siempre o el chat de la conversación. */
+export type PaneView = 'terminal' | 'chat';
+
 export type Workspace = {
   /** Pestañas abiertas, en orden: nombres de sesión y claves de seguimiento. */
   tabs: string[];
@@ -16,6 +19,8 @@ export type Workspace = {
   layout: Layout;
   /** Índice de la primera pestaña visible. */
   start: number;
+  /** Pestañas que se ven como chat; las demás, como terminal. Ausente en lo guardado por versiones anteriores. */
+  chatTabs?: string[];
 };
 
 export const EMPTY_WORKSPACE: Workspace = { tabs: [], active: null, layout: 1, start: 0 };
@@ -25,6 +30,8 @@ export type WorkspaceAction =
   /** Abre (o activa) una pestaña de seguimiento junto a la última de la sesión que la lanzó. */
   | { type: 'openFollow'; key: string }
   | { type: 'activate'; name: string }
+  /** Cambia entre la vista de terminal y la de chat de una pestaña. */
+  | { type: 'view'; name: string; view: PaneView }
   | { type: 'close'; name: string }
   | { type: 'move'; delta: number }
   /** Lleva la pestaña a la posición `to` (índice en el orden final), al arrastrarla. */
@@ -36,7 +43,7 @@ export type WorkspaceAction =
 /** Ajusta `start` para que la pestaña activa quede dentro de la ventana visible. */
 function normalize(w: Workspace): Workspace {
   const n = w.tabs.length;
-  if (n === 0) return { ...w, active: null, start: 0 };
+  if (n === 0) return withoutStaleChat({ ...w, active: null, start: 0 });
   const active = w.active !== null && w.tabs.includes(w.active) ? w.active : w.tabs[0]!;
   const idx = w.tabs.indexOf(active);
   let start = w.start;
@@ -45,7 +52,21 @@ function normalize(w: Workspace): Workspace {
   start = Math.max(0, Math.min(start, Math.max(0, n - w.layout)));
   // Si tras acotar la ventana la activa se queda fuera, prevalece la activa.
   if (idx < start) start = idx;
-  return { ...w, active, start };
+  return withoutStaleChat({ ...w, active, start });
+}
+
+/** Solo las pestañas abiertas recuerdan su vista; sin ninguna en chat, el campo no existe (como en lo guardado antes). */
+function withoutStaleChat(w: Workspace): Workspace {
+  if (w.chatTabs === undefined) return w;
+  const chatTabs = w.chatTabs.filter((t) => w.tabs.includes(t));
+  if (chatTabs.length === w.chatTabs.length && chatTabs.length > 0) return w;
+  const { chatTabs: _descartado, ...resto } = w;
+  return chatTabs.length > 0 ? { ...resto, chatTabs } : resto;
+}
+
+/** Vista de una pestaña: terminal salvo que se haya dejado en chat. */
+export function viewOf(w: Workspace, name: string): PaneView {
+  return w.chatTabs?.includes(name) ? 'chat' : 'terminal';
 }
 
 export function workspaceReducer(w: Workspace, a: WorkspaceAction): Workspace {
@@ -69,6 +90,11 @@ export function workspaceReducer(w: Workspace, a: WorkspaceAction): Workspace {
     }
     case 'activate':
       return w.tabs.includes(a.name) ? normalize({ ...w, active: a.name }) : w;
+    case 'view': {
+      if (!w.tabs.includes(a.name) || viewOf(w, a.name) === a.view) return w;
+      const resto = (w.chatTabs ?? []).filter((t) => t !== a.name);
+      return normalize({ ...w, chatTabs: a.view === 'chat' ? [...resto, a.name] : resto });
+    }
     case 'close': {
       const idx = w.tabs.indexOf(a.name);
       if (idx < 0) return w;
@@ -127,7 +153,8 @@ export function parseWorkspace(crudo: string | null): Workspace | null {
     const tabs = [...new Set(v.tabs.filter((t): t is string => typeof t === 'string' && (!isFollowKey(t) || parseFollowKey(t) !== null)))];
     const layout: Layout = v.layout === 2 || v.layout === 4 ? v.layout : 1;
     const active = typeof v.active === 'string' ? v.active : null;
-    return normalize({ tabs, active, layout, start: typeof v.start === 'number' ? v.start : 0 });
+    const chatTabs = Array.isArray(v.chatTabs) ? [...new Set(v.chatTabs.filter((t): t is string => typeof t === 'string' && !isFollowKey(t)))] : [];
+    return normalize({ tabs, active, layout, start: typeof v.start === 'number' ? v.start : 0, ...(chatTabs.length > 0 ? { chatTabs } : {}) });
   } catch {
     return null;
   }

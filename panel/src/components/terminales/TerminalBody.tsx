@@ -39,11 +39,13 @@ type Props = {
   active: boolean;
   /** El diálogo u otra capa está encima: no se roba el foco. */
   suspended: boolean;
+  /** La pestaña se ve como chat: la terminal sigue conectada pero oculta (no se reajusta mientras mide 0). */
+  hidden?: boolean;
   onFocus: () => void;
 };
 
 /** Una terminal xterm.js conectada por WebSocket a una sesión de tmux del servidor. */
-export function TerminalBody({ name, active, suspended, onFocus }: Props) {
+export function TerminalBody({ name, active, suspended, hidden = false, onFocus }: Props) {
   const { settings, appearanceKey } = useSettings();
   const { focusTick, takeFocusRequest } = useWorkspace();
   const { home } = useSessions();
@@ -370,7 +372,7 @@ export function TerminalBody({ name, active, suspended, onFocus }: Props) {
   }, [active, suspended, conexion, focusTick, takeFocusRequest]);
 
   return (
-    <div ref={root} className="termbody" {...dropProps}>
+    <div ref={root} className="termbody" hidden={hidden} {...dropProps}>
       <div ref={host} id={`term-${name}`} className="termbody__host" />
       <ScrollBar state={scroll.state} controls={`term-${name}`} onOrder={scroll.send} onHover={scroll.setHovering} onDragging={scroll.setDragging} />
       {hover && <ImageHoverCard key={hover.path} info={hover} session={name} preview={settings.terminal.hoverPreview} container={root.current} />}

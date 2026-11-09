@@ -20,7 +20,7 @@ import type {
   WorktreeList,
 } from './types.ts';
 import type { ActivityAgent, ActivityRange, ActivityResponse } from '../shared/activity.ts';
-import type { FollowKind, FollowResponse } from '../shared/follow.ts';
+import type { ConversationResponse, FollowKind, FollowResponse } from '../shared/follow.ts';
 import type { SettingsPatch } from './lib/settingsPatch.ts';
 import { parseImageHeaders } from './lib/imageZoom.ts';
 import type { ImageMeta } from './lib/imageZoom.ts';
@@ -114,6 +114,12 @@ export const api = {
       `/api/sessions/${encodeURIComponent(sesion)}/follow/${kind}/${encodeURIComponent(id)}${from === null ? '' : `?from=${from}`}`,
       { signal },
     ),
+  /** Lo nuevo de la conversación de una sesión de Claude desde el byte `from` (0: la primera lectura). */
+  conversation: (sesion: string, from: number, signal?: AbortSignal) =>
+    request<ConversationResponse>(`/api/sessions/${encodeURIComponent(sesion)}/conversation?from=${from}`, { signal }),
+  /** Envía un mensaje (de una o varias líneas) a la sesión de Claude, como si se escribiera en su terminal. */
+  sendInput: (sesion: string, text: string) =>
+    request<{ sent: boolean }>(`/api/sessions/${encodeURIComponent(sesion)}/input`, { method: 'POST', body: JSON.stringify({ text }) }),
   /** Sonidos de Windows disponibles para los avisos ([] fuera de WSL). */
   windowsSounds: () => request<{ windows: string[] }>('/api/sounds'),
   scrollState: (nombre: string, signal?: AbortSignal) =>

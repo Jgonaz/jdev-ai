@@ -98,6 +98,10 @@ function useActivity(filtros: ActivityFilters): { data: ActivityResponse | null;
 
 type TipState = { text: string; rect: DOMRect } | null;
 
+// Cada tarjeta tiene su tooltip; al abrir uno se cierra el de otra tarjeta (foco en
+// una y ratón en otra mostrarían dos a la vez).
+let cerrarTipAbierto: (() => void) | null = null;
+
 /**
  * Detalle exacto al pasar el ratón o llegar con el teclado a un elemento del
  * gráfico. El texto ya está en el aria-label del elemento: el tooltip es solo visual.
@@ -105,16 +109,24 @@ type TipState = { text: string; rect: DOMRect } | null;
 function useChartTip() {
   const [tip, setTip] = useState<TipState>(null);
   const cerrar = useCallback(() => setTip(null), []);
+  const abrir = useCallback(
+    (text: string, el: HTMLElement) => {
+      if (cerrarTipAbierto && cerrarTipAbierto !== cerrar) cerrarTipAbierto();
+      cerrarTipAbierto = cerrar;
+      setTip({ text, rect: el.getBoundingClientRect() });
+    },
+    [cerrar],
+  );
   const props = useCallback(
     (text: string) => ({
       onPointerEnter: (e: PointerEvent<HTMLElement>) => {
-        if (e.pointerType === 'mouse') setTip({ text, rect: e.currentTarget.getBoundingClientRect() });
+        if (e.pointerType === 'mouse') abrir(text, e.currentTarget);
       },
       onPointerLeave: cerrar,
-      onFocus: (e: FocusEvent<HTMLElement>) => setTip({ text, rect: e.currentTarget.getBoundingClientRect() }),
+      onFocus: (e: FocusEvent<HTMLElement>) => abrir(text, e.currentTarget),
       onBlur: cerrar,
     }),
-    [cerrar],
+    [abrir, cerrar],
   );
   useEffect(() => {
     if (!tip) return;
@@ -456,7 +468,7 @@ export function ActivitySection() {
           {data.indexing && (
             <p className="act__indexing" role="status">
               {indexingText(data)}
-              {data.updatedAt === null || isEmpty(data) ? ' Lo que ya está leído se muestra mientras tanto.' : ''}
+              {data.updatedAt === null || isEmpty(data) ? `${data.progress && data.progress.total > 0 ? '.' : ''} Lo que ya está leído se muestra mientras tanto.` : ''}
             </p>
           )}
           <Tiles data={data} />

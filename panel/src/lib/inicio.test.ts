@@ -40,6 +40,7 @@ function sesion(name: string, parche: Partial<SessionInfo> = {}): SessionInfo {
     activity: null,
     archived: false,
     run: null,
+    chat: { available: false, reason: null },
     ...parche,
   };
 }

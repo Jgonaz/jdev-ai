@@ -24,7 +24,7 @@ function irAProyectos() {
  */
 export function RunButton({ project }: { project: ProjectInfo }) {
   const { sessions, upsert } = useSessions();
-  const { openSession } = useWorkspace();
+  const { openSession, requestTerminalFocus } = useWorkspace();
   const [ocupado, setOcupado] = useState<'arrancando' | 'parando' | null>(null);
   const [error, setError] = useState<{ texto: string; x: number; y: number } | null>(null);
   const boton = useRef<HTMLButtonElement>(null);
@@ -65,6 +65,8 @@ export function RunButton({ project }: { project: ProjectInfo }) {
         const r = await api.startProject(project.id);
         upsert(r.session);
         openSession(r.session.name);
+        // El foco sigue en el botón (no se desactiva): lo pasamos a la terminal recién abierta.
+        requestTerminalFocus();
       }
     } catch (err) {
       const r = boton.current?.getBoundingClientRect();
@@ -83,8 +85,10 @@ export function RunButton({ project }: { project: ProjectInfo }) {
         className={`group__add group__run${viva ? ' group__run--on' : ''}${ocupado ? ' group__run--busy' : ''}`}
         aria-label={etiqueta}
         aria-busy={ocupado ? true : undefined}
+        // aria-disabled y no disabled: un botón desactivado pierde el foco y se lo
+        // quedaría la terminal activa; las pulsaciones durante la espera se ignoran en alPulsar.
+        aria-disabled={ocupado ? true : undefined}
         title={etiqueta}
-        disabled={ocupado !== null}
         onClick={(e) => void alPulsar(e)}
       >
         {ocupado ? <span className="group__spin" aria-hidden="true" /> : viva ? <IconStop size={11} /> : <IconPlay size={12} />}

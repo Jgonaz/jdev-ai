@@ -8,6 +8,7 @@ import {
   parseWorkspace,
   saveUiPrefs,
   saveWorkspace,
+  viewOf,
   visibleTabs,
   workspaceReducer,
 } from './workspace.ts';
@@ -200,5 +201,44 @@ describe('persistencia', () => {
     // Al guardar desaparece el nombre anterior.
     saveUiPrefs(loadUiPrefs());
     expect(localStorage.getItem('jdev-panel:ui')).toBe('{"contextOpen":true,"hideDone":false}');
+  });
+});
+
+describe('vista de cada pestaña (terminal o chat)', () => {
+  it('por defecto todas se ven como terminal y se puede cambiar por pestaña', () => {
+    let w = aplicar(EMPTY_WORKSPACE, ...abrir('a', 'b'));
+    expect(viewOf(w, 'a')).toBe('terminal');
+    w = workspaceReducer(w, { type: 'view', name: 'a', view: 'chat' });
+    expect(viewOf(w, 'a')).toBe('chat');
+    expect(viewOf(w, 'b')).toBe('terminal');
+    w = workspaceReducer(w, { type: 'view', name: 'a', view: 'terminal' });
+    expect(viewOf(w, 'a')).toBe('terminal');
+    // Sin ninguna en chat, el campo desaparece: el estado queda igual que antes de existir.
+    expect('chatTabs' in w).toBe(false);
+  });
+
+  it('ignora pestañas que no están abiertas y olvida la vista al cerrar o podar', () => {
+    let w = aplicar(EMPTY_WORKSPACE, ...abrir('a', 'b'));
+    expect(workspaceReducer(w, { type: 'view', name: 'zzz', view: 'chat' })).toBe(w);
+    w = workspaceReducer(workspaceReducer(w, { type: 'view', name: 'a', view: 'chat' }), { type: 'view', name: 'b', view: 'chat' });
+    expect(w.chatTabs).toEqual(['a', 'b']);
+    w = workspaceReducer(w, { type: 'close', name: 'a' });
+    expect(w.chatTabs).toEqual(['b']);
+    w = workspaceReducer(w, { type: 'prune', alive: new Set<string>() });
+    expect(w.chatTabs).toBeUndefined();
+  });
+
+  it('sobrevive a guardar y recargar; el estado viejo sin el campo se ve como terminal', () => {
+    let w = aplicar(EMPTY_WORKSPACE, ...abrir('a', 'b'));
+    w = workspaceReducer(w, { type: 'view', name: 'b', view: 'chat' });
+    const vuelto = parseWorkspace(JSON.stringify(w))!;
+    expect(viewOf(vuelto, 'b')).toBe('chat');
+    expect(viewOf(vuelto, 'a')).toBe('terminal');
+    const viejo = parseWorkspace(JSON.stringify({ tabs: ['a', 'b'], active: 'a', layout: 2, start: 0 }))!;
+    expect(viewOf(viejo, 'a')).toBe('terminal');
+    expect(viejo.chatTabs).toBeUndefined();
+    // Basura y pestañas que ya no están se descartan.
+    const raro = parseWorkspace(JSON.stringify({ tabs: ['a'], active: 'a', layout: 1, start: 0, chatTabs: ['a', 'x', 3, 'a'] }))!;
+    expect(raro.chatTabs).toEqual(['a']);
   });
 });

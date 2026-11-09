@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import { followKey, isFollowKey } from '../lib/follow.ts';
 import type { FollowKind } from '../lib/follow.ts';
+import { forgetConversation } from '../lib/useConversation.ts';
 import { forgetFollow } from '../lib/useFollow.ts';
 import { visualState } from '../lib/sessions.ts';
 import {
@@ -15,7 +16,7 @@ import {
   visibleTabs,
   workspaceReducer,
 } from '../lib/workspace.ts';
-import type { Layout, UiPrefs, Workspace } from '../lib/workspace.ts';
+import type { Layout, PaneView, UiPrefs, Workspace } from '../lib/workspace.ts';
 import { useSessions } from './SessionsContext.tsx';
 import { useSettings } from './SettingsContext.tsx';
 import type { LocationId, RecentSession, SessionInfo } from '../types.ts';
@@ -27,6 +28,8 @@ type WorkspaceValue = {
   /** Abre la pestaña de seguimiento de un subagente o una shell en segundo plano (o la activa si ya está abierta). */
   openFollow: (session: string, kind: FollowKind, id: string) => void;
   activate: (name: string) => void;
+  /** Cambia una pestaña entre la vista de terminal y la de chat (se recuerda por pestaña). */
+  setView: (name: string, view: PaneView) => void;
   closeTab: (name: string) => void;
   move: (delta: number) => void;
   /** Lleva una pestaña a otra posición (arrastrándola en la barra). */
@@ -130,8 +133,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const openSession = useCallback<WorkspaceValue['openSession']>((name, opciones) => dispatch({ type: 'open', name, ...opciones }), []);
   const activate = useCallback((name: string) => dispatch({ type: 'activate', name }), []);
   const openFollow = useCallback<WorkspaceValue['openFollow']>((session, kind, id) => dispatch({ type: 'openFollow', key: followKey(session, kind, id) }), []);
+  const setView = useCallback((name: string, view: PaneView) => dispatch({ type: 'view', name, view }), []);
   const closeTab = useCallback((name: string) => {
     if (isFollowKey(name)) forgetFollow(name);
+    else forgetConversation(name);
     dispatch({ type: 'close', name });
   }, []);
   const move = useCallback((delta: number) => dispatch({ type: 'move', delta }), []);
@@ -178,6 +183,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       openSession,
       openFollow,
       activate,
+      setView,
       closeTab,
       move,
       reorder,
@@ -207,6 +213,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       openSession,
       openFollow,
       activate,
+      setView,
       closeTab,
       move,
       reorder,

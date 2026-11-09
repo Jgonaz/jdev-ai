@@ -96,7 +96,7 @@ export const IconCopy = (p: Props) => (
   </Svg>
 );
 export const IconStop = (p: Props) => (
-  <Svg {...p}>
+  <Svg fill="currentColor" {...p}>
     <rect x="6" y="6" width="12" height="12" rx="2" />
   </Svg>
 );
@@ -206,5 +206,36 @@ export const IconArchive = (p: Props) => (
   <Svg {...p}>
     <rect x="3" y="4" width="18" height="4" rx="1" />
     <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4" />
+  </Svg>
+);
+export const IconChat = (p: Props) => (
+  <Svg strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </Svg>
+);
+export const IconSearch = (p: Props) => (
+  <Svg strokeLinecap="round" {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M21 21l-4.35-4.35" />
+  </Svg>
+);
+export const IconSend = (p: Props) => (
+  <Svg strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </Svg>
+);
+export const IconChevronUp = (p: Props) => (
+  <Svg strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M18 15l-6-6-6 6" />
+  </Svg>
+);
+export const IconChevronDown = (p: Props) => (
+  <Svg strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+);
+export const IconArrowDown = (p: Props) => (
+  <Svg strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M12 5v14M19 12l-7 7-7-7" />
   </Svg>
 );

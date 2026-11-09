@@ -93,14 +93,15 @@
 .group__run--on {
   color: var(--working);
 }
+/* Sin comando: algo más tenue que el ▶ normal, pero con contraste ≥ 3:1 (es un enlace operable a Ajustes). */
 .group__run--off {
-  opacity: 0.45;
+  opacity: 0.8;
 }
 .group__run--off:hover,
 .group__run--off:focus-visible {
   opacity: 1;
 }
-.group__run:disabled {
+.group__run[aria-disabled='true'] {
   cursor: progress;
 }
 .group__spin {

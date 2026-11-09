@@ -78,6 +78,8 @@ describe('formato de cifras', () => {
     expect(hoursText(0)).toBe('0 min');
     expect(hoursText(20)).toBe('< 1 min');
     expect(hoursText(42 * 60)).toBe('42 min');
+    // 59,7 min redondea a una hora, no a «60 min».
+    expect(hoursText(3580)).toBe(`1${NB}h`);
     expect(hoursText(3.5 * 3600)).toBe(`3,5${NB}h`);
     expect(hoursText(31 * 3600 + 600)).toBe(`31${NB}h`);
   });
