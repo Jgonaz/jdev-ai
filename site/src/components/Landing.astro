@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import Panel from './Panel.astro';
 import { es } from '../i18n/es';
 import { en } from '../i18n/en';
 
@@ -13,10 +14,6 @@ const t = lang === 'es' ? es : en;
 const repo = 'https://github.com/Jgonaz/jdev-ai';
 const home = { es: '/', en: '/en/' };
 const canonical = new URL(home[lang], Astro.site);
-const agents = ['Claude Code', 'Codex', 'Copilot', 'OpenCode'];
-// Estado de cada sesión de la maqueta, en el mismo orden que `t.mock.sessions`.
-const sessionStates = ['waiting', 'working', 'idle', 'done'];
-const two = (n: number) => String(n + 1).padStart(2, '0');
 ---
 
 <!doctype html>
@@ -40,192 +37,97 @@ const two = (n: number) => String(n + 1).padStart(2, '0');
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Las mismas fuentes que el panel: interfaz, títulos y terminal. -->
+    <!-- Las fuentes del panel (interfaz, logo y terminal) e IBM Plex Sans para los titulares. -->
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Martian+Mono:wght@400;600;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@600&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Martian+Mono:wght@600;800&display=swap"
     />
   </head>
   <body>
-    <header class="site-header">
-      <div class="wrap site-header__inner">
-        <a class="brand" href="#top">
-          <svg aria-hidden="true" width="32" height="32" viewBox="0 0 32 32">
-            <rect width="32" height="32" rx="7" fill="#1f2328"></rect>
-            <path
-              d="M7 10l7 6-7 6"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              stroke-linecap="round"
-              stroke-linejoin="round"></path>
-            <path d="M17 23h8" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
-          </svg>
-          <span>jdev-ai</span>
-        </a>
-        <nav class="site-nav" aria-label={t.nav.label}>
-          <a href="#what">{t.nav.what}</a>
-          <a href="#features">{t.nav.features}</a>
-          <a href="#panel">{t.nav.panel}</a>
-          <a href="#flow">{t.nav.flow}</a>
-          <a href="#start">{t.nav.start}</a>
-        </nav>
-        <div class="site-header__actions">
-          <div class="lang" role="group" aria-label={t.nav.language}>
+    <div class="wrap">
+      <header class="masthead">
+        <a class="masthead__brand" href={home[lang]}>jdev-ai</a>
+        <div class="masthead__links">
+          <div class="lang" role="group" aria-label={t.header.language}>
             <a href={home.es} hreflang="es" lang="es" aria-label="Español" aria-current={lang === 'es' ? 'page' : undefined}>ES</a>
             <a href={home.en} hreflang="en" lang="en" aria-label="English" aria-current={lang === 'en' ? 'page' : undefined}>EN</a>
           </div>
-          <a class="btn btn--ghost btn--sm" href={repo}>
-            <svg
-              aria-hidden="true"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round">
-              <path
-                d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"
-              ></path>
-            </svg>
-            GitHub
-          </a>
+          <a href={repo}>github.com/Jgonaz/jdev-ai</a>
         </div>
-      </div>
-    </header>
+      </header>
 
-    <main id="top">
-      <section class="wrap hero">
-        <div class="hero__text">
-          <p class="eyebrow">{t.hero.eyebrow}</p>
-          <h1>
-            {t.hero.title[0]}<br />{t.hero.title[1]}<br /><span class="accent">{t.hero.title[2]}</span>
-          </h1>
-          <p class="hero__lead">{t.hero.lead}</p>
-          <div class="actions">
-            <a class="btn btn--primary" href="#start">
-              {t.hero.start}
-              <svg
-                aria-hidden="true"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.4"
-                stroke-linecap="round"
-                stroke-linejoin="round">
-                <path d="M5 12h14M13 6l6 6-6 6"></path>
-              </svg>
-            </a>
-            <a class="btn btn--ghost" href={repo}>{t.hero.github}</a>
+      <main>
+        <section class="open">
+          <h1>{t.open.title}</h1>
+          <p class="open__lead">{t.open.lead}</p>
+          <div class="open__side">
+            <pre class="code" tabindex="0"><span class="p">$</span> git clone {repo}.git</pre>
+            <div class="open__meta">
+              <a class="link" href="#start">{t.open.steps}</a>
+              <span>{t.open.badge}</span>
+            </div>
           </div>
-          <ul class="agents" aria-label={t.hero.worksWith}>
-            <li class="agents__label" aria-hidden="true">{t.hero.worksWith}</li>
-            {agents.map((agent) => <li class="chip">{agent}</li>)}
-          </ul>
-        </div>
+        </section>
 
-        <!-- Maqueta ilustrativa del panel: no es una captura real. -->
-        <div class="mock" role="img" aria-label={t.mock.label}>
-          <div class="mock__bar">
-            <span class="mock__brand">jdev-ai</span>
-            {t.mock.tabs.map((tab, i) => <span class={i === 1 ? 'is-active' : undefined}>{tab}</span>)}
+        <section id="panel" class="section section--wide">
+          <div class="panel-intro">
+            <h2>{t.panel.title}</h2>
+            <p set:html={t.panel.lead} />
           </div>
-          <div class="mock__body">
-            <div class="mock__side">
+          <Panel t={t.panel} />
+          <p class="note">{t.panel.note}</p>
+        </section>
+
+        <section id="how" class="section">
+          <p class="rail">{t.how.rail}</p>
+          <div class="section__body">
+            <div class="section__head">
+              <h2>{t.how.title}</h2>
+              <p>{t.how.lead}</p>
+            </div>
+            <ol class="steps">
               {
-                t.mock.projects.map((project, p) => (
-                  <div class="mock__group">
-                    <span class="mock__project">{project}</span>
-                    {t.mock.sessions.slice(p * 2, p * 2 + 2).map((session, s) => (
-                      <div class={`mock__session mock__session--${sessionStates[p * 2 + s]}`}>
-                        <span class="mock__dot" />
-                        <span class="mock__session-text">
-                          <span>{session.title}</span>
-                          <span class="mock__state">{session.state}</span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                t.how.steps.map((step) => (
+                  <li class="step">
+                    <div class="step__text">
+                      <h3>{step.title}</h3>
+                      <p>{step.text}</p>
+                      {step.stop && <span class="stop">{t.how.stop}</span>}
+                    </div>
+                    <blockquote>
+                      <p>{step.quote}</p>
+                      <a class="link" href={`${repo}/blob/main/${step.file}`}>
+                        {step.file}
+                      </a>
+                    </blockquote>
+                  </li>
                 ))
               }
+            </ol>
+          </div>
+        </section>
+
+        <section id="subagents" class="section">
+          <p class="rail">{t.sub.rail}</p>
+          <div class="section__body">
+            <div class="section__head">
+              <h2>{t.sub.title}</h2>
+              <p>{t.sub.lead}</p>
             </div>
-            <div class="mock__term">
-              <div class="mock__term-head">
-                <span class="mock__term-title">{t.mock.sessions[0].title}</span>
-                <span class="mock__chip">feat/login</span>
-                <span class="mock__chip">{t.mock.view}</span>
-              </div>
-              <div class="mock__lines">
-                <div class="is-user">&gt; {t.mock.lines[0]}</div>
-                <div><span class="accent">●</span> {t.mock.lines[1]}</div>
-                <div class="is-user">&gt; {t.mock.lines[2]}</div>
-                <div><span class="teal">●</span> {t.mock.lines[3]}</div>
-                <div><span class="teal">●</span> {t.mock.lines[4]} <span class="teal">{t.mock.lines[5]}</span></div>
-                <div><span class="accent">●</span> {t.mock.lines[6]}</div>
-                <div class="is-user mock__prompt">&gt; <span class="mock__cursor"></span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="what" class="band band--alt">
-        <div class="wrap section">
-          <div class="section__head">
-            <p class="eyebrow">{t.what.eyebrow}</p>
-            <h2>{t.what.title}</h2>
-            <p class="lead">{t.what.lead}</p>
-          </div>
-          <div class="grid grid--3">
-            {
-              t.what.cards.map((card) => (
-                <div class="card card--raised">
-                  <h3>{card.title}</h3>
-                  <p set:html={card.text} />
-                </div>
-              ))
-            }
-          </div>
-        </div>
-      </section>
-
-      <section id="features" class="band">
-        <div class="wrap section">
-          <div class="section__head">
-            <p class="eyebrow">{t.features.eyebrow}</p>
-            <h2>{t.features.title}</h2>
-          </div>
-          <div class="grid grid--3">
-            {
-              t.features.cards.map((card, i) => (
-                <div class="card">
-                  <span class="card__num">{two(i)}</span>
-                  <h3>{card.title}</h3>
-                  <p set:html={card.text} />
-                </div>
-              ))
-            }
-          </div>
-
-          <div class="subagents">
-            <h3 class="subagents__title">{t.subagents.title}</h3>
-            <div class="table-box">
+            <div class="table-box" tabindex="0">
               <table>
                 <thead>
                   <tr>
-                    {t.subagents.columns.map((column) => <th scope="col">{column}</th>)}
+                    {t.sub.columns.map((column) => <th scope="col">{column}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {
-                    t.subagents.rows.map((row) => (
+                    t.sub.rows.map((row) => (
                       <tr>
                         <th scope="row">{row.name}</th>
-                        <td class="model">{row.model}</td>
+                        <td>{row.model}</td>
+                        <td class={row.writes ? 'yes' : 'no'}>{row.writes ? t.sub.yes : t.sub.no}</td>
                         <td>{row.role}</td>
                       </tr>
                     ))
@@ -233,107 +135,89 @@ const two = (n: number) => String(n + 1).padStart(2, '0');
                 </tbody>
               </table>
             </div>
-            <p class="note">{t.subagents.note}</p>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="panel" class="band band--alt">
-        <div class="wrap section">
-          <div class="section__head">
-            <p class="eyebrow">{t.panel.eyebrow}</p>
-            <h2>{t.panel.title}</h2>
-            <p class="lead" set:html={t.panel.lead} />
+        <section id="repo" class="section">
+          <p class="rail">{t.repo.rail}</p>
+          <div class="section__body">
+            <h2>{t.repo.title}</h2>
+            <dl class="tree">
+              {
+                t.repo.tree.map((entry) => (
+                  <div>
+                    <dt>{entry.name}</dt>
+                    <dd>{entry.text}</dd>
+                  </div>
+                ))
+              }
+            </dl>
           </div>
-          <div class="grid grid--3">
-            {
-              t.panel.cards.map((card) => (
-                <div class="card card--raised">
-                  <h3>{card.title}</h3>
-                  <p>{card.text}</p>
-                </div>
-              ))
-            }
-          </div>
-          <p class="note">{t.panel.note}</p>
-        </div>
-      </section>
+        </section>
 
-      <section id="flow" class="band">
-        <div class="wrap section">
-          <div class="section__head">
-            <p class="eyebrow">{t.flow.eyebrow}</p>
-            <h2>{t.flow.title}</h2>
+        <section id="limits" class="section">
+          <p class="rail">{t.limits.rail}</p>
+          <div class="section__body">
+            <h2>{t.limits.title}</h2>
+            <ul class="limits">
+              {
+                t.limits.items.map((item) => (
+                  <li>
+                    <strong>{item.strong}</strong> {item.text}
+                  </li>
+                ))
+              }
+            </ul>
           </div>
-          <ol class="grid grid--4 steps">
-            {
-              t.flow.steps.map((step, i) => (
-                <li class:list={['card', 'step', { 'step--approval': step.approval }]}>
-                  <span class="step__num" aria-hidden="true">
-                    {i + 1}
-                  </span>
-                  <h3>{step.title}</h3>
-                  <p>{step.text}</p>
-                </li>
-              ))
-            }
-          </ol>
-          <p class="note note--legend"><span class="legend" aria-hidden="true"></span>{t.flow.note}</p>
-        </div>
-      </section>
+        </section>
 
-      <section id="start" class="band band--alt">
-        <div class="wrap section start">
-          <div class="start__text">
-            <p class="eyebrow">{t.start.eyebrow}</p>
-            <h2>{t.start.title}</h2>
-            <p class="lead" set:html={t.start.lead} />
-            <p class="note">{t.start.note}</p>
-            <div class="actions">
-              <a class="btn btn--primary" href={repo}>{t.start.repo}</a>
-              <a class="btn btn--ghost" href={t.start.docsUrl}>{t.start.docs}</a>
+        <section id="start" class="section">
+          <p class="rail">{t.start.rail}</p>
+          <div class="section__body">
+            <div class="section__head">
+              <h2>{t.start.title}</h2>
+              <p set:html={t.start.lead} />
             </div>
-          </div>
-          <div class="terminal">
-            <div class="terminal__bar">{t.start.terminal}</div>
-            <pre tabindex="0"><span class="c">{t.start.comments[0]}</span>
-<span class="p">$</span> git clone https://github.com/Jgonaz/jdev-ai.git
+            <ol class="start">
+              <li>
+                <span>1. <Fragment set:html={t.start.steps[0]} /></span>
+                <pre class="code" tabindex="0"><span class="p">$</span> git clone {repo}.git
 <span class="p">$</span> cd jdev-ai
-<span class="p">$</span> git clone {t.start.repoPlaceholder} projects/{t.start.project}
-
-<span class="c">{t.start.comments[1]}</span>
-<span class="p">$</span> bin/agent {t.start.project}
-<span class="p">$</span> bin/agent {t.start.project} --codex
-<span class="p">$</span> bin/agent {t.start.project} --wt login
-
-<span class="c">{t.start.comments[2]}</span>
-<span class="p">$</span> bin/panel</pre>
+<span class="p">$</span> git clone {t.start.repoPlaceholder} projects/{t.start.project}</pre>
+              </li>
+              <li>
+                <span>2. <Fragment set:html={t.start.steps[1]} /></span>
+              </li>
+              <li>
+                <span>3. <Fragment set:html={t.start.steps[2]} /></span>
+                <pre class="code" tabindex="0"><span class="p">$</span> bin/agent {t.start.project}
+<span class="p">$</span> bin/agent {t.start.project} --codex</pre>
+              </li>
+            </ol>
+            <a class="link" href={t.start.docsUrl}>{t.start.docs}</a>
           </div>
-        </div>
-      </section>
-    </main>
+        </section>
+      </main>
 
-    <footer class="site-footer">
-      <div class="wrap site-footer__inner">
+      <footer class="footer">
         <p>
-          {t.footer.by} <a href="https://jgonaz.dev">Jorge González Azpillaga</a>{t.footer.role}
+          {t.footer.by} <a class="link" href="https://jgonaz.dev">Jorge González Azpillaga</a>.
         </p>
-        <div class="site-footer__links">
-          <a href={repo}>GitHub</a>
-          <a href={`${repo}/blob/main/LICENSE`}>{t.footer.license}</a>
+        <p class="footer__links">
+          <a class="link" href={`${repo}/blob/main/LICENSE`}>{t.footer.license}</a>
           {
             lang === 'es' ? (
-              <a href={home.en} hreflang="en" lang="en">
+              <a class="link" href={home.en} hreflang="en" lang="en">
                 English
               </a>
             ) : (
-              <a href={home.es} hreflang="es" lang="es">
+              <a class="link" href={home.es} hreflang="es" lang="es">
                 Español
               </a>
             )
           }
-        </div>
-      </div>
-    </footer>
+        </p>
+      </footer>
+    </div>
   </body>
 </html>

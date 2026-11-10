@@ -1,0 +1,223 @@
+---
+// Simulación del panel gráfico con datos inventados. Reproduce la pantalla
+// Terminales: se puede cambiar de sesión y de vista; el resto de pantallas
+// del menú aún no están simuladas.
+import type { Dictionary } from '../i18n/es';
+
+interface Props {
+  t: Dictionary['panel'];
+}
+
+const { t } = Astro.props;
+const { ui, projects, sessions } = t;
+const glyph = { waiting: '●', working: '◐', idle: '○', done: '✓' };
+const first = sessions[0].id;
+// Posición de cada sesión viva en la barra de tmux, como en el panel real.
+const live = sessions.filter((s) => s.state !== 'done');
+const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id ? '*' : ''}`).join('  ');
+---
+
+<div class="pn" data-panel data-view="term" role="region" aria-label={ui.label}>
+  <div class="pn-window">
+    <span>localhost:4317</span>
+    <span>{ui.bar}</span>
+  </div>
+
+  <div class="pn-head">
+    <span class="pn-logo"><span>~/</span>jdev-ai</span>
+    <div class="pn-nav" role="group" aria-label={ui.navLabel}>
+      {
+        ui.nav.map((item) => (
+          <button type="button" data-screen-btn={item.id} aria-pressed={item.id === 'terminales' ? 'true' : 'false'}>
+            {item.label}
+          </button>
+        ))
+      }
+    </div>
+    <span class="pn-agent"><span aria-hidden="true">&gt;_</span>Claude Code</span>
+    <span class="pn-new">+ {ui.newSession}</span>
+  </div>
+
+  <div class="pn-screen" data-screen="terminales">
+    <div class="pn-side">
+      <span class="pn-side__title">{ui.projects} ({projects.length})</span>
+      {
+        projects.map((project) => (
+          <div class="pn-project">
+            <div class="pn-project__name">
+              <span class="pn-mono" style={`background:${project.color}`}>
+                {project.mono}
+              </span>
+              {project.name}
+            </div>
+            {sessions
+              .filter((s) => s.project === project.name)
+              .map((s) => (
+                <button
+                  type="button"
+                  class={`pn-row pn-row--${s.state}`}
+                  data-pick={s.id}
+                  aria-pressed={s.id === first ? 'true' : 'false'}
+                >
+                  <span class="pn-glyph" aria-hidden="true">
+                    {glyph[s.state]}
+                  </span>
+                  <span class="pn-row__text">
+                    <span class="pn-row__title">{s.title}</span>
+                    <span class="pn-row__state">
+                      {ui.states[s.state]} · {s.agent}
+                    </span>
+                  </span>
+                </button>
+              ))}
+          </div>
+        ))
+      }
+      <div class="pn-legend">
+        <span><span class="pn-glyph pn-glyph--waiting" aria-hidden="true">●</span> {ui.states.waiting}</span>
+        <span><span class="pn-glyph pn-glyph--working" aria-hidden="true">◐</span> {ui.states.working}</span>
+        <span><span aria-hidden="true">○</span> {ui.states.idle}</span>
+        <span><span aria-hidden="true">✓</span> {ui.states.done}</span>
+      </div>
+    </div>
+
+    <div class="pn-main">
+      <div class="pn-tabs" role="group" aria-label={ui.tabsLabel}>
+        {
+          sessions.map((s) => (
+            <button
+              type="button"
+              class={`pn-tab pn-row--${s.state}`}
+              data-pick={s.id}
+              data-tab-done={s.state === 'done' ? '' : undefined}
+              hidden={s.state === 'done'}
+              aria-pressed={s.id === first ? 'true' : 'false'}
+            >
+              <span class="pn-glyph" aria-hidden="true">
+                {glyph[s.state]}
+              </span>
+              {s.title}
+            </button>
+          ))
+        }
+      </div>
+
+      {
+        sessions.map((s) => (
+          <div class="pn-pane" data-pane={s.id} hidden={s.id !== first}>
+            <div class="pn-pane__head">
+              <div class="pn-pane__top">
+                <span class="pn-pane__title">{s.title}</span>
+                <span class={`pn-pill pn-pill--${s.state}`}>{ui.states[s.state]}</span>
+                <div class="pn-switch" role="group" aria-label={ui.viewLabel}>
+                  <button type="button" data-view-btn="term" aria-pressed="true">
+                    {ui.terminal}
+                  </button>
+                  <button type="button" data-view-btn="chat" aria-pressed="false">
+                    {ui.chat}
+                  </button>
+                </div>
+              </div>
+              <div class="pn-meta">
+                <span>{s.project}</span>
+                <span>{s.branch}</span>
+                <span class="pn-meta__model">{s.model}</span>
+                <span>{s.time}</span>
+                <span class="pn-ctx">
+                  ctx
+                  <span class="pn-ctx__bar">
+                    <span style={`width:${s.ctx}%`} />
+                  </span>
+                  {s.ctx} %
+                </span>
+              </div>
+            </div>
+
+            <div class="pn-term">
+              {s.lines.map((line) => (
+                <div class={`pn-line pn-line--${line.tone}`}>{line.t}</div>
+              ))}
+              <div class="pn-prompt">
+                &gt; <span class="pn-cursor" />
+              </div>
+            </div>
+
+            <div class="pn-chat">
+              {s.chat.map((msg) => (
+                <div class={`pn-msg ${msg.me ? 'pn-msg--me' : ''}`}>
+                  <span class="pn-msg__who">{msg.me ? ui.you : s.agent}</span>
+                  <span class="pn-msg__text">{msg.t}</span>
+                </div>
+              ))}
+              <div class="pn-input">{ui.input}</div>
+            </div>
+
+            <div class="pn-status">
+              <span class="pn-status__tag">[jdev]</span>
+              <span class="pn-status__tmux">{tmux(s.id)}</span>
+              <span class="pn-status__alive">{ui.alive}</span>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+
+  {
+    ui.nav
+      .filter((item) => item.id !== 'terminales')
+      .map((item) => (
+        <div class="pn-screen pn-pending" data-screen={item.id} hidden>
+          <span class="pn-pending__title">{item.label}</span>
+          <span class="pn-pending__text">{ui.pending}</span>
+          <button type="button" data-screen-btn="terminales" data-back>
+            {ui.back}
+          </button>
+        </div>
+      ))
+  }
+</div>
+
+<script>
+  // Sin dependencias: el estado vive en atributos y el HTML ya trae todas las sesiones.
+  for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
+    const all = <T extends HTMLElement>(sel: string) => [...panel.querySelectorAll<T>(sel)];
+
+    const showScreen = (id: string) => {
+      for (const screen of all('[data-screen]')) screen.hidden = screen.dataset.screen !== id;
+      for (const btn of all('.pn-nav [data-screen-btn]')) {
+        btn.setAttribute('aria-pressed', String(btn.dataset.screenBtn === id));
+      }
+    };
+
+    const pick = (id: string) => {
+      showScreen('terminales');
+      for (const pane of all('[data-pane]')) pane.hidden = pane.dataset.pane !== id;
+      for (const btn of all('[data-pick]')) {
+        const selected = btn.dataset.pick === id;
+        btn.setAttribute('aria-pressed', String(selected));
+        // Una sesión hecha no tiene pestaña salvo mientras está abierta.
+        if (btn.dataset.tabDone !== undefined) btn.hidden = !selected;
+        // En pantallas estrechas la pestaña elegida puede quedar fuera de la tira.
+        if (selected && btn.classList.contains('pn-tab') && btn.parentElement) {
+          btn.parentElement.scrollLeft = btn.offsetLeft;
+        }
+      }
+    };
+
+    const setView = (view: string) => {
+      panel.dataset.view = view;
+      for (const btn of all('[data-view-btn]')) {
+        btn.setAttribute('aria-pressed', String(btn.dataset.viewBtn === view));
+      }
+    };
+
+    panel.addEventListener('click', (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLElement>('button');
+      if (!btn) return;
+      if (btn.dataset.pick) pick(btn.dataset.pick);
+      else if (btn.dataset.screenBtn) showScreen(btn.dataset.screenBtn);
+      else if (btn.dataset.viewBtn) setView(btn.dataset.viewBtn);
+    });
+  }
+</script>

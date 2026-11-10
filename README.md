@@ -662,7 +662,11 @@ que verás en todas las sesiones:
 
 `site/` contiene la landing que presenta el proyecto en
 [harness.jgonaz.dev](https://harness.jgonaz.dev): un sitio estático con Astro,
-en castellano (`/`) e inglés (`/en/`), con la identidad visual del panel. Es
+en castellano (`/`) e inglés (`/en/`), con el tema Grafito del panel. Incluye
+una simulación del panel con datos inventados
+(`site/src/components/Panel.astro`): de momento reproduce la pantalla
+Terminales, con cambio de sesión y de vista; el resto del menú avisa de que
+aún no está simulado. Es
 independiente del resto del harness, que no la necesita para funcionar, y
 tiene sus propias dependencias:
 
