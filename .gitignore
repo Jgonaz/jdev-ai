@@ -14,3 +14,8 @@ Thumbs.db
 # Panel gráfico: dependencias y compilación del cliente.
 /panel/node_modules/
 /panel/dist/
+
+# Landing: dependencias, compilación y tipos generados por Astro.
+/site/node_modules/
+/site/dist/
+/site/.astro/

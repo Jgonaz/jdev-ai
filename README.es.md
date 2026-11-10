@@ -610,6 +610,24 @@ bin/panel --app           # ventana de aplicación; o --open, o abre la URL que 
   agente al iniciar o retomar, y [`rules/surface.md`](rules/surface.md) explica
   cómo debe mostrar y pedir imágenes en cada caso.
 
+## Landing
+
+`site/` contiene la landing que presenta el proyecto en
+[harness.jgonaz.dev](https://harness.jgonaz.dev): un sitio estático con Astro,
+en castellano (`/`) e inglés (`/en/`), con la identidad visual del panel. Es
+independiente del resto del harness, que no la necesita para funcionar, y
+tiene sus propias dependencias:
+
+```sh
+pnpm --dir site install   # una vez
+pnpm --dir site dev       # desarrollo
+pnpm --dir site build     # compila en site/dist; es su validación
+```
+
+Los textos viven en `site/src/i18n/` (`es.ts` y `en.ts`, con la misma forma) y
+resumen este README: si cambia lo que cuentan, actualízalos en ambos idiomas.
+En Vercel, el proyecto usa `site` como directorio raíz.
+
 ## Validación del harness
 
 Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/session-done`, `bin/session-state`, `bin/session-statusline`, `bin/session-activity`, `bin/worktree`, `bin/panel` o los archivos que inyectan, ejecuta:

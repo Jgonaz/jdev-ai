@@ -77,7 +77,9 @@ adapters/        Per-provider subagent definitions (claude, codex)
 bin/             agent, check, worktree, panel, session-status, session-state,
                  session-statusline, session-activity, session-title, session-done,
                  subagent-notice
-panel/           Graphical panel (Node + React), the only part with dependencies
+panel/           Graphical panel (Node + React), with its own dependencies
+site/            Landing page at harness.jgonaz.dev (Astro, Spanish and English),
+                 with its own dependencies; the harness does not need it to work
 openspec/        Specs and changes of the harness itself
 projects/        Your projects, one Git repository each (ignored by this repo)
 ```
