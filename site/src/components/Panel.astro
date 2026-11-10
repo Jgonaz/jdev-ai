@@ -1,7 +1,7 @@
 ---
 // Simulación del panel gráfico con datos inventados. Reproduce la pantalla
-// Terminales: se puede cambiar de sesión y de vista; el resto de pantallas
-// del menú aún no están simuladas.
+// Terminales (cambio de sesión y de vista) e Inicio (avisos que abren su
+// sesión y cifras por periodo); el resto del menú aún no está simulado.
 import type { Dictionary } from '../i18n/es';
 
 interface Props {
@@ -9,7 +9,18 @@ interface Props {
 }
 
 const { t } = Astro.props;
-const { ui, projects, sessions } = t;
+const { ui, home, projects, sessions } = t;
+const periods = ['week', 'month', 'all'] as const;
+const colorOf = (name: string) => projects.find((p) => p.name === name)?.color;
+const monoOf = (name: string) => projects.find((p) => p.name === name)?.mono;
+// Mapa de calor de ejemplo: 12 semanas por 7 días con un patrón fijo, más flojo en fin de semana.
+const heat = Array.from({ length: 7 }, (_, day) =>
+  Array.from({ length: 12 }, (_, week) => {
+    const n = (week * 7 + day * 13 + week * day * 5) % 11;
+    const level = n < 2 ? 0 : n < 5 ? 1 : n < 8 ? 2 : n < 10 ? 3 : 4;
+    return day > 4 ? Math.max(0, level - 2) : level;
+  }),
+);
 const glyph = { waiting: '●', working: '◐', idle: '○', done: '✓' };
 const first = sessions[0].id;
 // Posición de cada sesión viva en la barra de tmux, como en el panel real.
@@ -17,7 +28,7 @@ const live = sessions.filter((s) => s.state !== 'done');
 const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id ? '*' : ''}`).join('  ');
 ---
 
-<div class="pn" data-panel data-view="term" role="region" aria-label={ui.label}>
+<div class="pn" data-panel data-view="term" data-period="week" role="region" aria-label={ui.label}>
   <div class="pn-window">
     <span>localhost:4317</span>
     <span>{ui.bar}</span>
@@ -163,9 +174,117 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
     </div>
   </div>
 
+  <div class="pn-screen pn-home" data-screen="inicio" hidden>
+    <div class="pn-home__main">
+      <div class="pn-home__head">
+        <div>
+          <span class="pn-home__shift">{home.shift}</span>
+          <p class="pn-home__greeting">{home.greeting}</p>
+          <span class="pn-home__summary">{home.summary}</span>
+        </div>
+        <div class="pn-home__chips">
+          {home.chips.map((chip) => <span class={`pn-pill pn-pill--${chip.state}`}>{chip.text}</span>)}
+        </div>
+      </div>
+
+      <p class="pn-home__label">{home.attention}</p>
+      <div class="pn-home__items">
+        {
+          home.items.map((item) => (
+            <div class={`pn-item pn-item--${item.kind}`}>
+              <span class="pn-item__mark" aria-hidden="true">
+                {item.kind === 'waiting' ? '●' : item.kind === 'done' ? '✓' : '□'}
+              </span>
+              <div class="pn-item__text">
+                <span class="pn-item__title">{item.title}</span>
+                <span>{item.text}</span>
+              </div>
+              <span class="pn-item__meta">{item.meta}</span>
+              <button type="button" data-open={item.open || undefined} data-screen-btn={item.screen || undefined}>
+                {item.action}
+              </button>
+            </div>
+          ))
+        }
+      </div>
+
+      <div class="pn-home__activity">
+        <p class="pn-home__label">{home.activity}</p>
+        <div class="pn-switch" role="group" aria-label={home.periodLabel}>
+          {
+            home.periods.map((period) => (
+              <button type="button" data-period-btn={period.id} aria-pressed={period.id === 'week' ? 'true' : 'false'}>
+                {period.label}
+              </button>
+            ))
+          }
+        </div>
+      </div>
+      <div class="pn-tiles">
+        {
+          home.tiles.map((tile) => (
+            <div class="pn-tile">
+              <span class="pn-tile__label">{tile.label}</span>
+              {periods.map((id) => <span class={`pn-tile__value pn-p pn-p--${id}`}>{tile[id]}</span>)}
+            </div>
+          ))
+        }
+      </div>
+      <div class="pn-charts">
+        <div class="pn-tile">
+          <span class="pn-tile__title">{home.heatTitle}</span>
+          <div class="pn-heat" role="img" aria-label={home.heatLabel}>
+            {heat.map((row) => row.map((level) => <span class={`pn-heat__cell pn-heat__cell--${level}`} />))}
+          </div>
+          <div class="pn-heat__legend" aria-hidden="true">
+            {home.less}
+            {[0, 1, 2, 3, 4].map((level) => <span class={`pn-heat__cell pn-heat__cell--${level}`} />)}
+            {home.more}
+          </div>
+        </div>
+        <div class="pn-tile">
+          <span class="pn-tile__title">{home.byProject}</span>
+          <div class="pn-bars">
+            {
+              home.bars.map((bar) => (
+                <div class="pn-bar">
+                  <span class="pn-mono" style={`background:${colorOf(bar.project)}`}>
+                    {monoOf(bar.project)}
+                  </span>
+                  <span class="pn-bar__name">{bar.project}</span>
+                  <span class="pn-bar__track">
+                    {periods.map((id) => <span class={`pn-p pn-p--${id}`} style={`width:${bar[id][1]}%`} />)}
+                  </span>
+                  {periods.map((id) => <span class={`pn-bar__value pn-p pn-p--${id}`}>{bar[id][0]}</span>)}
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pn-home__aside">
+      <p class="pn-home__label">{home.recent}</p>
+      <ul class="pn-recent">
+        {
+          home.entries.map((entry) => (
+            <li>
+              <span class="pn-recent__meta">
+                {entry.when} · {entry.project} <span class={`pn-recent__state pn-recent__state--${entry.tone}`}>{entry.state}</span>
+              </span>
+              <span>{entry.title}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <button type="button" class="pn-home__more" data-screen-btn="historial">{home.allHistory}</button>
+    </div>
+  </div>
+
   {
     ui.nav
-      .filter((item) => item.id !== 'terminales')
+      .filter((item) => item.id !== 'terminales' && item.id !== 'inicio')
       .map((item) => (
         <div class="pn-screen pn-pending" data-screen={item.id} hidden>
           <span class="pn-pending__title">{item.label}</span>
@@ -212,10 +331,19 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       }
     };
 
+    const setPeriod = (period: string) => {
+      panel.dataset.period = period;
+      for (const btn of all('[data-period-btn]')) {
+        btn.setAttribute('aria-pressed', String(btn.dataset.periodBtn === period));
+      }
+    };
+
     panel.addEventListener('click', (event) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('button');
       if (!btn) return;
       if (btn.dataset.pick) pick(btn.dataset.pick);
+      else if (btn.dataset.open) pick(btn.dataset.open);
+      else if (btn.dataset.periodBtn) setPeriod(btn.dataset.periodBtn);
       else if (btn.dataset.screenBtn) showScreen(btn.dataset.screenBtn);
       else if (btn.dataset.viewBtn) setView(btn.dataset.viewBtn);
     });
