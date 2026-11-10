@@ -952,22 +952,9 @@ td.no {
   color: var(--fg-muted);
 }
 
-.pn-cursor {
-  width: 8px;
-  height: 16px;
-  background: var(--pn-accent);
-  animation: pn-blink 1.1s steps(1) infinite;
-}
-
 @keyframes pn-blink {
   50% {
     opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pn-cursor {
-    animation: none;
   }
 }
 
@@ -2475,10 +2462,6 @@ td.no {
   --pn-accent: #6fd3e6;
 }
 
-.pn:not([data-on-cursor]) .pn-cursor {
-  animation: none;
-}
-
 .pn:not([data-on-ascii]) .pn-ascii {
   display: none;
 }
@@ -2675,4 +2658,130 @@ td.no {
 .pn-proj__tabs,
 .pn-places {
   position: relative;
+}
+
+/* Simulación del panel: movimiento. Todo se desactiva con «reducir movimiento». */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Lo que aparece al navegar entra con un fundido corto y un leve desplazamiento.
+     La animación arranca sola cada vez que el elemento deja de estar oculto. */
+  .pn-screen:not([hidden]) {
+    animation: pn-enter 0.26s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .pn-pane:not([hidden]),
+  .pn [data-when]:not([hidden]):not(b) {
+    animation: pn-enter-soft 0.2s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .pn[data-view='term'] .pn-term,
+  .pn[data-view='chat'] .pn-chat {
+    animation: pn-enter-soft 0.2s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  /* Los bloques de Inicio y las columnas del tablero entran escalonados. */
+  .pn-home:not([hidden]) .pn-item,
+  .pn-home:not([hidden]) .pn-tile,
+  .pn-home:not([hidden]) .pn-recent li,
+  .pn-proj__pane:not([hidden]) .pn-col {
+    animation: pn-enter-soft 0.3s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .pn-item:nth-child(2),
+  .pn-tile:nth-child(2),
+  .pn-col:nth-child(2),
+  .pn-recent li:nth-child(2) {
+    animation-delay: 0.04s;
+  }
+
+  .pn-item:nth-child(3),
+  .pn-tile:nth-child(3),
+  .pn-col:nth-child(3),
+  .pn-recent li:nth-child(3) {
+    animation-delay: 0.08s;
+  }
+
+  .pn-tile:nth-child(4),
+  .pn-col:nth-child(4),
+  .pn-recent li:nth-child(4) {
+    animation-delay: 0.12s;
+  }
+
+  .pn-recent li:nth-child(5) {
+    animation-delay: 0.16s;
+  }
+
+  /* Las cifras y las barras de actividad cambian de periodo sin salto. */
+  .pn-p {
+    animation: pn-enter-soft 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .pn-bar__track .pn-p {
+    transform-origin: left;
+    animation-name: pn-grow;
+    animation-duration: 0.4s;
+  }
+
+  /* Selección, tema y acento cambian de color de forma gradual. */
+  .pn,
+  .pn :where(*) {
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease;
+  }
+
+  .pn button:active {
+    transform: scale(0.98);
+  }
+
+  .pn-todo__item,
+  .pn-todo__text {
+    transition: opacity 0.2s ease;
+  }
+
+  .pn-todo__item[data-done] {
+    opacity: 0.7;
+  }
+}
+
+@keyframes pn-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes pn-enter-soft {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes pn-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Cursor de bloque tras «jdev-ai», como en el logo del panel real. */
+.caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 0.12em;
+  vertical-align: -0.16em;
+  background: var(--pn-accent, var(--accent));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .caret {
+    animation: pn-blink 1.1s steps(1) infinite;
+  }
+}
+
+/* En el logo del panel el cursor es fijo; solo parpadea el de la cabecera de la página. */
+.pn .caret {
+  animation: none;
 }

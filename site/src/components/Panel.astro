@@ -40,7 +40,6 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
   data-panel
   data-view="term"
   data-period="week"
-  data-on-cursor
   data-on-ascii
   data-on-greeting
   data-on-grid
@@ -56,7 +55,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
   </div>
 
   <div class="pn-head">
-    <span class="pn-logo"><span>~/</span>jdev-ai</span>
+    <span class="pn-logo"><span>~/</span>jdev-ai<i class="caret" aria-hidden="true"></i></span>
     <div class="pn-nav" role="group" aria-label={ui.navLabel}>
       {
         ui.nav.map((item) => (
@@ -187,9 +186,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
               {s.lines.map((line) => (
                 <div class={`pn-line pn-line--${line.tone}`}>{line.t}</div>
               ))}
-              <div class="pn-prompt">
-                &gt; <span class="pn-cursor" />
-              </div>
+              <div class="pn-prompt">&gt;</div>
             </div>
 
             <div class="pn-chat">
@@ -447,10 +444,19 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       }
     });
 
+    // Al cambiar de pantalla el panel cambia de alto: se anima para que la página no salte.
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const animateHeight = (from: number) => {
+      const to = panel.offsetHeight;
+      if (calm.matches || Math.abs(to - from) < 2) return;
+      panel.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 260, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+    };
+
     panel.addEventListener('click', (event) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('button');
       if (!btn) return;
       const d = btn.dataset;
+      const height = panel.offsetHeight;
       if (d.pick) pick(d.pick);
       if (d.open) pick(d.open);
       if (d.screenBtn) showScreen(d.screenBtn);
@@ -481,6 +487,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
           all('.pn-nav [aria-pressed="true"]')[0];
         next?.focus();
       }
+      animateHeight(height);
     });
   }
 </script>
