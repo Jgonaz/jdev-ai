@@ -203,7 +203,7 @@ export const es = {
     note: 'Las reglas están escritas en castellano y los agentes responden en castellano por defecto, salvo que el proyecto diga otra cosa.',
     repo: 'Ver el repositorio',
     docs: 'Leer la documentación',
-    docsUrl: 'https://github.com/Jgonaz/jdev-ai/blob/main/README.es.md',
+    docsUrl: 'https://github.com/Jgonaz/jdev-ai#readme',
     terminal: 'terminal',
     comments: [
       '# 1. Clona el harness y añade un proyecto con su .git',

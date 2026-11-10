@@ -204,7 +204,7 @@ export const en: Dictionary = {
     note: 'The rules are written in Spanish and agents reply in Spanish by default, unless the project says otherwise.',
     repo: 'View the repository',
     docs: 'Read the documentation',
-    docsUrl: 'https://github.com/Jgonaz/jdev-ai#readme',
+    docsUrl: 'https://github.com/Jgonaz/jdev-ai/blob/main/README.en.md',
     terminal: 'terminal',
     comments: [
       '# 1. Clone the harness and add a project with its .git',
