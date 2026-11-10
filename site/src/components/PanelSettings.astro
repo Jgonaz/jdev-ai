@@ -1,0 +1,214 @@
+---
+// Pantalla Ajustes del panel simulado. El tema, el acento, varios interruptores,
+// el tamaño de la terminal, la visibilidad de proyectos y el agente por defecto
+// actúan sobre la propia simulación (ver «Ajustes» en global.css y Panel.astro).
+import { settingsScreen } from '../data/settings';
+
+interface Props {
+  lang: 'es' | 'en';
+  projects: { name: string; mono: string; color: string }[];
+}
+
+const { lang, projects } = Astro.props;
+const t = settingsScreen[lang];
+// Color de cada acento, el mismo que en panel/src/styles/tokens.css.
+const accentColor: Record<string, string> = {
+  ambar: '#f0b25a',
+  menta: '#6cc3b5',
+  lavanda: '#b9a6ff',
+  coral: '#ff8a6b',
+  cian: '#6fd3e6',
+};
+---
+
+<div class="pn-screen pn-set" data-screen="ajustes" hidden>
+  <div class="pn-set__nav" role="group" aria-label={t.nav}>
+    <span class="pn-side__title">{t.title}</span>
+    {
+      t.sections.map((section, i) => (
+        <button type="button" data-set={`sec:${section.id}`} aria-pressed={i === 0 ? 'true' : 'false'}>
+          {section.label}
+        </button>
+      ))
+    }
+  </div>
+
+  <div class="pn-set__body">
+    {
+      t.sections.map((section, i) => (
+        <section data-when={`sec:${section.id}`} hidden={i !== 0}>
+          <p class="pn-set__title">{section.label}</p>
+          <p class="pn-set__lead">{section.lead}</p>
+
+          {section.id === 'apariencia' && (
+            <>
+              <p class="pn-set__h">{t.appearance.theme}</p>
+              <div class="pn-themes" role="group" aria-label={t.appearance.theme}>
+                {t.appearance.themes.map((theme, n) => (
+                  <button type="button" class={`pn-theme pn-theme--${theme.id}`} data-set={`theme:${theme.id}`} aria-pressed={n === 0 ? 'true' : 'false'}>
+                    <span class="pn-theme__preview" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    <span class="pn-theme__name">{theme.label}</span>
+                    <span class="pn-theme__hint">{theme.hint}</span>
+                  </button>
+                ))}
+              </div>
+              <p class="pn-set__h">{t.appearance.accent}</p>
+              <div class="pn-chips" role="group" aria-label={t.appearance.accent}>
+                {t.appearance.accents.map((accent, n) => (
+                  <button type="button" data-set={`accent:${accent.id}`} aria-pressed={n === 0 ? 'true' : 'false'}>
+                    <span class="pn-chips__dot" style={`background:${accentColor[accent.id]}`} aria-hidden="true" />
+                    {accent.label}
+                  </button>
+                ))}
+              </div>
+              <p class="pn-set__h">{t.appearance.details}</p>
+              {t.appearance.toggles.map((toggle) => (
+                <button type="button" class="pn-sw" data-toggle={toggle.id} aria-pressed={String(toggle.on)}>
+                  <span class="pn-sw__text">
+                    <span>{toggle.label}</span>
+                    <span class="pn-sw__hint">{toggle.hint}</span>
+                  </span>
+                  <span class="pn-sw__knob" aria-hidden="true" />
+                </button>
+              ))}
+            </>
+          )}
+
+          {section.id === 'tipografia' && (
+            <>
+              <dl class="pn-rows">
+                {t.typography.rows.map((row) => (
+                  <div>
+                    <dt>{row.role}</dt>
+                    <dd>{row.font}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p class="pn-set__h">{t.typography.size}</p>
+              <div class="pn-chips" role="group" aria-label={t.typography.size}>
+                {t.typography.sizes.map((size) => (
+                  <button type="button" data-set={`tsize:${size.id}`} aria-pressed={size.id === '13' ? 'true' : 'false'}>
+                    {size.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {section.id === 'terminal' && (
+            <>
+              <p class="pn-set__h">{t.terminal.layout}</p>
+              <div class="pn-chips" role="group" aria-label={t.terminal.layout}>
+                {t.terminal.layouts.map((layout, n) => (
+                  <button type="button" data-set={`layout:${layout.id}`} aria-pressed={n === 0 ? 'true' : 'false'}>
+                    {layout.label}
+                  </button>
+                ))}
+              </div>
+              {t.terminal.toggles.map((toggle) => (
+                <button type="button" class="pn-sw" data-toggle={toggle.id} aria-pressed={String(toggle.on)}>
+                  <span class="pn-sw__text">
+                    <span>{toggle.label}</span>
+                    <span class="pn-sw__hint">{toggle.hint}</span>
+                  </span>
+                  <span class="pn-sw__knob" aria-hidden="true" />
+                </button>
+              ))}
+            </>
+          )}
+
+          {section.id === 'proyectos' && (
+            <>
+              {projects.map((project, n) => (
+                <button type="button" class="pn-sw" data-toggle={`vis${n}`} aria-pressed="true">
+                  <span class="pn-sw__text pn-sw__text--row">
+                    <span class="pn-mono pn-mono--lg" style={`background:${project.color}`}>
+                      {project.mono}
+                    </span>
+                    <span>{project.name}</span>
+                    <span class="pn-sw__hint">{t.projects.visible}</span>
+                  </span>
+                  <span class="pn-sw__knob" aria-hidden="true" />
+                </button>
+              ))}
+              <p class="pn-set__lead">{t.projects.hint}</p>
+            </>
+          )}
+
+          {section.id === 'avisos' && (
+            <>
+              {t.notifications.toggles.map((toggle) => (
+                <button type="button" class="pn-sw" data-toggle={toggle.id} aria-pressed={String(toggle.on)}>
+                  <span class="pn-sw__text">
+                    <span>{toggle.label}</span>
+                    <span class="pn-sw__hint">{toggle.hint}</span>
+                  </span>
+                  <span class="pn-sw__knob" aria-hidden="true" />
+                </button>
+              ))}
+              <p class="pn-set__h">{t.notifications.sound}</p>
+              <div class="pn-chips" role="group" aria-label={t.notifications.sound}>
+                {t.notifications.sounds.map((sound, n) => (
+                  <button type="button" data-set={`sound:${sound.id}`} aria-pressed={n === 0 ? 'true' : 'false'}>
+                    {sound.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {section.id === 'agentes' && (
+            <>
+              <p class="pn-set__h">{t.agents.agent}</p>
+              <div class="pn-chips" role="group" aria-label={t.agents.agent}>
+                {t.agents.agents.map((agent, n) => (
+                  <button type="button" data-set={`agent:${agent.id}`} aria-pressed={n === 0 ? 'true' : 'false'}>
+                    {agent.label}
+                  </button>
+                ))}
+              </div>
+              <p class="pn-set__h">{t.agents.where}</p>
+              <div class="pn-chips" role="group" aria-label={t.agents.where}>
+                {t.agents.places.map((place, n) => (
+                  <button type="button" data-set={`where:${place.id}`} aria-pressed={n === 0 ? 'true' : 'false'}>
+                    {place.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {section.id === 'atajos' && (
+            <dl class="pn-rows pn-rows--keys">
+              {t.shortcuts.map((shortcut) => (
+                <div>
+                  <dt>
+                    <kbd>{shortcut.keys}</kbd>
+                  </dt>
+                  <dd>{shortcut.action}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {section.id === 'servidor' && (
+            <dl class="pn-rows">
+              {t.server.rows.map((row) => (
+                <div>
+                  <dt>{row.label}</dt>
+                  <dd>
+                    <code>{row.value}</code>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </section>
+      ))
+    }
+  </div>
+</div>

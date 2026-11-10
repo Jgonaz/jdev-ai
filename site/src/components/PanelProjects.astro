@@ -26,7 +26,7 @@ const firstPlace = (i: number) => (t.projects[i].places.find((p) => p.files.leng
     <span class="pn-side__title">~/{L.list.toLowerCase()}</span>
     {
       projects.map((project, i) => (
-        <button type="button" class="pn-proj__item" data-set={`proj:p${i}`} aria-pressed={i === 0 ? 'true' : 'false'}>
+        <button type="button" class="pn-proj__item" data-proj={i} data-set={`proj:p${i}`} aria-pressed={i === 0 ? 'true' : 'false'}>
           <span class="pn-mono" style={`background:${project.color}`}>
             {project.mono}
           </span>
@@ -145,7 +145,7 @@ const firstPlace = (i: number) => (t.projects[i].places.find((p) => p.files.leng
                                   data-set={`file${i}${place.id}:${f}`}
                                   aria-pressed={f === 0 ? 'true' : 'false'}
                                 >
-                                  <span class={`pn-status pn-status--${file.status}`}>{file.status}</span>
+                                  <span class={`pn-fstatus pn-fstatus--${file.status}`}>{file.status}</span>
                                   <span class="pn-diff__path">{file.path}</span>
                                   <span class="pn-add">+{file.add}</span>
                                   <span class="pn-del">-{file.del}</span>

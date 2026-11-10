@@ -41,8 +41,6 @@ export const es = {
       you: 'Tú',
       input: 'Escribe un mensaje…',
       alive: '3 vivas · 1 visible',
-      pending: 'Esta pantalla todavía no está en la simulación.',
-      back: 'Volver a Terminales',
     },
     // Pantalla Inicio de la simulación. `open` abre una sesión y `screen` otra pantalla.
     home: {

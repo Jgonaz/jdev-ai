@@ -1,10 +1,12 @@
 ---
 // Simulación del panel gráfico con datos inventados. Reproduce la pantalla
-// Terminales (cambio de sesión y de vista) e Inicio (avisos que abren su
-// sesión y cifras por periodo); el resto del menú aún no está simulado.
+// todas las pantallas del menú: Inicio, Terminales, Proyectos, Historial y
+// Ajustes. El estado vive en atributos del panel que leen el CSS y el script.
 import type { Dictionary } from '../i18n/es';
 import PanelHistory from './PanelHistory.astro';
 import PanelProjects from './PanelProjects.astro';
+import PanelSettings from './PanelSettings.astro';
+import { settingsScreen } from '../data/settings';
 
 interface Props {
   t: Dictionary['panel'];
@@ -31,7 +33,20 @@ const live = sessions.filter((s) => s.state !== 'done');
 const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id ? '*' : ''}`).join('  ');
 ---
 
-<div class="pn" data-panel data-view="term" data-period="week" role="region" aria-label={ui.label}>
+<div
+  class="pn"
+  data-panel
+  data-view="term"
+  data-period="week"
+  data-on-cursor
+  data-on-ascii
+  data-on-greeting
+  data-on-grid
+  data-on-tmux
+  data-on-vis0
+  data-on-vis1
+  data-on-vis2
+  role="region" aria-label={ui.label}>
   <div class="pn-window">
     <span>localhost:4317</span>
     <span>{ui.bar}</span>
@@ -48,7 +63,16 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
         ))
       }
     </div>
-    <span class="pn-agent"><span aria-hidden="true">&gt;_</span>Claude Code</span>
+    <span class="pn-agent">
+      <span aria-hidden="true">&gt;_</span>
+      {
+        settingsScreen[lang].agents.agents.map((agent, i) => (
+          <b data-when={`agent:${agent.id}`} hidden={i !== 0}>
+            {agent.label}
+          </b>
+        ))
+      }
+    </span>
     <span class="pn-new">+ {ui.newSession}</span>
   </div>
 
@@ -57,7 +81,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       <span class="pn-side__title">{ui.projects} ({projects.length})</span>
       {
         projects.map((project) => (
-          <div class="pn-project">
+          <div class="pn-project" data-proj={projects.indexOf(project)}>
             <div class="pn-project__name">
               <span class="pn-mono" style={`background:${project.color}`}>
                 {project.mono}
@@ -182,7 +206,10 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       <div class="pn-home__head">
         <div>
           <span class="pn-home__shift">{home.shift}</span>
-          <p class="pn-home__greeting">{home.greeting}</p>
+          <p class="pn-home__greeting">
+            <span class="pn-greet-on">{home.greeting}</span>
+            <span class="pn-greet-off">{ui.nav[0].label}</span>
+          </p>
           <span class="pn-home__summary">{home.summary}</span>
         </div>
         <div class="pn-home__chips">
@@ -287,20 +314,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
 
   <PanelProjects lang={lang} projects={projects} />
   <PanelHistory lang={lang} />
-
-  {
-    ui.nav
-      .filter((item) => !['terminales', 'inicio', 'proyectos', 'historial'].includes(item.id))
-      .map((item) => (
-        <div class="pn-screen pn-pending" data-screen={item.id} hidden>
-          <span class="pn-pending__title">{item.label}</span>
-          <span class="pn-pending__text">{ui.pending}</span>
-          <button type="button" data-screen-btn="terminales" data-back>
-            {ui.back}
-          </button>
-        </div>
-      ))
-  }
+  <PanelSettings lang={lang} projects={projects} />
 </div>
 
 <script>

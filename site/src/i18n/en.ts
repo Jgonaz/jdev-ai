@@ -39,8 +39,6 @@ export const en: Dictionary = {
       you: 'You',
       input: 'Write a message…',
       alive: '3 live · 1 visible',
-      pending: 'This screen is not in the simulation yet.',
-      back: 'Back to Terminals',
     },
     home: {
       shift: '$ afternoon shift · Thu 12 Mar',
