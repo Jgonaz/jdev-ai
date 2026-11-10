@@ -1,0 +1,216 @@
+---
+// Pantalla Proyectos del panel simulado: Backlog, Cambios y Guías de cada proyecto.
+// En el panel real son tres pantallas de un menú desplegable; aquí son pestañas.
+import { projectsScreen } from '../data/projects';
+
+interface Props {
+  lang: 'es' | 'en';
+  projects: { name: string; mono: string; color: string }[];
+}
+
+const { lang, projects } = Astro.props;
+const t = projectsScreen[lang];
+const L = t.labels;
+const subs = [
+  { id: 'backlog', label: L.backlog, path: 'docs/backlog/' },
+  { id: 'cambios', label: L.changes, path: '' },
+  { id: 'guias', label: L.guides, path: 'docs/user-guides/' },
+];
+const glyph = ['○', '●', '◐', '✓'];
+// Lugar que se abre primero: el primero con cambios, como hace el panel real.
+const firstPlace = (i: number) => (t.projects[i].places.find((p) => p.files.length) ?? t.projects[i].places[0]).id;
+---
+
+<div class="pn-screen pn-proj" data-screen="proyectos" hidden>
+  <div class="pn-proj__side" role="group" aria-label={L.list}>
+    <span class="pn-side__title">~/{L.list.toLowerCase()}</span>
+    {
+      projects.map((project, i) => (
+        <button type="button" class="pn-proj__item" data-set={`proj:p${i}`} aria-pressed={i === 0 ? 'true' : 'false'}>
+          <span class="pn-mono" style={`background:${project.color}`}>
+            {project.mono}
+          </span>
+          {project.name}
+        </button>
+      ))
+    }
+  </div>
+
+  <div class="pn-proj__main">
+    <div class="pn-proj__tabs" role="group" aria-label={L.tabs}>
+      {
+        subs.map((sub, i) => (
+          <button type="button" data-set={`psub:${sub.id}`} aria-pressed={i === 0 ? 'true' : 'false'}>
+            {sub.label}
+          </button>
+        ))
+      }
+    </div>
+
+    {
+      subs.map((sub, s) => (
+        <div class="pn-proj__sub" data-when={`psub:${sub.id}`} hidden={s !== 0}>
+          {projects.map((project, i) => {
+            const data = t.projects[i];
+            return (
+              <div class="pn-proj__pane" data-when={`proj:p${i}`} hidden={i !== 0}>
+                <div class="pn-proj__head">
+                  <span class="pn-mono pn-mono--lg" style={`background:${project.color}`}>
+                    {project.mono}
+                  </span>
+                  <span class="pn-proj__name">{project.name}</span>
+                  <span class="pn-recent__meta">{sub.path || `projects/${project.name}/`}</span>
+                </div>
+
+                {sub.id === 'backlog' && (
+                  <div class="pn-board">
+                    {t.columns.map((column, c) => (
+                      <div class={`pn-col pn-col--${column.key}`}>
+                        <div class="pn-col__head">
+                          <span>
+                            <span class="pn-col__glyph" aria-hidden="true">
+                              {glyph[c]}
+                            </span>{' '}
+                            {column.label}
+                          </span>
+                          <span class="pn-col__count">{data.backlog[c].length}</span>
+                        </div>
+                        {column.hint && <span class="pn-col__hint">{column.hint}</span>}
+                        {data.backlog[c].map((card) => (
+                          <div class="pn-card">
+                            <span class="pn-card__title">{card.title}</span>
+                            <span class="pn-card__text">{card.text}</span>
+                            <span class="pn-card__foot">
+                              <span class={`pn-type pn-type--${card.type === 'bug' ? 'bug' : card.type === 'docs' ? 'docs' : 'feature'}`}>
+                                {card.type}
+                              </span>
+                              <span>{card.date}</span>
+                            </span>
+                          </div>
+                        ))}
+                        {data.backlog[c].length === 0 &&
+                          (column.key === 'doing' ? (
+                            <div class="pn-quiet">
+                              <pre class="pn-ascii" aria-hidden="true">{'( -_-)  zZ\n/|___|\\'}</pre>
+                              <span class="pn-quiet__title">{L.quiet}</span>
+                              <span>{L.quietHint}</span>
+                            </div>
+                          ) : (
+                            <span class="pn-col__hint">{L.empty}</span>
+                          ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {sub.id === 'cambios' && (
+                  <>
+                    <div class="pn-places" role="group" aria-label={L.places}>
+                      {data.places.map((place) => (
+                        <button
+                          type="button"
+                          data-set={`place${i}:${place.id}`}
+                          aria-pressed={place.id === firstPlace(i) ? 'true' : 'false'}
+                        >
+                          {place.label}
+                          <span class="pn-col__count">{place.files.length}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {data.places.map((place) => (
+                      <div class="pn-place" data-when={`place${i}:${place.id}`} hidden={place.id !== firstPlace(i)}>
+                        <div class="pn-place__bar">
+                          <span class="pn-place__branch">{place.branch}</span>
+                          <span>{place.note}</span>
+                          <span class="pn-place__sum">
+                            {place.files.length} {L.filesCount}{' '}
+                            <span class="pn-add">+{place.files.reduce((n, f) => n + f.add, 0)}</span>{' '}
+                            <span class="pn-del">-{place.files.reduce((n, f) => n + f.del, 0)}</span>
+                          </span>
+                        </div>
+                        {place.files.length === 0 ? (
+                          <div class="pn-nochanges">
+                            <span class="pn-nochanges__mark" aria-hidden="true">
+                              ✓
+                            </span>
+                            <span class="pn-quiet__title">{L.noChanges}</span>
+                            <span>{L.noChangesHint}</span>
+                          </div>
+                        ) : (
+                          <div class="pn-diff">
+                            <div class="pn-diff__files" role="group" aria-label={L.files}>
+                              {place.files.map((file, f) => (
+                                <button
+                                  type="button"
+                                  data-set={`file${i}${place.id}:${f}`}
+                                  aria-pressed={f === 0 ? 'true' : 'false'}
+                                >
+                                  <span class={`pn-status pn-status--${file.status}`}>{file.status}</span>
+                                  <span class="pn-diff__path">{file.path}</span>
+                                  <span class="pn-add">+{file.add}</span>
+                                  <span class="pn-del">-{file.del}</span>
+                                </button>
+                              ))}
+                            </div>
+                            {place.files.map((file, f) => (
+                              <div class="pn-diff__body" data-when={`file${i}${place.id}:${f}`} hidden={f !== 0}>
+                                <span class="pn-diff__name">{file.path}</span>
+                                <div class="pn-diff__code">
+                                  {file.lines.map(([kind, text]) => (
+                                    <div class={`pn-dl pn-dl--${kind === '+' ? 'add' : kind === '-' ? 'del' : 'ctx'}`}>
+                                      <span class="pn-dl__sign" aria-hidden="true">
+                                        {kind}
+                                      </span>
+                                      <span>{text}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {sub.id === 'guias' &&
+                  (data.guides.length === 0 ? (
+                    <span class="pn-col__hint">{L.noGuides}</span>
+                  ) : (
+                    <div class="pn-guides">
+                      <div class="pn-guides__list" role="group" aria-label={L.guidesList}>
+                        {data.guides.map((guide, g) => (
+                          <button type="button" data-set={`guide${i}:${guide.id}`} aria-pressed={g === 0 ? 'true' : 'false'}>
+                            {guide.title}
+                          </button>
+                        ))}
+                      </div>
+                      {data.guides.map((guide, g) => (
+                        <article class="pn-guide" data-when={`guide${i}:${guide.id}`} hidden={g !== 0}>
+                          <p class="pn-hist__title">{guide.title}</p>
+                          {guide.blocks.map((block) =>
+                            block.h ? (
+                              <p class="pn-hist__h">{block.h}</p>
+                            ) : block.ol ? (
+                              <ol class="pn-guide__ol">
+                                {block.ol.map((step) => (
+                                  <li>{step}</li>
+                                ))}
+                              </ol>
+                            ) : (
+                              <p>{block.p}</p>
+                            ),
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  ))}
+              </div>
+            );
+          })}
+        </div>
+      ))
+    }
+  </div>
+</div>

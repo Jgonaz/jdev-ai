@@ -4,6 +4,7 @@
 // sesión y cifras por periodo); el resto del menú aún no está simulado.
 import type { Dictionary } from '../i18n/es';
 import PanelHistory from './PanelHistory.astro';
+import PanelProjects from './PanelProjects.astro';
 
 interface Props {
   t: Dictionary['panel'];
@@ -284,11 +285,12 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
     </div>
   </div>
 
+  <PanelProjects lang={lang} projects={projects} />
   <PanelHistory lang={lang} />
 
   {
     ui.nav
-      .filter((item) => !['terminales', 'inicio', 'historial'].includes(item.id))
+      .filter((item) => !['terminales', 'inicio', 'proyectos', 'historial'].includes(item.id))
       .map((item) => (
         <div class="pn-screen pn-pending" data-screen={item.id} hidden>
           <span class="pn-pending__title">{item.label}</span>
