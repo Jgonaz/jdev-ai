@@ -19,3 +19,7 @@ Thumbs.db
 /site/node_modules/
 /site/dist/
 /site/.astro/
+
+# Vercel: enlace local del proyecto y variables que descarga su CLI.
+.vercel
+.env*

@@ -1,0 +1,5 @@
+# Vercel solo necesita la landing: el resto del harness (y projects/) no se sube.
+/*
+!/site
+/site/dist
+/site/.astro

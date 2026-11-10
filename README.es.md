@@ -626,7 +626,10 @@ pnpm --dir site build     # compila en site/dist; es su validación
 
 Los textos viven en `site/src/i18n/` (`es.ts` y `en.ts`, con la misma forma) y
 resumen este README: si cambia lo que cuentan, actualízalos en ambos idiomas.
-En Vercel, el proyecto usa `site` como directorio raíz.
+Se publica en el proyecto `jdev-ai` de Vercel, que usa `site` como directorio
+raíz. No está conectado al repositorio de GitHub, así que un push no la
+publica: despliega desde la raíz del harness con `vercel deploy --prod`. El
+`.vercelignore` de la raíz hace que solo se suba `site/`.
 
 ## Validación del harness
 
