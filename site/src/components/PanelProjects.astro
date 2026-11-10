@@ -6,9 +6,11 @@ import { projectsScreen } from '../data/projects';
 interface Props {
   lang: 'es' | 'en';
   projects: { name: string; mono: string; color: string }[];
+  empty: string;
+  action: string;
 }
 
-const { lang, projects } = Astro.props;
+const { lang, projects, empty, action } = Astro.props;
 const t = projectsScreen[lang];
 const L = t.labels;
 const subs = [
@@ -34,6 +36,11 @@ const firstPlace = (i: number) => (t.projects[i].places.find((p) => p.files.leng
         </button>
       ))
     }
+  </div>
+
+  <div class="pn-empty" data-empty>
+    <span>{empty}</span>
+    <button type="button" data-screen-btn="ajustes" data-goto="sec:proyectos">{action}</button>
   </div>
 
   <div class="pn-proj__main">

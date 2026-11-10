@@ -9,6 +9,10 @@ interface Props {
 const t = history[Astro.props.lang];
 const entries = t.days.flatMap((day) => day.entries);
 const first = entries[0].id;
+// Inicio cuenta los pendientes de la última entrada de cada proyecto.
+const latest = new Set(
+  [...new Set(entries.map((e) => e.project))].map((project) => entries.find((e) => e.project === project)!.id),
+);
 ---
 
 <div class="pn-screen pn-hist" data-screen="historial" hidden>
@@ -51,7 +55,11 @@ const first = entries[0].id;
   <div class="pn-hist__reader">
     {
       entries.map((entry) => (
-        <article data-when={`entry:${entry.id}`} hidden={entry.id !== first}>
+        <article
+          data-when={`entry:${entry.id}`}
+          data-latest-pending={latest.has(entry.id) && entry.pending.length ? '' : undefined}
+          hidden={entry.id !== first}
+        >
           <span class="pn-recent__meta">
             {entry.project} · {entry.file}
           </span>

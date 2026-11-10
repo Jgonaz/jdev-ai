@@ -2523,3 +2523,135 @@ td.no {
     width: 100%;
   }
 }
+
+/* Simulación del panel: ajustes tras el QA */
+
+/* Altura común para que la página no salte al cambiar de pantalla. */
+.pn-screen {
+  min-height: 620px;
+}
+
+/* En los contenedores con desplazamiento el anillo de foco va por dentro para no recortarse. */
+.pn-nav button:focus-visible,
+.pn-tabs button:focus-visible,
+.pn-proj__tabs button:focus-visible,
+.pn-places button:focus-visible {
+  outline-offset: -2px;
+}
+
+.pn[data-g-theme='papel'] :focus-visible {
+  outline-color: var(--fg);
+}
+
+.pn-empty {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+.pn-empty button {
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.pn-empty button:hover {
+  background: var(--bg-surface);
+}
+
+/* Sin proyectos visibles: Terminales y Proyectos muestran solo el estado vacío. */
+.pn[data-no-projects] .pn-empty {
+  display: flex;
+}
+
+.pn[data-no-projects] .pn-main,
+.pn[data-no-projects] .pn-proj__main,
+.pn[data-no-projects] .pn-proj__side,
+.pn[data-no-projects] .pn-side {
+  display: none;
+}
+
+.pn-noscript {
+  padding: 8px 14px;
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  font-size: 13px;
+}
+
+.pn-check__box {
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--bg);
+}
+
+.pn-check[aria-pressed='true'] .pn-check__box {
+  box-shadow: none;
+}
+
+.pn-check[aria-pressed='true'] .pn-check__box::after {
+  content: '✓';
+}
+
+/* Papel: el mapa de calor y el diff necesitan la escala y la tinta de un fondo claro. */
+.pn[data-g-theme='papel'] .pn-heat__cell--1 {
+  background: #c5d9f6;
+}
+
+.pn[data-g-theme='papel'] .pn-heat__cell--2 {
+  background: #8db9f7;
+}
+
+.pn[data-g-theme='papel'] .pn-heat__cell--3 {
+  background: #3b82e6;
+}
+
+.pn[data-g-theme='papel'] .pn-heat__cell--4 {
+  background: #1d4f9c;
+}
+
+.pn[data-g-theme='papel'] .pn-add,
+.pn[data-g-theme='papel'] .pn-fstatus--A {
+  color: #0f5323;
+}
+
+.pn[data-g-theme='papel'] .pn-del,
+.pn[data-g-theme='papel'] .pn-type--bug {
+  color: #9a1c12;
+}
+
+/* Anchos intermedios y móvil: el menú del panel pasa a su propia fila y se ve entero. */
+@media (max-width: 900px) {
+  .pn-head {
+    flex-wrap: wrap;
+  }
+
+  .pn-logo {
+    margin-right: auto;
+  }
+
+  .pn-nav {
+    order: 3;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 760px) {
+  .pn-status__tmux {
+    max-width: 100%;
+    padding: 4px 10px;
+    overflow-x: auto;
+  }
+}

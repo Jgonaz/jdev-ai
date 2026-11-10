@@ -41,6 +41,9 @@ export const es = {
       you: 'Tú',
       input: 'Escribe un mensaje…',
       alive: '3 vivas · 1 visible',
+      noProjects: 'No hay proyectos visibles.',
+      noProjectsAction: 'Abrir Ajustes › Proyectos',
+      noScript: 'Este panel simulado necesita JavaScript para cambiar de pantalla.',
     },
     // Pantalla Inicio de la simulación. `open` abre una sesión y `screen` otra pantalla.
     home: {
@@ -62,6 +65,7 @@ export const es = {
           action: 'Revisar',
           open: 's1',
           screen: '',
+          one: '',
         },
         {
           kind: 'done',
@@ -71,6 +75,7 @@ export const es = {
           action: 'Revisar',
           open: 's4',
           screen: '',
+          one: '',
         },
         {
           kind: 'pending',
@@ -80,6 +85,7 @@ export const es = {
           action: 'Ver pendientes',
           open: '',
           screen: 'historial',
+          one: '1 pendiente de ti',
         },
       ],
       activity: 'tu actividad',

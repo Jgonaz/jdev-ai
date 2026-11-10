@@ -39,6 +39,9 @@ export const en: Dictionary = {
       you: 'You',
       input: 'Write a message…',
       alive: '3 live · 1 visible',
+      noProjects: 'No projects are visible.',
+      noProjectsAction: 'Open Settings › Projects',
+      noScript: 'This simulated panel needs JavaScript to switch screens.',
     },
     home: {
       shift: '$ afternoon shift · Thu 12 Mar',
@@ -59,6 +62,7 @@ export const en: Dictionary = {
           action: 'Review',
           open: 's1',
           screen: '',
+          one: '',
         },
         {
           kind: 'done',
@@ -68,6 +72,7 @@ export const en: Dictionary = {
           action: 'Review',
           open: 's4',
           screen: '',
+          one: '',
         },
         {
           kind: 'pending',
@@ -77,6 +82,7 @@ export const en: Dictionary = {
           action: 'See pending items',
           open: '',
           screen: 'historial',
+          one: '1 item pending on you',
         },
       ],
       activity: 'your activity',

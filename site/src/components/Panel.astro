@@ -28,6 +28,8 @@ const heat = Array.from({ length: 7 }, (_, day) =>
 );
 const glyph = { waiting: '●', working: '◐', idle: '○', done: '✓' };
 const first = sessions[0].id;
+const projOf = (name: string) => projects.findIndex((p) => p.name === name);
+const projOfSession = (id: string) => projOf(sessions.find((s) => s.id === id)?.project ?? '');
 // Posición de cada sesión viva en la barra de tmux, como en el panel real.
 const live = sessions.filter((s) => s.state !== 'done');
 const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id ? '*' : ''}`).join('  ');
@@ -47,6 +49,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
   data-on-vis1
   data-on-vis2
   role="region" aria-label={ui.label}>
+  <noscript><p class="pn-noscript">{ui.noScript}</p></noscript>
   <div class="pn-window">
     <span>localhost:4317</span>
     <span>{ui.bar}</span>
@@ -78,7 +81,9 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
 
   <div class="pn-screen" data-screen="terminales">
     <div class="pn-side">
-      <span class="pn-side__title">{ui.projects} ({projects.length})</span>
+      <span class="pn-side__title">
+        {ui.projects} (<span data-proj-count>{projects.length}</span>)
+      </span>
       {
         projects.map((project) => (
           <div class="pn-project" data-proj={projects.indexOf(project)}>
@@ -95,6 +100,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
                   type="button"
                   class={`pn-row pn-row--${s.state}`}
                   data-pick={s.id}
+                  data-proj={projOf(s.project)}
                   aria-pressed={s.id === first ? 'true' : 'false'}
                 >
                   <span class="pn-glyph" aria-hidden="true">
@@ -119,6 +125,11 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       </div>
     </div>
 
+    <div class="pn-empty" data-empty>
+      <span>{ui.noProjects}</span>
+      <button type="button" data-screen-btn="ajustes" data-goto="sec:proyectos">{ui.noProjectsAction}</button>
+    </div>
+
     <div class="pn-main">
       <div class="pn-tabs" role="group" aria-label={ui.tabsLabel}>
         {
@@ -127,6 +138,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
               type="button"
               class={`pn-tab pn-row--${s.state}`}
               data-pick={s.id}
+              data-proj={projOf(s.project)}
               data-tab-done={s.state === 'done' ? '' : undefined}
               hidden={s.state === 'done'}
               aria-pressed={s.id === first ? 'true' : 'false'}
@@ -142,7 +154,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
 
       {
         sessions.map((s) => (
-          <div class="pn-pane" data-pane={s.id} hidden={s.id !== first}>
+          <div class="pn-pane" data-pane={s.id} data-proj={projOf(s.project)} hidden={s.id !== first}>
             <div class="pn-pane__head">
               <div class="pn-pane__top">
                 <span class="pn-pane__title">{s.title}</span>
@@ -221,12 +233,18 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       <div class="pn-home__items">
         {
           home.items.map((item) => (
-            <div class={`pn-item pn-item--${item.kind}`}>
+            <div
+              class={`pn-item pn-item--${item.kind}`}
+              data-proj={item.open ? projOfSession(item.open) : undefined}
+              data-pending-item={item.kind === 'pending' ? '' : undefined}
+            >
               <span class="pn-item__mark" aria-hidden="true">
                 {item.kind === 'waiting' ? '●' : item.kind === 'done' ? '✓' : '□'}
               </span>
               <div class="pn-item__text">
-                <span class="pn-item__title">{item.title}</span>
+                <span class="pn-item__title" data-one={item.one || undefined}>
+                  {item.title}
+                </span>
                 <span>{item.text}</span>
               </div>
               <span class="pn-item__meta">{item.meta}</span>
@@ -312,7 +330,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
     </div>
   </div>
 
-  <PanelProjects lang={lang} projects={projects} />
+  <PanelProjects lang={lang} projects={projects} empty={ui.noProjects} action={ui.noProjectsAction} />
   <PanelHistory lang={lang} />
   <PanelSettings lang={lang} projects={projects} />
 </div>
@@ -321,6 +339,9 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
   // Sin dependencias: el estado vive en atributos y el HTML ya trae todas las sesiones.
   for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
     const all = <T extends HTMLElement>(sel: string) => [...panel.querySelectorAll<T>(sel)];
+
+    const visible = (el: HTMLElement) => el.offsetParent !== null;
+    const hiddenProject = (index: string | undefined) => index !== undefined && !panel.hasAttribute(`data-on-vis${index}`);
 
     const showScreen = (id: string) => {
       for (const screen of all('[data-screen]')) screen.hidden = screen.dataset.screen !== id;
@@ -367,6 +388,51 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       panel.setAttribute(`data-g-${group}`, pair.slice(group.length + 1));
     };
 
+    // Proyectos ocultos desde Ajustes: recuenta, y si lo que estaba abierto ya no
+    // se ve, pasa al primero visible o muestra el estado vacío.
+    const syncProjects = () => {
+      const rows = all('.pn-side [data-pick]').filter((row) => !hiddenProject(row.dataset.proj));
+      const count = panel.querySelector('[data-proj-count]');
+      if (count) count.textContent = String(all('.pn-side .pn-project').filter((el) => !hiddenProject(el.dataset.proj)).length);
+      panel.toggleAttribute('data-no-projects', rows.length === 0);
+      const current = all('[data-pane]').find((pane) => !pane.hidden);
+      if (rows.length && hiddenProject(current?.dataset.proj)) {
+        const screen = all('[data-screen]').find((el) => !el.hidden)?.dataset.screen;
+        pick(rows[0].dataset.pick!);
+        if (screen) showScreen(screen);
+      }
+      const items = all('.pn-proj__item').filter((item) => !hiddenProject(item.dataset.proj));
+      const selected = all('.pn-proj__item[aria-pressed="true"]')[0];
+      if (items.length && hiddenProject(selected?.dataset.proj)) applySet(items[0].dataset.set!);
+    };
+
+    const syncHistory = () => {
+      if (!panel.hasAttribute('data-on-only-pending')) return;
+      const entries = all('.pn-hentry[data-has-pending]');
+      if (entries.length && !entries.some((entry) => entry.getAttribute('aria-pressed') === 'true')) {
+        applySet(entries[0].dataset.set!);
+      }
+    };
+
+    // Un pendiente marcado como hecho se refleja en la lista del historial y en el aviso de Inicio.
+    const syncPending = () => {
+      for (const article of all('.pn-hist article')) {
+        const left = article.querySelectorAll('[data-todo]:not([data-done])').length;
+        const entry = all(`.pn-hentry[data-set="${article.dataset.when}"]`)[0];
+        if (!entry || left > 0) continue;
+        entry.removeAttribute('data-has-pending');
+        entry.querySelector('.pn-hentry__pending')?.setAttribute('hidden', '');
+        const day = entry.closest<HTMLElement>('.pn-hist__day');
+        if (day && !day.querySelector('.pn-hentry[data-has-pending]')) day.removeAttribute('data-has-pending');
+      }
+      const latest = panel.querySelectorAll('[data-latest-pending] [data-todo]:not([data-done])').length;
+      const item = panel.querySelector<HTMLElement>('[data-pending-item]');
+      const title = item?.querySelector<HTMLElement>('[data-one]');
+      if (item && latest === 0) item.hidden = true;
+      else if (title && latest === 1) title.textContent = title.dataset.one!;
+      syncHistory();
+    };
+
     panel.addEventListener('click', (event) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('button');
       if (!btn) return;
@@ -377,15 +443,29 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       if (d.viewBtn) setView(d.viewBtn);
       if (d.periodBtn) setPeriod(d.periodBtn);
       if (d.set) applySet(d.set);
+      // data-goto abre una opción de otro grupo sin formar parte de él.
+      if (d.goto) applySet(d.goto);
       // Interruptor: su estado queda también como atributo del panel para el CSS.
       if (d.toggle) {
         const on = btn.getAttribute('aria-pressed') !== 'true';
         btn.setAttribute('aria-pressed', String(on));
         panel.toggleAttribute(`data-on-${d.toggle}`, on);
       }
+      if (d.toggle?.startsWith('vis')) syncProjects();
+      // Con el filtro activo, la entrada abierta debe seguir estando en la lista.
+      if (d.toggle === 'only-pending') syncHistory();
       if (d.markDone !== undefined) {
         btn.closest('[data-todo]')?.setAttribute('data-done', '');
         btn.hidden = true;
+        syncPending();
+      }
+      // Si el botón pulsado ha dejado de verse, el foco pasa a lo que se acaba de abrir.
+      if (!visible(btn)) {
+        const next =
+          (d.markDone !== undefined && all('[data-mark-done]').find(visible)) ||
+          all('.pn-hist [data-set][aria-pressed="true"], .pn-side [data-pick][aria-pressed="true"]').find(visible) ||
+          all('.pn-nav [aria-pressed="true"]')[0];
+        next?.focus();
       }
     });
   }
