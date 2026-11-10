@@ -21,6 +21,7 @@ const latest = new Set(
       <span class="pn-check__box" aria-hidden="true"></span>
       {t.filters.onlyPending}
     </button>
+    <p class="pn-hist__none">{t.labels.none}</p>
     <div class="pn-hist__list" role="group" aria-label={t.labels.list}>
       {
         t.days.map((day) => (
@@ -53,6 +54,7 @@ const latest = new Set(
   </div>
 
   <div class="pn-hist__reader">
+    <p class="pn-hist__none">{t.labels.none}</p>
     {
       entries.map((entry) => (
         <article

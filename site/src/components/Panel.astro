@@ -406,10 +406,13 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       if (items.length && hiddenProject(selected?.dataset.proj)) applySet(items[0].dataset.set!);
     };
 
+    // Con el filtro activo, la entrada abierta debe estar en la lista; si no queda
+    // ninguna con pendientes, lista y lector muestran que no hay nada.
     const syncHistory = () => {
-      if (!panel.hasAttribute('data-on-only-pending')) return;
+      const filtering = panel.hasAttribute('data-on-only-pending');
       const entries = all('.pn-hentry[data-has-pending]');
-      if (entries.length && !entries.some((entry) => entry.getAttribute('aria-pressed') === 'true')) {
+      panel.toggleAttribute('data-no-pending', filtering && entries.length === 0);
+      if (filtering && entries.length && !entries.some((entry) => entry.getAttribute('aria-pressed') === 'true')) {
         applySet(entries[0].dataset.set!);
       }
     };
@@ -432,6 +435,17 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       else if (title && latest === 1) title.textContent = title.dataset.one!;
       syncHistory();
     };
+
+    // Con teclado, una pestaña a medio ver se desplaza dentro de su tira al recibir el foco.
+    panel.addEventListener('focusin', (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLElement>('.pn-tabs button, .pn-proj__tabs button, .pn-places button');
+      const strip = btn?.parentElement;
+      if (!btn || !strip) return;
+      if (btn.offsetLeft < strip.scrollLeft) strip.scrollLeft = btn.offsetLeft;
+      else if (btn.offsetLeft + btn.offsetWidth > strip.scrollLeft + strip.clientWidth) {
+        strip.scrollLeft = btn.offsetLeft + btn.offsetWidth - strip.clientWidth;
+      }
+    });
 
     panel.addEventListener('click', (event) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('button');

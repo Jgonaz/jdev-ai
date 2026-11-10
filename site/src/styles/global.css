@@ -2655,3 +2655,24 @@ td.no {
     overflow-x: auto;
   }
 }
+
+/* Filtro de pendientes sin nada que mostrar: lo dicen la lista y el lector. */
+.pn-hist__none {
+  display: none;
+  padding: 16px;
+  color: var(--fg-muted);
+}
+
+.pn[data-no-pending] .pn-hist__none {
+  display: block;
+}
+
+.pn[data-no-pending] .pn-hist__reader article {
+  display: none;
+}
+
+.pn-tabs,
+.pn-proj__tabs,
+.pn-places {
+  position: relative;
+}

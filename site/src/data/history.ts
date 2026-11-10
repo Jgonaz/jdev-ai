@@ -27,6 +27,7 @@ type History = {
     next: string;
     resume: string;
     list: string;
+    none: string;
   };
   days: { label: string; entries: Entry[] }[];
 };
@@ -43,6 +44,7 @@ export const history: Record<'es' | 'en', History> = {
       next: 'Continuación recomendada',
       resume: 'Retomar desde aquí',
       list: 'Entradas del historial',
+      none: 'Nada pendiente de ti.',
     },
     days: [
       {
@@ -164,6 +166,7 @@ export const history: Record<'es' | 'en', History> = {
       next: 'Recommended continuation',
       resume: 'Resume from here',
       list: 'History entries',
+      none: 'Nothing pending on you.',
     },
     days: [
       {
