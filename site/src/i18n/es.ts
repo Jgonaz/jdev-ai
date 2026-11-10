@@ -77,7 +77,7 @@ export const es = {
         {
           kind: 'pending',
           title: '2 pendientes de ti',
-          text: 'En la última entrada del historial de cada proyecto (2 proyectos).',
+          text: 'En la última entrada del historial de cada proyecto (1 proyecto).',
           meta: 'historial',
           action: 'Ver pendientes',
           open: '',

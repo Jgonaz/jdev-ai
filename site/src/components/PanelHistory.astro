@@ -1,0 +1,100 @@
+---
+// Pantalla Historial del panel simulado: lista de entradas por día y lector.
+import { history } from '../data/history';
+
+interface Props {
+  lang: 'es' | 'en';
+}
+
+const t = history[Astro.props.lang];
+const entries = t.days.flatMap((day) => day.entries);
+const first = entries[0].id;
+---
+
+<div class="pn-screen pn-hist" data-screen="historial" hidden>
+  <div class="pn-hist__side">
+    <button type="button" class="pn-check" data-toggle="only-pending" aria-pressed="false">
+      <span class="pn-check__box" aria-hidden="true"></span>
+      {t.filters.onlyPending}
+    </button>
+    <div class="pn-hist__list" role="group" aria-label={t.labels.list}>
+      {
+        t.days.map((day) => (
+          <div class="pn-hist__day" data-has-pending={day.entries.some((e) => e.pending.length) ? '' : undefined}>
+            <span class="pn-hist__daylabel">{day.label}</span>
+            {day.entries.map((entry) => (
+              <button
+                type="button"
+                class="pn-hentry"
+                data-set={`entry:${entry.id}`}
+                data-has-pending={entry.pending.length ? '' : undefined}
+                aria-pressed={entry.id === first ? 'true' : 'false'}
+              >
+                <span class="pn-recent__meta">
+                  {entry.time} {entry.project}{' '}
+                  <span class={`pn-recent__state pn-recent__state--${entry.tone}`}>{entry.state}</span>
+                </span>
+                <span class="pn-hentry__title">{entry.title}</span>
+                {entry.pending.length > 0 && (
+                  <span class="pn-hentry__pending">
+                    {t.labels.pending}: {entry.pending[0]}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        ))
+      }
+    </div>
+  </div>
+
+  <div class="pn-hist__reader">
+    {
+      entries.map((entry) => (
+        <article data-when={`entry:${entry.id}`} hidden={entry.id !== first}>
+          <span class="pn-recent__meta">
+            {entry.project} · {entry.file}
+          </span>
+          <p class="pn-hist__title">{entry.title}</p>
+          <div class="pn-hist__state">
+            <span class={`pn-pill pn-pill--${entry.tone === 'done' ? 'working' : 'waiting'}`}>{entry.state}</span>
+            <span>{entry.date}</span>
+          </div>
+          {entry.pending.length > 0 && (
+            <div class="pn-todo">
+              <span class="pn-todo__title">
+                <span aria-hidden="true">●</span> {t.labels.pending}
+              </span>
+              {entry.pending.map((item) => (
+                <div class="pn-todo__item" data-todo>
+                  <span class="pn-todo__text">
+                    {item} <span class="pn-todo__done">({t.labels.done})</span>
+                  </span>
+                  <button type="button" data-mark-done>
+                    {t.labels.markDone}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <p class="pn-hist__h">{t.labels.summary}</p>
+          <ul class="pn-hist__ul">
+            {entry.summary.map((line) => (
+              <li>{line}</li>
+            ))}
+          </ul>
+          <p class="pn-hist__h">{t.labels.decisions}</p>
+          <ul class="pn-hist__ul">
+            {entry.decisions.map((line) => (
+              <li>{line}</li>
+            ))}
+          </ul>
+          <p class="pn-hist__h">{t.labels.next}</p>
+          <ul class="pn-hist__ul">
+            <li>{entry.next}</li>
+          </ul>
+        </article>
+      ))
+    }
+  </div>
+</div>

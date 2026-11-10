@@ -74,7 +74,7 @@ const canonical = new URL(home[lang], Astro.site);
             <h2>{t.panel.title}</h2>
             <p set:html={t.panel.lead} />
           </div>
-          <Panel t={t.panel} />
+          <Panel t={t.panel} lang={lang} />
           <p class="note">{t.panel.note}</p>
         </section>
 

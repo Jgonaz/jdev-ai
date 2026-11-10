@@ -3,12 +3,14 @@
 // Terminales (cambio de sesión y de vista) e Inicio (avisos que abren su
 // sesión y cifras por periodo); el resto del menú aún no está simulado.
 import type { Dictionary } from '../i18n/es';
+import PanelHistory from './PanelHistory.astro';
 
 interface Props {
   t: Dictionary['panel'];
+  lang: 'es' | 'en';
 }
 
-const { t } = Astro.props;
+const { t, lang } = Astro.props;
 const { ui, home, projects, sessions } = t;
 const periods = ['week', 'month', 'all'] as const;
 const colorOf = (name: string) => projects.find((p) => p.name === name)?.color;
@@ -282,9 +284,11 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
     </div>
   </div>
 
+  <PanelHistory lang={lang} />
+
   {
     ui.nav
-      .filter((item) => item.id !== 'terminales' && item.id !== 'inicio')
+      .filter((item) => !['terminales', 'inicio', 'historial'].includes(item.id))
       .map((item) => (
         <div class="pn-screen pn-pending" data-screen={item.id} hidden>
           <span class="pn-pending__title">{item.label}</span>
@@ -338,14 +342,35 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       }
     };
 
+    // data-set="grupo:valor": marca ese botón dentro de su grupo y muestra los
+    // elementos data-when del mismo grupo. Sirve para listas con lector, pestañas y opciones.
+    const applySet = (pair: string) => {
+      const group = pair.split(':')[0];
+      for (const btn of all(`[data-set^="${group}:"]`)) btn.setAttribute('aria-pressed', String(btn.dataset.set === pair));
+      for (const el of all(`[data-when^="${group}:"]`)) el.hidden = el.dataset.when !== pair;
+      panel.setAttribute(`data-g-${group}`, pair.slice(group.length + 1));
+    };
+
     panel.addEventListener('click', (event) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('button');
       if (!btn) return;
-      if (btn.dataset.pick) pick(btn.dataset.pick);
-      else if (btn.dataset.open) pick(btn.dataset.open);
-      else if (btn.dataset.periodBtn) setPeriod(btn.dataset.periodBtn);
-      else if (btn.dataset.screenBtn) showScreen(btn.dataset.screenBtn);
-      else if (btn.dataset.viewBtn) setView(btn.dataset.viewBtn);
+      const d = btn.dataset;
+      if (d.pick) pick(d.pick);
+      if (d.open) pick(d.open);
+      if (d.screenBtn) showScreen(d.screenBtn);
+      if (d.viewBtn) setView(d.viewBtn);
+      if (d.periodBtn) setPeriod(d.periodBtn);
+      if (d.set) applySet(d.set);
+      // Interruptor: su estado queda también como atributo del panel para el CSS.
+      if (d.toggle) {
+        const on = btn.getAttribute('aria-pressed') !== 'true';
+        btn.setAttribute('aria-pressed', String(on));
+        panel.toggleAttribute(`data-on-${d.toggle}`, on);
+      }
+      if (d.markDone !== undefined) {
+        btn.closest('[data-todo]')?.setAttribute('data-done', '');
+        btn.hidden = true;
+      }
     });
   }
 </script>

@@ -74,7 +74,7 @@ export const en: Dictionary = {
         {
           kind: 'pending',
           title: '2 items pending on you',
-          text: 'In the latest history entry of each project (2 projects).',
+          text: 'In the latest history entry of each project (1 project).',
           meta: 'history',
           action: 'See pending items',
           open: '',
