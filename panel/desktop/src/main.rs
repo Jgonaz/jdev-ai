@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use tauri::ipc::CapabilityBuilder;
 use tauri::webview::{NewWindowResponse, PageLoadEvent};
+use tauri::window::Color;
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 /// Distro de WSL y ruta del harness dentro de ella, grabadas al compilar.
@@ -34,6 +35,8 @@ const STOP_WAIT: Duration = Duration::from_secs(3);
 const PID_WAIT: Duration = Duration::from_secs(2);
 /// Plazo total para que lo que escucha en el puerto demuestre que es el panel.
 const IDENTIFY_WAIT: Duration = Duration::from_secs(3);
+/// Tiempo máximo que se espera a que Windows alcance el puerto del panel antes de navegar.
+const REACH_WAIT: Duration = Duration::from_secs(10);
 /// Cuánta salida de error se conserva para enseñarla si el arranque falla.
 const MAX_ERROR_BYTES: usize = 8 * 1024;
 
@@ -293,6 +296,17 @@ fn show_error(app: &AppHandle, mensaje: &str) {
     }
 }
 
+/// Espera a que el puerto del panel acepte conexiones desde Windows.
+fn wait_reachable(estado: &Panel, port: u16) {
+    let limite = Instant::now() + REACH_WAIT;
+    while Instant::now() < limite && !estado.stopping.load(Ordering::SeqCst) {
+        if connect(port).is_some() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
 fn launch(app: AppHandle) {
     let estado = app.state::<Panel>();
     let url = match start_server(&estado) {
@@ -327,6 +341,10 @@ fn launch(app: AppHandle) {
     }
     let puerto = url.port().unwrap_or(0);
     estado.port.store(puerto, Ordering::Relaxed);
+    // El servidor ya escucha dentro de WSL, pero Windows tarda un instante en
+    // reenviar el puerto: sin esta espera la ventana enseña «conexión rechazada»
+    // antes de cargar el panel.
+    wait_reachable(&estado, puerto);
 
     // La página del panel solo puede usar las notificaciones nativas: nada de
     // archivos, procesos ni shell.
@@ -380,6 +398,9 @@ fn main() {
                 .title("jdev-ai")
                 .inner_size(1400.0, 900.0)
                 .min_inner_size(720.0, 480.0)
+                // El mismo fondo que la pantalla de arranque: la ventana no parpadea
+                // en blanco mientras el motor web carga.
+                .background_color(Color(9, 9, 10, 255))
                 // Sin esto Tauri intercepta el arrastre de archivos y el panel
                 // no recibe las imágenes que se sueltan sobre una terminal.
                 .disable_drag_drop_handler()
