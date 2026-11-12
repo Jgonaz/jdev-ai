@@ -4,6 +4,47 @@
 
 `jdev-ai` es un harness global y ligero para trabajar con agentes de IA sobre varios proyectos independientes. Centraliza reglas y flujos de trabajo sin imponer stack, dependencias ni arquitectura a los proyectos.
 
+## Primeros pasos
+
+Requisitos: una shell POSIX, Git y la CLI del agente que quieras usar
+(`claude`, `codex`, `copilot` u `opencode`) instalada y en el `PATH`. Para el
+flujo de Pull Requests de los worktrees, además `gh`.
+
+1. Clona el harness y mete un proyecto en `projects/`, conservando su `.git`:
+
+   ```sh
+   git clone https://github.com/Jgonaz/jdev-ai.git
+   cd jdev-ai
+   git clone <url-de-tu-repositorio> projects/mi-proyecto
+   ```
+
+2. Crea o adapta el `AGENTS.md` del proyecto con su contexto y sus reglas
+   (stack, comandos, validaciones) e ignora `/.agent/history/` en su Git.
+3. Lanza un agente con `bin/agent mi-proyecto`.
+
+Con eso basta: el harness son archivos Markdown y scripts de shell, no instala
+nada ni escribe configuración en tus proyectos. Lo demás es opcional:
+
+- **`agent` desde cualquier carpeta**: añade `bin/` a tu `PATH`
+  ([Sesiones en paralelo con worktrees](#sesiones-en-paralelo-con-worktrees)).
+- **Panel gráfico**: necesita Node 24, pnpm, tmux y un compilador para
+  `node-pty`. Ejecuta una vez `pnpm --dir panel install` y ábrelo con
+  `bin/panel --app` ([Panel gráfico](#panel-gráfico)). Si falta algo,
+  `bin/panel` lo indica y dice cómo instalarlo.
+- **Programa de Windows del panel**: hay que compilarlo en tu máquina con
+  `bin/panel-desktop build` e instalarlo con `bin/panel-desktop install`; no
+  se distribuye compilado. Necesita además Rust y las herramientas que indica
+  el script.
+- **Subagente de QA**: un apartado `## QA` en el `AGENTS.md` del proyecto
+  ([QA](#qa)).
+
+El harness se usa a diario en WSL2 sobre Windows. `bin/agent` y el panel en el
+navegador solo dependen de herramientas habituales de Linux, pero no se han
+probado en macOS ni en Linux sin WSL; abrir el navegador de Windows, los
+sonidos de `C:\Windows\Media` y el programa de escritorio son propios de WSL.
+El programa de escritorio arranca el panel con `bash -ic`, así que espera que
+Node esté en el `PATH` de tu `~/.bashrc` (como deja nvm).
+
 ## Separación entre harness y proyectos
 
 El harness define **cómo trabajan los agentes**. Cada repositorio situado en `projects/<nombre>/` define su dominio, código, dependencias, documentación y configuración. No es un monorepo ni un workspace: cada proyecto conserva su propio `.git` y puede funcionar aunque este harness desaparezca.
@@ -277,7 +318,9 @@ terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
 con `bin/agent`, las pantallas Inicio, Backlog, Cambios, Guías e Historial y una
 pantalla de Ajustes con estos apartados:
 
-- **Apariencia**: tema (con la opción de seguir el del sistema), color de
+- **Apariencia**: tema (Carbón, casi negro y neutro, por defecto; Grafito;
+  Pizarra, gris azulado; Fósforo; Papel, claro; y Alto contraste; con la opción
+  de seguir el del sistema), color de
   acento, pantalla al abrir, tu nombre para el saludo, mostrar u ocultar «tu
   actividad» y cinco detalles que se pueden desactivar por separado: cursor
   parpadeante del logo, luces piloto animadas, arte ASCII en los estados
@@ -680,7 +723,7 @@ que verás en todas las sesiones:
 
 `site/` contiene la landing que presenta el proyecto en
 [harness.jgonaz.dev](https://harness.jgonaz.dev): un sitio estático con Astro,
-en castellano (`/`) e inglés (`/en/`), con el tema Grafito del panel. Incluye
+en castellano (`/`) e inglés (`/en/`), con el aspecto del panel y su tema por defecto, Carbón. Incluye
 una simulación del panel con datos inventados (`site/src/components/Panel*.astro`,
 con sus datos en `site/src/data/`): reproduce Inicio, Terminales, Proyectos
 (Backlog, Cambios y Guías), Historial y Ajustes, y en Ajustes el tema, el
