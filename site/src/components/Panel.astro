@@ -3,6 +3,7 @@
 // todas las pantallas del menú: Inicio, Terminales, Proyectos, Historial y
 // Ajustes. El estado vive en atributos del panel que leen el CSS y el script.
 import type { Dictionary } from '../i18n/es';
+import PanelAgentIcon from './PanelAgentIcon.astro';
 import PanelHistory from './PanelHistory.astro';
 import PanelProjects from './PanelProjects.astro';
 import PanelSettings from './PanelSettings.astro';
@@ -26,7 +27,6 @@ const heat = Array.from({ length: 7 }, (_, day) =>
     return day > 4 ? Math.max(0, level - 2) : level;
   }),
 );
-const glyph = { waiting: '●', working: '◐', idle: '○', done: '✓' };
 const first = sessions[0].id;
 const projOf = (name: string) => projects.findIndex((p) => p.name === name);
 const projOfSession = (id: string) => projOf(sessions.find((s) => s.id === id)?.project ?? '');
@@ -65,6 +65,10 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
         ))
       }
     </div>
+    <span class="pn-limits" aria-hidden="true">
+      <span class="pn-lim">5 h <span class="pn-lim__track"><span style="width:11%" /></span> <b>11 %</b></span>
+      <span class="pn-lim">7 d <span class="pn-lim__track"><span style="width:26%" /></span> <b>26 %</b></span>
+    </span>
     <span class="pn-agent">
       <span aria-hidden="true">&gt;_</span>
       {
@@ -91,6 +95,9 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
                 {project.mono}
               </span>
               {project.name}
+              <span class="pn-project__act" aria-hidden="true">+</span>
+              <span class="pn-project__act" aria-hidden="true">▶</span>
+              <span class="pn-project__count" aria-hidden="true">{sessions.filter((s) => s.project === project.name).length}</span>
             </div>
             {sessions
               .filter((s) => s.project === project.name)
@@ -102,25 +109,26 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
                   data-proj={projOf(s.project)}
                   aria-pressed={s.id === first ? 'true' : 'false'}
                 >
-                  <span class="pn-glyph" aria-hidden="true">
-                    {glyph[s.state]}
-                  </span>
+                  <span class={`pn-light pn-light--${s.state}`} role="img" aria-label={ui.states[s.state]} />
                   <span class="pn-row__text">
                     <span class="pn-row__title">{s.title}</span>
-                    <span class="pn-row__state">
-                      {ui.states[s.state]} · {s.agent}
-                    </span>
+                    <span class="pn-row__state">{s.branch} · {s.agent}</span>
                   </span>
+                  <span class="pn-row__time">{s.time}</span>
                 </button>
               ))}
           </div>
         ))
       }
       <div class="pn-legend">
-        <span><span class="pn-glyph pn-glyph--waiting" aria-hidden="true">●</span> {ui.states.waiting}</span>
-        <span><span class="pn-glyph pn-glyph--working" aria-hidden="true">◐</span> {ui.states.working}</span>
-        <span><span aria-hidden="true">○</span> {ui.states.idle}</span>
-        <span><span aria-hidden="true">✓</span> {ui.states.done}</span>
+        <span class="pn-legend__title">{ui.legend}</span>
+        {
+          (['waiting', 'working', 'idle', 'done'] as const).map((state) => (
+            <span class="pn-legend__row">
+              <span class={`pn-light pn-light--${state}`} aria-hidden="true" /> {ui.states[state]}
+            </span>
+          ))
+        }
       </div>
     </div>
 
@@ -142,10 +150,9 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
               hidden={s.state === 'done'}
               aria-pressed={s.id === first ? 'true' : 'false'}
             >
-              <span class="pn-glyph" aria-hidden="true">
-                {glyph[s.state]}
-              </span>
+              <PanelAgentIcon agent={s.agent} size={13} />
               {s.title}
+              <span class={`pn-light pn-light--${s.state}`} role="img" aria-label={ui.states[s.state]} />
             </button>
           ))
         }
@@ -154,8 +161,10 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       {
         sessions.map((s) => (
           <div class="pn-pane" data-pane={s.id} data-proj={projOf(s.project)} hidden={s.id !== first}>
+            <div class={`pn-tcard${s.state === 'waiting' ? ' pn-tcard--waiting' : ''}`}>
             <div class="pn-pane__head">
               <div class="pn-pane__top">
+                <PanelAgentIcon agent={s.agent} />
                 <span class="pn-pane__title">{s.title}</span>
                 <span class={`pn-pill pn-pill--${s.state}`}>{ui.states[s.state]}</span>
                 <div class="pn-switch" role="group" aria-label={ui.viewLabel}>
@@ -197,6 +206,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
                 </div>
               ))}
               <div class="pn-input">{ui.input}</div>
+            </div>
             </div>
 
             <div class="pn-status">

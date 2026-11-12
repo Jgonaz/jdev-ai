@@ -25,7 +25,7 @@ const firstPlace = (i: number) => (t.projects[i].places.find((p) => p.files.leng
 
 <div class="pn-screen pn-proj" data-screen="proyectos" hidden>
   <div class="pn-proj__side" role="group" aria-label={L.list}>
-    <span class="pn-side__title">~/{L.list.toLowerCase()}</span>
+    <span class="pn-side__title">{L.list}</span>
     {
       projects.map((project, i) => (
         <button type="button" class="pn-proj__item" data-proj={i} data-set={`proj:p${i}`} aria-pressed={i === 0 ? 'true' : 'false'}>

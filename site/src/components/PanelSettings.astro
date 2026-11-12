@@ -47,9 +47,15 @@ const accentColor: Record<string, string> = {
                 {t.appearance.themes.map((theme, n) => (
                   <button type="button" class={`pn-theme pn-theme--${theme.id}`} data-set={`theme:${theme.id}`} aria-pressed={n === 0 ? 'true' : 'false'}>
                     <span class="pn-theme__preview" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
+                      <span class="pn-theme__bar" />
+                      <span class="pn-theme__row">
+                        <span class="pn-theme__side" />
+                        <span class="pn-theme__term">
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                      </span>
                     </span>
                     <span class="pn-theme__name">{theme.label}</span>
                     <span class="pn-theme__hint">{theme.hint}</span>

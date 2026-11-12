@@ -27,7 +27,7 @@ type SettingsScreen = {
 
 export const settingsScreen: Record<'es' | 'en', SettingsScreen> = {
   es: {
-    title: '~/ajustes',
+    title: 'Ajustes',
     nav: 'Secciones de ajustes',
     sections: [
       { id: 'apariencia', label: 'Apariencia', lead: 'Cómo se ve el panel. Las terminales usan el mismo tema.' },
@@ -42,7 +42,9 @@ export const settingsScreen: Record<'es' | 'en', SettingsScreen> = {
     appearance: {
       theme: 'Tema',
       themes: [
-        { id: 'grafito', label: 'Grafito', hint: 'Oscuro neutro, por defecto' },
+        { id: 'carbon', label: 'Carbón', hint: 'Casi negro y neutro, por defecto' },
+        { id: 'grafito', label: 'Grafito', hint: 'Oscuro neutro, con un punto de azul' },
+        { id: 'pizarra', label: 'Pizarra', hint: 'Gris azulado, más claro que Grafito' },
         { id: 'fosforo', label: 'Fósforo', hint: 'Oscuro cálido, papel y tinta' },
         { id: 'papel', label: 'Papel', hint: 'Claro, tinta sobre crema' },
         { id: 'contraste', label: 'Alto contraste', hint: 'Negro puro, bordes marcados' },
@@ -138,7 +140,7 @@ export const settingsScreen: Record<'es' | 'en', SettingsScreen> = {
     },
   },
   en: {
-    title: '~/settings',
+    title: 'Settings',
     nav: 'Settings sections',
     sections: [
       { id: 'apariencia', label: 'Appearance', lead: 'How the panel looks. The terminals use the same theme.' },
@@ -153,7 +155,9 @@ export const settingsScreen: Record<'es' | 'en', SettingsScreen> = {
     appearance: {
       theme: 'Theme',
       themes: [
-        { id: 'grafito', label: 'Graphite', hint: 'Neutral dark, the default' },
+        { id: 'carbon', label: 'Carbon', hint: 'Near-black and neutral, the default' },
+        { id: 'grafito', label: 'Graphite', hint: 'Neutral dark with a touch of blue' },
+        { id: 'pizarra', label: 'Slate', hint: 'Blue-grey, lighter than Graphite' },
         { id: 'fosforo', label: 'Phosphor', hint: 'Warm dark, paper and ink' },
         { id: 'papel', label: 'Paper', hint: 'Light, ink on cream' },
         { id: 'contraste', label: 'High contrast', hint: 'Pure black, strong borders' },

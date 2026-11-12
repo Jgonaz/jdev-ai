@@ -1,0 +1,45 @@
+---
+// Icono de un agente en el panel simulado: los mismos trazos que el panel real
+// (panel/src/components/AgentIcon.tsx). Es decorativo: el agente también sale en texto.
+interface Props {
+  agent: string;
+  size?: number;
+}
+
+const { agent, size = 14 } = Astro.props;
+const kind = ['claude', 'codex', 'copilot', 'opencode'].includes(agent) ? agent : 'shell';
+---
+
+<svg
+  class={`pn-agenticon pn-agenticon--${kind}`}
+  width={size}
+  height={size}
+  viewBox="0 0 16 16"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="1.6"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  {kind === 'claude' && <path d="M8 2v12M2 8h12M3.8 3.8l8.4 8.4M12.2 3.8l-8.4 8.4" />}
+  {
+    kind === 'codex' && (
+      <>
+        <rect x="2.5" y="2.5" width="11" height="11" rx="3.5" stroke-width="1.5" />
+        <circle cx="8" cy="8" r="2" stroke-width="1.5" />
+      </>
+    )
+  }
+  {
+    kind === 'copilot' && (
+      <>
+        <rect x="2.5" y="4" width="11" height="8.5" rx="3.5" stroke-width="1.5" />
+        <path d="M6 8v1M10 8v1" />
+      </>
+    )
+  }
+  {kind === 'opencode' && <path d="M6 4.5L2.5 8 6 11.5M10 4.5L13.5 8 10 11.5" stroke-width="1.5" />}
+  {kind === 'shell' && <path d="M3 5l3 3-3 3M8.5 11H13" stroke-width="1.5" />}
+</svg>
