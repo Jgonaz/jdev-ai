@@ -11,7 +11,7 @@ import { focusActiveTabSoon } from '../../lib/focus.ts';
 import { isFollowKey, parseFollowKey } from '../../lib/follow.ts';
 import { useFollowEntry } from '../../lib/useFollow.ts';
 import { IconClose, IconEye, IconLayout1, IconLayout2, IconLayout4, IconShell, IconSidePanel } from '../Icons.tsx';
-import { Monogram } from '../Monogram.tsx';
+import { AgentIcon } from '../AgentIcon.tsx';
 import { StatusLight } from '../StatusLight.tsx';
 import { useSessionMenu } from './SessionMenu.tsx';
 
@@ -221,9 +221,10 @@ export function TabsBar() {
                 }}
                 title={`${s.title} · ${proyecto.name}`}
               >
-                <StatusLight state={estado} label />
-                <Monogram project={proyecto} size="sm" />
+                <AgentIcon agent={s.agent} />
                 <span className="tab__title">{s.title}</span>
+                {/* La terminal sin agente ya lo dice con su icono: no necesita luz de estado. */}
+                {estado !== 'shell' && <StatusLight state={estado} label />}
               </button>
               <button
                 type="button"
@@ -239,8 +240,7 @@ export function TabsBar() {
           );
         })}
       </div>
-      <div className="tabsbar__tools">
-        <span className="tabsbar__label">Distribución</span>
+      <div className="tabsbar__tools" role="group" aria-label="Distribución">
         {LAYOUTS.map(({ layout, label, Icon }) => (
           <button
             key={layout}

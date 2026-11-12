@@ -27,13 +27,104 @@
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;
+  /* Tarjetas (terminales, panel de contexto) y su separación entre sí y respecto a los bordes. */
+  --radius-card: 12px;
+  --gap-card: 8px;
   --header-h: 52px;
   --sidebar-w: 280px;
   --context-w: 320px;
 }
 
-/* ---------- Grafito (por defecto): oscuro neutro ---------- */
+/* ---------- Carbón (por defecto): casi negro y neutro, sin tinte azulado ---------- */
 :root,
+:root[data-theme='carbon'] {
+  color-scheme: dark;
+  --bg: #09090a;
+  --bg-panel: #0e0e10;
+  --bg-surface: #161618;
+  --bg-raised: #1a1a1d;
+  --bg-term: #0e0e10;
+  --bg-input: #09090a;
+  --bg-switch: #17171a;
+  /* Tarjetas: fondo, borde y borde de la que tiene el foco; relleno de la opción activa de un segmentado. */
+  --bg-card: #0e0e10;
+  --bg-seg: #17171a;
+  --bg-seg-on: #26262b;
+  --line-card: #1f1f23;
+  --line-card-active: #45454c;
+  --line: #1f1f23;
+  --line-strong: #2c2c31;
+  --line-soft: #19191c;
+  --fg: #ececee;
+  --fg-soft: #c9c9ce;
+  --fg-muted: #8e8e96;
+  --fg-faint: #85858d;
+  --fg-dim: #4b4b52;
+  --link: #9db8e8;
+  --link-hover: #c2d4f2;
+  --waiting: #f0b25a;
+  --waiting-text: #f2bc66;
+  --waiting-ink: #1a1408;
+  --waiting-bg: #2a2011;
+  --waiting-line: #3d2f19;
+  --waiting-head: #14110b;
+  --waiting-ring: #6b5228;
+  --working: #5fc9a8;
+  --working-text: #6fd3b4;
+  --working-bg: #10231e;
+  --working-line: #1f3d35;
+  --danger: #ff7b6b;
+  --danger-ink: #1a0a07;
+  --mono-ink: #0b0b0c;
+  --agent-claude: #e58a62;
+  --agent-codex: #8fa8ff;
+  --agent-copilot: #c3a6fb;
+  --agent-opencode: #6fd3e6;
+  --overlay: rgba(0, 0, 0, 0.65);
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  --term-bg: #0e0e10;
+  --term-text: #d4d4d8;
+  --term-selection: rgba(157, 184, 232, 0.28);
+  --ansi-black: #2c2c31;
+  --ansi-red: #ff7b6b;
+  --ansi-green: #5fc9a8;
+  --ansi-yellow: #f0b25a;
+  --ansi-blue: #9db8e8;
+  --ansi-magenta: #c3a6fb;
+  --ansi-cyan: #6fd3e6;
+  --ansi-white: #d4d4d8;
+  --ansi-bright-black: #85858d;
+  --ansi-bright-red: #ff9d85;
+  --ansi-bright-green: #86dcc0;
+  --ansi-bright-yellow: #f5c27a;
+  --ansi-bright-blue: #c2d4f2;
+  --ansi-bright-magenta: #d9c6fd;
+  --ansi-bright-cyan: #9be3f0;
+  --ansi-bright-white: #ffffff;
+  /* Pantalla Cambios: diff, árbol y estado de cada archivo (todos con 4,5:1 sobre su fondo). */
+  --diff-add: #5fc9a8;
+  --diff-del: #ff7b6b;
+  --diff-add-bg: #17261f;
+  --diff-add-num-bg: #14201b;
+  --diff-del-bg: #2c1c1c;
+  --diff-del-num-bg: #251818;
+  --diff-hunk-bg: #1b2029;
+  --diff-hunk-fg: #9db8e8;
+  --diff-gap-a: #0e0e10;
+  --diff-gap-b: #161618;
+  --diff-num: #85858d;
+  --diff-num-add: #9a9aa2;
+  --diff-num-del: #9a9aa2;
+  --diff-sel-bg: #1c212b;
+  --diff-sel-line: #3d5a85;
+  --diff-st-a: #5fc9a8;
+  --diff-st-m: #f0b25a;
+  --diff-st-d: #ff7b6b;
+  --diff-st-r: #9db8e8;
+  --diff-st-u: #c3a6fb;
+}
+
+/* ---------- Grafito: oscuro neutro ---------- */
 :root[data-theme='grafito'] {
   color-scheme: dark;
   --bg: #0f1113;
@@ -43,6 +134,11 @@
   --bg-term: #0b0d0f;
   --bg-input: #0f1113;
   --bg-switch: #1c2024;
+  --bg-card: #0b0d0f;
+  --bg-seg: #15181b;
+  --bg-seg-on: #2a3036;
+  --line-card: #22262b;
+  --line-card-active: #4d555e;
   --line: #2a2f35;
   --line-strong: #3a4048;
   --line-soft: #22262b;
@@ -67,6 +163,10 @@
   --danger: #ff7b6b;
   --danger-ink: #1a0a07;
   --mono-ink: #0f1113;
+  --agent-claude: #e58a62;
+  --agent-codex: #8fa8ff;
+  --agent-copilot: #c79bff;
+  --agent-opencode: #6fd3e6;
   --overlay: rgba(5, 6, 8, 0.6);
   --shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
   --term-bg: #0b0d0f;
@@ -111,6 +211,93 @@
   --diff-st-u: #c79bff;
 }
 
+/* ---------- Pizarra: oscuro gris azulado, más claro que Grafito ---------- */
+:root[data-theme='pizarra'] {
+  color-scheme: dark;
+  --bg: #161a21;
+  --bg-panel: #191e26;
+  --bg-surface: #1d232c;
+  --bg-raised: #262d39;
+  --bg-term: #12161c;
+  --bg-input: #13171d;
+  --bg-switch: #232a35;
+  --bg-card: #12161c;
+  --bg-seg: #1c222b;
+  --bg-seg-on: #313a47;
+  --line-card: #262d38;
+  --line-card-active: #566375;
+  --line: #2c3440;
+  --line-strong: #3d4756;
+  --line-soft: #242b35;
+  --fg: #e6e9ee;
+  --fg-soft: #c8ced7;
+  --fg-muted: #a3adba;
+  --fg-faint: #8d98a8;
+  --fg-dim: #5a6576;
+  --link: #8fb8f6;
+  --link-hover: #b8d1fa;
+  --waiting: #f0b25a;
+  --waiting-text: #f5c27a;
+  --waiting-ink: #1a1408;
+  --waiting-bg: #2a251b;
+  --waiting-line: #57482b;
+  --waiting-head: #24211a;
+  --waiting-ring: #7a6033;
+  --working: #70cabb;
+  --working-text: #7ad1c3;
+  --working-bg: #182a29;
+  --working-line: #2f5450;
+  --danger: #ff8676;
+  --danger-ink: #1a0a07;
+  --mono-ink: #12161c;
+  --agent-claude: #eb9570;
+  --agent-codex: #98afff;
+  --agent-copilot: #cda6ff;
+  --agent-opencode: #79d8ea;
+  --overlay: rgba(8, 11, 15, 0.6);
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  --term-bg: #12161c;
+  --term-text: #d5dae2;
+  --term-selection: rgba(143, 184, 246, 0.3);
+  --ansi-black: #2c3440;
+  --ansi-red: #ff8676;
+  --ansi-green: #70cabb;
+  --ansi-yellow: #f0b25a;
+  --ansi-blue: #8fb8f6;
+  --ansi-magenta: #cda6ff;
+  --ansi-cyan: #79d8ea;
+  --ansi-white: #d5dae2;
+  --ansi-bright-black: #8d98a8;
+  --ansi-bright-red: #ffa593;
+  --ansi-bright-green: #94dfd2;
+  --ansi-bright-yellow: #f5c27a;
+  --ansi-bright-blue: #b8d1fa;
+  --ansi-bright-magenta: #dfc3ff;
+  --ansi-bright-cyan: #a3e7f3;
+  --ansi-bright-white: #ffffff;
+  /* Pantalla Cambios: diff, árbol y estado de cada archivo (todos con 4,5:1 sobre su fondo). */
+  --diff-add: #7ad1c3;
+  --diff-del: #ff9485;
+  --diff-add-bg: #1e302e;
+  --diff-add-num-bg: #1c2b29;
+  --diff-del-bg: #322527;
+  --diff-del-num-bg: #2c2225;
+  --diff-hunk-bg: #222b38;
+  --diff-hunk-fg: #9cc0f8;
+  --diff-gap-a: #191e26;
+  --diff-gap-b: #20262f;
+  --diff-num: #8d98a8;
+  --diff-num-add: #a8b2bf;
+  --diff-num-del: #a8b2bf;
+  --diff-sel-bg: #232e3e;
+  --diff-sel-line: #4a6a99;
+  --diff-st-a: #7ad1c3;
+  --diff-st-m: #f0b25a;
+  --diff-st-d: #ff9485;
+  --diff-st-r: #9cc0f8;
+  --diff-st-u: #cda6ff;
+}
+
 /* ---------- Fósforo: oscuro cálido, papel y tinta ---------- */
 :root[data-theme='fosforo'] {
   color-scheme: dark;
@@ -121,6 +308,11 @@
   --bg-term: #0d0c0a;
   --bg-input: #12110e;
   --bg-switch: #201e18;
+  --bg-card: #0d0c0a;
+  --bg-seg: #171510;
+  --bg-seg-on: #34312a;
+  --line-card: #2a2721;
+  --line-card-active: #625b4d;
   --line: #34302a;
   --line-strong: #4a453c;
   --line-soft: #2a2721;
@@ -145,6 +337,10 @@
   --danger: #ff8466;
   --danger-ink: #1a0a07;
   --mono-ink: #12110e;
+  --agent-claude: #e58a62;
+  --agent-codex: #8fa8ff;
+  --agent-copilot: #cfa0e8;
+  --agent-opencode: #6fd3e6;
   --overlay: rgba(6, 5, 3, 0.62);
   --shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   --term-bg: #0d0c0a;
@@ -199,6 +395,11 @@
   --bg-term: #fffdf8;
   --bg-input: #fffdf8;
   --bg-switch: #d9d1bd;
+  --bg-card: #fffdf8;
+  --bg-seg: #ede6d6;
+  --bg-seg-on: #fffdf8;
+  --line-card: #d3cab4;
+  --line-card-active: #857a62;
   --line: #cfc6b0;
   --line-strong: #857a62;
   --line-soft: #ddd5c1;
@@ -226,6 +427,10 @@
   --mono-ink: #1f2328;
   /* Contorno de los monogramas: los colores claros (crema) se pierden sobre el papel. */
   --mono-edge: #857a62;
+  --agent-claude: #a8431c;
+  --agent-codex: #2f4fb3;
+  --agent-copilot: #6f3fb0;
+  --agent-opencode: #0b6577;
   --overlay: rgba(60, 50, 30, 0.4);
   --shadow: 0 24px 64px rgba(60, 50, 30, 0.25);
   --term-bg: #fffdf8;
@@ -280,6 +485,11 @@
   --bg-term: #000000;
   --bg-input: #000000;
   --bg-switch: #1c1c1c;
+  --bg-card: #000000;
+  --bg-seg: #1c1c1c;
+  --bg-seg-on: #3a3a3a;
+  --line-card: #8a8a8a;
+  --line-card-active: #ffffff;
   --line: #b0b0b0;
   --line-strong: #ffffff;
   --line-soft: #8a8a8a;
@@ -304,6 +514,10 @@
   --danger: #ff8a7a;
   --danger-ink: #000000;
   --mono-ink: #000000;
+  --agent-claude: #ff9a72;
+  --agent-codex: #a9bcff;
+  --agent-copilot: #d8aaff;
+  --agent-opencode: #7fe8f5;
   --overlay: rgba(0, 0, 0, 0.75);
   --shadow: 0 0 0 1px #ffffff;
   --term-bg: #000000;

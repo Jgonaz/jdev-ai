@@ -49,7 +49,7 @@ const PARES: readonly (readonly [string, string, string])[] = [
 
 describe('vista de cambios: contraste', () => {
   it('todos los temas definen los tokens del diff', () => {
-    expect(temas.map((t) => t.nombre).sort()).toEqual(['contraste', 'fosforo', 'grafito', 'papel']);
+    expect(temas.map((t) => t.nombre).sort()).toEqual(['carbon', 'contraste', 'fosforo', 'grafito', 'papel', 'pizarra']);
     for (const t of temas) for (const [a, b] of PARES) expect(() => [color(t.cuerpo, a), color(t.cuerpo, b)], `${t.nombre}: ${a} / ${b}`).not.toThrow();
   });
 

@@ -54,7 +54,7 @@ export function Header({ route }: { route: Route | null }) {
             </div>
           )}
           <HeaderShortcuts />
-          <button type="button" className="btn btn--accent" aria-label="Nueva sesión" title="Nueva sesión" onClick={() => openDialog()}>
+          <button type="button" className="btn btn--sober" aria-label="Nueva sesión" title="Nueva sesión" onClick={() => openDialog()}>
             <IconPlus size={14} />
             <span className="btn__label">Nueva sesión</span>
           </button>

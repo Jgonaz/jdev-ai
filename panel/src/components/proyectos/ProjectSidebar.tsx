@@ -48,7 +48,7 @@ export function ProjectSidebar(props: {
   return (
     <>
       <nav className="psidebar" aria-label="Proyectos" style={sidebar.panel.style('--psidebar-w', !sidebar.compact)}>
-        <span className="psidebar__head">~/proyectos</span>
+        <span className="psidebar__head">Proyectos</span>
         <ul>
           {props.projects.map((p) => {
             const n = props.counts[p.id] ?? null;

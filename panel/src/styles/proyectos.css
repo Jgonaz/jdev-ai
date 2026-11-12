@@ -14,10 +14,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px 8px;
+  padding: 6px 4px 6px 8px;
   overflow-y: auto;
-  border-right: 1px solid var(--line);
-  background: var(--bg-panel);
 }
 .psidebar ul {
   display: flex;
@@ -25,18 +23,18 @@
   gap: 2px;
 }
 .psidebar__head {
-  padding: 4px 8px 8px;
-  font-family: var(--font-title);
-  font-size: var(--text-xs);
+  padding: 4px 10px 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
   color: var(--fg-muted);
 }
 .prow {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 10px;
-  border-radius: var(--radius-sm);
+  border-radius: 9px;
   color: var(--fg-soft);
 }
 .prow:hover {
@@ -226,10 +224,9 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  border-radius: var(--radius-lg);
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-top: 2px solid var(--col-accent);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  border: 1px solid var(--line-card);
 }
 .bcol--todo {
   --col-accent: var(--waiting);
@@ -537,8 +534,11 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--line);
-  background: var(--bg-panel);
+  margin: 0 var(--gap-card) var(--gap-card) 0;
+  border: 1px solid var(--line-card);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  overflow: hidden;
 }
 .ddet__head {
   display: flex;
@@ -597,21 +597,24 @@
 }
 .ddet__tabs {
   display: flex;
-  gap: 16px;
+  gap: 4px;
   margin-top: 4px;
-  border-bottom: 1px solid var(--line);
 }
 .ddet__tabs [role='tab'] {
-  padding: 8px 0;
+  padding: 6px 11px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: 9px;
   background: transparent;
   color: var(--fg-muted);
   font-size: var(--text-md);
 }
-.ddet__tabs [role='tab'][aria-selected='true'] {
-  border-bottom-color: var(--accent);
+.ddet__tabs [role='tab']:hover {
   color: var(--fg);
+}
+.ddet__tabs [role='tab'][aria-selected='true'] {
+  background: var(--bg-raised);
+  color: var(--fg);
+  font-weight: 500;
 }
 .ddet__live:empty {
   display: none;
@@ -1189,20 +1192,19 @@
 .ptabs {
   flex: none;
   display: flex;
-  align-items: stretch;
-  gap: 2px;
-  border-bottom: 1px solid var(--line);
+  align-items: center;
+  gap: 4px;
   overflow-x: auto;
+  scrollbar-width: none;
 }
 .ptabs__tab {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex: none;
-  height: 38px;
-  padding: 0 14px;
-  margin-bottom: -1px;
-  border-bottom: 2px solid transparent;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 9px;
   color: var(--fg-muted);
   font-size: var(--text-md);
   white-space: nowrap;
@@ -1216,8 +1218,9 @@
   text-decoration: none;
 }
 .ptabs__tab[aria-selected='true'] {
-  border-bottom-color: var(--link);
+  background: var(--bg-raised);
   color: var(--fg);
+  font-weight: 500;
 }
 .ptabs__count {
   min-width: 18px;
@@ -1336,18 +1339,18 @@
   flex: 1;
   min-height: min(640px, 80vh);
   display: flex;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: 1px solid var(--line-card);
+  border-radius: var(--radius-card);
   overflow: hidden;
-  background: var(--bg-surface);
+  background: var(--bg-card);
 }
 .wchg__tree {
   flex: 0 1 300px;
   min-width: 220px;
   display: flex;
   flex-direction: column;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--line);
+  background: var(--bg-card);
+  border-right: 1px solid var(--line-soft);
 }
 .wchg__main {
   flex: 1;
@@ -1578,8 +1581,8 @@
   flex-wrap: wrap;
   gap: 10px;
   padding: 6px 14px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-surface);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg-card);
 }
 .diffpanel__path {
   font-family: var(--font-term);
@@ -1611,9 +1614,8 @@
 .diffsw {
   display: inline-flex;
   padding: 2px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: var(--bg-input);
+  border-radius: var(--radius);
+  background: var(--bg-seg);
 }
 .diffsw__btn {
   display: inline-flex;
@@ -1631,7 +1633,7 @@
   color: var(--fg);
 }
 .diffsw__btn[aria-pressed='true'] {
-  background: var(--bg-raised);
+  background: var(--bg-seg-on);
   color: var(--fg);
 }
 .diffpanel__body {

@@ -3,6 +3,8 @@
   flex: 1;
   min-height: 0;
   display: flex;
+  /* El borde inferior y el derecho dejan aire a las tarjetas; el izquierdo lo da la propia barra lateral. */
+  padding: 0 var(--gap-card) var(--gap-card) 0;
 }
 .main {
   flex: 1;
@@ -10,32 +12,40 @@
   min-width: min(360px, 100%);
   display: flex;
   flex-direction: column;
+  gap: var(--gap-card);
+  /* Aire entre la barra lateral y las tarjetas (el tirador de la barra queda sobre este hueco). */
+  padding-left: var(--gap-card);
   container-type: inline-size;
 }
 
 /* ---------- Barra lateral ---------- */
+/* Sin línea divisoria con el centro ni fondo propio: va sobre el fondo de la aplicación. */
 .sidebar {
   flex: 0 1 var(--sidebar-w);
   min-width: 200px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 12px 8px;
+  padding: 6px 4px 6px 8px;
   overflow-y: auto;
-  border-right: 1px solid var(--line);
-  background: var(--bg-panel);
+  scrollbar-width: thin;
 }
 .sidebar__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px;
+  padding: 0 4px 0 10px;
+}
+.sidebar__label {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
 }
 .sidebar__count {
   color: var(--fg-faint);
 }
 .sidebar__empty {
-  padding: 0 8px;
+  padding: 0 10px;
   color: var(--fg-muted);
   font-size: var(--text-md);
 }
@@ -48,7 +58,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px;
+  padding: 4px 10px;
 }
 .group__name {
   font-weight: 600;
@@ -62,6 +72,16 @@
   font-family: var(--font-term);
   font-size: var(--text-xs);
   color: var(--fg-muted);
+}
+.group .mono {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  padding: 0;
+  font-family: var(--font-term);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 .group__add {
   display: grid;
@@ -119,9 +139,9 @@
   gap: 10px;
   width: 100%;
   min-height: 44px;
-  padding: 7px 8px 7px 26px;
+  padding: 7px 10px 7px 26px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 9px;
   background: transparent;
   color: var(--fg);
   text-align: left;
@@ -156,6 +176,9 @@
   white-space: nowrap;
   font-size: var(--text-md);
 }
+.srow[aria-current='true'] .srow__title {
+  font-weight: 500;
+}
 .srow--done .srow__title {
   color: var(--fg-muted);
 }
@@ -177,19 +200,19 @@
   white-space: nowrap;
 }
 
+/* Leyenda de las luces piloto, al pie y discreta. */
 .legend {
   margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 8px 4px;
-  border-top: 1px solid var(--line);
+  padding: 10px 10px 4px;
+  border-top: 1px solid var(--line-soft);
   font-size: var(--text-sm);
   color: var(--fg-muted);
 }
 .legend__title {
-  font-family: var(--font-title);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   color: var(--fg-faint);
 }
 .legend__row {
@@ -198,23 +221,42 @@
   gap: 8px;
 }
 
+.agent {
+  flex: none;
+}
+.agent--claude {
+  color: var(--agent-claude);
+}
+.agent--codex {
+  color: var(--agent-codex);
+}
+.agent--copilot {
+  color: var(--agent-copilot);
+}
+.agent--opencode {
+  color: var(--agent-opencode);
+}
+.agent--shell {
+  color: var(--fg-muted);
+}
+
 /* ---------- Pestañas y distribución ---------- */
 .tabsbar {
-  flex: 0 0 44px;
-  height: 44px;
+  flex: 0 0 auto;
   display: flex;
-  align-items: stretch;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-panel);
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 0 2px;
 }
 .tabs {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 4px;
   /* Se encoge antes que los controles; solo desborda (con scroll) cuando las pestañas ya están en su mínimo. */
   flex: 0 1 auto;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
   /* Al arrastrar una pestaña para reordenarla no se selecciona texto. */
   user-select: none;
 }
@@ -233,7 +275,11 @@
   flex: 0 1 auto;
   min-width: 112px;
   max-width: 260px;
-  border-right: 1px solid var(--line);
+  border-radius: 9px;
+}
+/* La pestaña activa va rellena; las visibles en pantalla sin ser la activa, con un relleno más suave. */
+.tabwrap--active {
+  background: var(--bg-raised);
 }
 .tab {
   display: flex;
@@ -241,14 +287,18 @@
   min-width: 0;
   align-items: center;
   gap: 8px;
+  height: 30px;
   /* A la derecha queda el hueco de la «x». */
-  padding: 0 30px 0 14px;
+  padding: 0 28px 0 11px;
   border: 0;
-  border-top: 2px solid transparent;
+  border-radius: 9px;
   background: transparent;
   color: var(--fg-muted);
   font-size: var(--text-md);
   white-space: nowrap;
+}
+.tab:hover {
+  color: var(--fg);
 }
 .tab > * {
   flex: none;
@@ -260,19 +310,8 @@
   text-overflow: ellipsis;
 }
 .tab--visible {
-  background: var(--bg);
-  color: var(--fg);
-  border-top-color: var(--fg-faint);
-}
-.tab--visible.tab--working,
-.tab--visible.tab--alive {
-  border-top-color: var(--working);
-}
-.tab--visible.tab--waiting {
-  border-top-color: var(--waiting);
-}
-.tab--follow.tab--visible {
-  border-top-color: var(--working);
+  background: color-mix(in srgb, var(--bg-raised) 45%, transparent);
+  color: var(--fg-soft);
 }
 .tab__eye {
   display: inline-flex;
@@ -287,9 +326,9 @@
   color: inherit;
 }
 .tab[aria-selected='true'] {
+  background: var(--bg-raised);
   color: var(--fg);
-  font-weight: 600;
-  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 500;
 }
 .tab__close {
   position: absolute;
@@ -314,7 +353,7 @@
   visibility: visible;
 }
 .tab__close:hover {
-  background: var(--bg-raised);
+  background: var(--bg-seg-on);
   color: var(--fg);
 }
 .tabsbar__tools {
@@ -323,23 +362,19 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 10px;
+  gap: 2px;
 }
-.tabsbar__label {
-  margin-right: 6px;
-  white-space: nowrap;
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
+.tabsbar__tools .icon-btn:last-child {
+  margin-left: 6px;
 }
 
 /* ---------- Terminales ---------- */
+/* Cada terminal es una tarjeta: borde fino, esquinas redondeadas y separación entre ellas. */
 .canvas {
   flex: 1;
   min-height: 0;
   display: grid;
-  gap: 1px;
-  background: var(--line);
+  gap: var(--gap-card);
 }
 .canvas--l1 {
   grid-template-columns: minmax(0, 1fr);
@@ -356,7 +391,9 @@
 .canvas--empty {
   display: flex;
   overflow: auto;
-  background: var(--bg);
+  border: 1px solid var(--line-card);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
 }
 
 .pane {
@@ -364,35 +401,43 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--bg-term);
+  border: 1px solid var(--line-card);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  /* Recorta el contenido a las esquinas redondeadas; xterm se ajusta al hueco que queda dentro del borde. */
+  overflow: hidden;
+}
+/* La tarjeta con el foco lleva el borde más claro. */
+.pane--active {
+  border-color: var(--line-card-active);
+}
+/* Una sesión que espera conserva su aviso en el borde, sin teñir la cabecera. */
+.pane--waiting {
+  border-color: var(--waiting-line);
+}
+.pane--waiting.pane--active {
+  border-color: var(--waiting-ring);
 }
 .pane__head {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-panel);
+  padding: 10px 12px 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
 }
 .pane__row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
+}
+.pane__row > .agent {
+  flex: none;
 }
 .pane__head--narrow .pane__row {
   gap: 8px;
-}
-.pane--active .pane__head {
-  box-shadow: inset 0 -2px 0 var(--accent-line);
-}
-.pane--waiting {
-  box-shadow: inset 0 0 0 1px var(--waiting-ring);
-}
-.pane--waiting .pane__head {
-  background: var(--waiting-head);
-  border-bottom-color: var(--waiting-line);
 }
 .pane__title {
   flex: 1;
@@ -465,10 +510,10 @@
 }
 .ctxbar__meter {
   position: relative;
-  width: 110px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--line-soft);
+  width: 90px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
 }
 .pane__head--narrow .ctxbar__meter {
   width: 48px;
@@ -479,8 +524,8 @@
 .ctxbar__fill {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 3px;
-  background: var(--fg-muted);
+  border-radius: 2px;
+  background: var(--fg-soft);
 }
 .ctxbar--warn .ctxbar__fill {
   background: var(--waiting);
@@ -577,7 +622,7 @@
   width: min(420px, calc(100% - 24px));
   padding: 8px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow);
 }
@@ -658,11 +703,14 @@
 .termbody__host {
   position: absolute;
   inset: 0;
-  padding: 6px 4px 0 10px;
   overflow: hidden;
 }
+/* El margen interior va en el propio .xterm y no en el contenedor: FitAddon descuenta el padding del
+   elemento de xterm (no el de su padre), y así las filas y columnas caben exactas, sin recortes en el
+   borde ni en las esquinas redondeadas de la tarjeta. */
 .termbody__host .xterm {
   height: 100%;
+  padding: 10px 6px 8px 16px;
 }
 /* xterm pinta el fondo del viewport en negro: debe seguir al tema (Papel es claro). */
 .termbody__host .xterm-viewport {
@@ -687,7 +735,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: var(--bg-term);
+  border: 1px dashed var(--line-card);
+  border-radius: var(--radius-card);
   color: var(--fg-muted);
   font-size: var(--text-md);
 }
@@ -704,7 +753,7 @@
   min-width: 270px;
   padding: 4px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow);
 }
@@ -744,14 +793,15 @@
 
 /* ---------- Barra de estado estilo tmux ---------- */
 .statusbar {
-  flex: 0 0 30px;
-  height: 30px;
+  flex: 0 0 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 0 12px;
-  border-top: 1px solid var(--line);
-  background: var(--bg-panel);
+  border: 1px solid var(--line-card);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
   font-family: var(--font-term);
   font-size: calc(11.5px * var(--u));
   color: var(--fg-muted);
@@ -764,9 +814,9 @@
   align-items: center;
   height: 100%;
   margin-left: -12px;
-  padding: 0 8px;
-  background: var(--accent);
-  color: var(--accent-ink);
+  padding: 0 10px 0 12px;
+  background: var(--bg-raised);
+  color: var(--fg);
   font-weight: 700;
 }
 .statusbar__windows {
@@ -833,23 +883,22 @@
 .context {
   flex: 0 1 var(--right-w, var(--context-w));
   min-width: 280px;
+  margin-left: var(--gap-card);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  border-left: 1px solid var(--line);
-  background: var(--bg-panel);
+  border: 1px solid var(--line-card);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
 }
 .context__head {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
 }
 .context__eyebrow {
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--text-sm);
   color: var(--fg-muted);
 }
 .context__name {
@@ -867,10 +916,7 @@
   align-items: flex-start;
   gap: 10px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
-}
-.context__section--last {
-  border-bottom: 0;
+  border-top: 1px solid var(--line-soft);
 }
 .context__h {
   font-size: var(--text-md);
@@ -899,7 +945,7 @@
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--bg-term);
+  background: var(--bg);
   color: var(--fg-soft);
   font-size: var(--text-sm2);
   overflow-wrap: anywhere;
@@ -991,7 +1037,7 @@
   padding: 0;
   list-style: none;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--bg-panel);
   overflow: hidden;
 }
@@ -1076,14 +1122,14 @@
   }
 }
 
-/* Apartado «En segundo plano» de la barra lateral, encima de la leyenda. */
+/* Apartados «En segundo plano» y «Archivadas» de la barra lateral, al pie, separados por una línea suave. */
 .slive {
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
 }
 .slive + .slive {
   margin-top: 0;
@@ -1101,14 +1147,14 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-height: 32px;
-  padding: 0 8px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 9px;
   background: transparent;
   color: var(--fg-muted);
-  font-family: var(--font-title);
-  font-size: var(--text-2xs);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
   text-align: left;
 }
 .slive__head:hover {
@@ -1140,9 +1186,9 @@
   gap: 10px;
   width: 100%;
   min-height: 32px;
-  padding: 4px 8px 4px 12px;
+  padding: 4px 10px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 9px;
   background: transparent;
   color: var(--fg);
   text-align: left;
@@ -1169,10 +1215,6 @@
   white-space: nowrap;
   font-size: var(--text-md);
 }
-.slrow--waiting .slrow__title {
-  color: var(--waiting-text);
-  font-weight: 500;
-}
 .slrow--done .slrow__title {
   color: var(--fg-muted);
 }
@@ -1196,11 +1238,12 @@
 .context--overlay {
   min-width: 0;
   position: absolute;
-  top: 44px; /* bajo la barra de pestañas, para no tapar su botón */
-  right: 0;
-  bottom: 0;
+  top: 38px; /* bajo la barra de pestañas, para no tapar su botón */
+  right: var(--gap-card);
+  bottom: var(--gap-card);
   z-index: 20;
-  max-width: 100%;
+  max-width: calc(100% - var(--gap-card));
+  margin-left: 0;
   box-shadow: -12px 0 28px rgb(0 0 0 / 0.35);
 }
 @media (max-width: 800px) {
@@ -1232,12 +1275,12 @@
 .prev__head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   min-height: 32px;
-  padding: 0 8px 0 24px;
+  padding: 0 10px 0 24px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 9px;
   background: transparent;
   color: var(--fg-muted);
   font-size: var(--text-sm);
@@ -1262,9 +1305,9 @@
   gap: 10px;
   width: 100%;
   min-height: 40px;
-  padding: 6px 8px 6px 26px;
+  padding: 6px 10px 6px 26px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 9px;
   background: transparent;
   color: var(--fg-muted);
   text-align: left;
@@ -1321,17 +1364,20 @@
   /* Con un mínimo propio, la tira de miniaturas no ensancha el visor al crecer. */
   min-width: 280px;
   min-height: 0;
+  margin-left: var(--gap-card);
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--line);
-  background: var(--bg-panel);
+  border: 1px solid var(--line-card);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  overflow: hidden;
 }
 .viewer__head {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
 }
 .viewer__icon {
   flex: none;
@@ -1364,7 +1410,7 @@
   align-items: center;
   gap: 4px;
   padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
 }
 .viewer__tool {
   height: 30px;
@@ -1379,7 +1425,6 @@
   color: var(--fg);
 }
 .viewer__tool[aria-pressed='true'] {
-  border-color: var(--line-strong);
   background: var(--bg-raised);
   color: var(--fg);
 }
@@ -1475,7 +1520,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px 14px 14px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-soft);
 }
 .viewer__strip-title {
   font-family: var(--font-title);
@@ -1525,12 +1570,13 @@
 .viewer--overlay {
   min-width: 0;
   position: absolute;
-  top: 44px;
-  right: 0;
-  bottom: 0;
+  top: 38px;
+  right: var(--gap-card);
+  bottom: var(--gap-card);
+  margin-left: 0;
   z-index: 20;
   width: 520px;
-  max-width: 100%;
+  max-width: calc(100% - var(--gap-card));
   flex: none;
   box-shadow: -12px 0 28px rgb(0 0 0 / 0.35);
 }
@@ -1690,7 +1736,7 @@
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
   pointer-events: auto;
@@ -1780,18 +1826,18 @@
 }
 .tscroll {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  /* Separada de las esquinas redondeadas de la tarjeta, sin línea propia. */
+  top: 8px;
+  right: 2px;
+  bottom: 8px;
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
   width: var(--tscroll-w);
-  padding: 4px 0;
+  padding: 0;
   gap: 2px;
   background: var(--bg-term);
-  border-left: 1px solid var(--line-soft);
 }
 .tscroll[hidden] {
   display: none;

@@ -4,7 +4,9 @@ export type ThemeName = Settings['theme']['name'];
 export type Scheme = 'dark' | 'light';
 
 export const THEME_SCHEME: Record<ThemeName, Scheme> = {
+  carbon: 'dark',
   grafito: 'dark',
+  pizarra: 'dark',
   fosforo: 'dark',
   papel: 'light',
   contraste: 'dark',
@@ -23,7 +25,9 @@ export type ThemeCard = {
 
 // Valores del «themeList» del diseño aprobado (Config).
 export const THEME_CARDS: readonly ThemeCard[] = [
-  { id: 'grafito', name: 'Grafito', hint: 'Oscuro neutro, por defecto', bg: '#0f1113', panel: '#131619', term: '#0b0d0f', text: '#e8e6e1' },
+  { id: 'carbon', name: 'Carbón', hint: 'Casi negro y neutro, por defecto', bg: '#09090a', panel: '#0e0e10', term: '#0e0e10', text: '#ececee' },
+  { id: 'grafito', name: 'Grafito', hint: 'Oscuro neutro, con un punto de azul', bg: '#0f1113', panel: '#131619', term: '#0b0d0f', text: '#e8e6e1' },
+  { id: 'pizarra', name: 'Pizarra', hint: 'Gris azulado, más claro que Grafito', bg: '#161a21', panel: '#191e26', term: '#12161c', text: '#e6e9ee' },
   { id: 'fosforo', name: 'Fósforo', hint: 'Oscuro cálido, papel y tinta', bg: '#12110e', panel: '#181612', term: '#0d0c0a', text: '#efe8da' },
   { id: 'papel', name: 'Papel', hint: 'Claro, tinta sobre crema', bg: '#f6f1e6', panel: '#ebe4d4', term: '#fffdf8', text: '#1f2328' },
   { id: 'contraste', name: 'Alto contraste', hint: 'Negro puro, bordes marcados', bg: '#000000', panel: '#0a0a0a', term: '#000000', text: '#ffffff' },

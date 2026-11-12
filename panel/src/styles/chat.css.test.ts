@@ -35,7 +35,7 @@ describe('«Chat» desactivado: contraste', () => {
     expect(temas.length).toBeGreaterThanOrEqual(4);
     for (const [, nombre, cuerpo] of temas) {
       const fg = color(cuerpo!, 'fg-faint')!;
-      const bg = color(cuerpo!, 'bg-input')!;
+      const bg = color(cuerpo!, 'bg-seg')!;
       expect(contraste(fg, bg), `tema ${nombre}`).toBeGreaterThanOrEqual(4.5);
     }
   });

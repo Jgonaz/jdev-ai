@@ -24,7 +24,7 @@ describe('ajustes', () => {
   it('devuelve los valores por defecto sin archivo', () => {
     const s = readSettings();
     expect(s).toEqual(DEFAULT_SETTINGS);
-    expect(s.theme.name).toBe('grafito');
+    expect(s.theme.name).toBe('carbon');
     expect(s.port).toBe(4317);
     expect(s.terminal.initialLayout).toBe(1);
     expect(s.newSession).toEqual({ agent: 'claude', location: 'principal' });
@@ -38,8 +38,14 @@ describe('ajustes', () => {
   it('fusión profunda: un archivo antiguo recibe las claves nuevas', () => {
     updateSettings({ theme: { accent: 'menta' } });
     const s = readSettings();
-    expect(s.theme).toEqual({ name: 'grafito', followSystem: false, accent: 'menta' });
+    expect(s.theme).toEqual({ name: 'carbon', followSystem: false, accent: 'menta' });
     expect(s.personality.grid).toBe(true);
+  });
+
+  it('un archivo con Grafito elegido lo conserva: el tema por defecto nuevo no migra ajustes guardados', () => {
+    updateSettings({ theme: { name: 'grafito' } });
+    expect(readSettings().theme.name).toBe('grafito');
+    expect(mergeSettings(DEFAULT_SETTINGS, { theme: { name: 'carbon' } }).theme.name).toBe('carbon');
   });
 
   it('ignora valores fuera de rango, desconocidos y de tipo erróneo', () => {
@@ -52,7 +58,7 @@ describe('ajustes', () => {
       desconocida: { a: 1 },
       personality: 'no',
     });
-    expect(s.theme).toEqual({ name: 'grafito', followSystem: false, accent: 'coral' });
+    expect(s.theme).toEqual({ name: 'carbon', followSystem: false, accent: 'coral' });
     expect(s.sizes).toEqual(DEFAULT_SETTINGS.sizes);
     expect(s.terminal.scrollback).toBe(5000);
     expect(s.terminal.cursor).toBe('barra');

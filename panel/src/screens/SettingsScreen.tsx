@@ -71,7 +71,7 @@ export function SettingsScreen() {
   return (
     <div className="screen screen--settings">
       <nav className="setnav" aria-label="Secciones de ajustes" style={anchoNav.style('--setnav-w')}>
-        <span className="label-mono setnav__title">~/ajustes</span>
+        <span className="setnav__title">Ajustes</span>
         {SECCIONES.map((s) => (
           <button key={s.id} type="button" className="setnav__link" aria-current={activa === s.id ? 'true' : undefined} onClick={() => ir(s.id)}>
             {s.label}

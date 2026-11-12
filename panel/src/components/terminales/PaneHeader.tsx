@@ -6,6 +6,7 @@ import { useElementWidth } from '../../lib/useElementWidth.ts';
 import { useNow } from '../../lib/useNow.ts';
 import type { ProjectInfo, SessionInfo } from '../../types.ts';
 import type { PaneView } from '../../lib/workspace.ts';
+import { AgentIcon } from '../AgentIcon.tsx';
 import { IconBranch, IconClock, IconSpark, IconWarning } from '../Icons.tsx';
 import { MoreMenu } from './MoreMenu.tsx';
 import { SearchButton, ViewSwitch } from './ViewSwitch.tsx';
@@ -83,6 +84,7 @@ export function PaneHeader({
   return (
     <div className={`pane__head${narrow ? ' pane__head--narrow' : ''}${view === 'chat' ? ' pane__head--chat' : ''}`} ref={raiz}>
       <div className="pane__row">
+        <AgentIcon agent={session.agent} />
         <span className="pane__title">{session.title}</span>
         {narrow && trabajo && <WorkChips counts={v.counts} activity={session.activity!} compact session={session.name} />}
         {/* En un pane estrecho en vista chat, el chip pasa a un punto de 8 px: el estado va en su nombre accesible y su título. */}

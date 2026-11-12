@@ -21,15 +21,18 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--line);
-  background: var(--bg-panel);
+  margin: 0 0 var(--gap-card) var(--gap-card);
+  border: 1px solid var(--line-card);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  overflow: hidden;
 }
 .hlist__filters {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
 }
 .hlist__selects {
   display: flex;
@@ -85,10 +88,9 @@
 .hlist__view {
   align-self: flex-start;
   display: flex;
-  padding: 3px;
+  padding: 2px;
   border-radius: var(--radius);
-  background: var(--bg-surface);
-  border: 1px solid var(--line);
+  background: var(--bg-seg);
 }
 .hlist__view-btn {
   min-height: 30px;
@@ -105,7 +107,7 @@
   color: var(--fg);
 }
 .hlist__view-btn[aria-pressed='true'] {
-  background: var(--line);
+  background: var(--bg-seg-on);
   color: var(--fg);
 }
 /* Vista por proyecto: cabecera como los grupos de Sesiones recientes. */
@@ -299,7 +301,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 14px 16px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--waiting-head);
   border: 1px solid var(--waiting-ring);
 }
@@ -409,8 +411,7 @@
     min-width: 0;
     flex: 0 0 auto;
     max-height: 45vh;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+    margin: 0 var(--gap-card) var(--gap-card);
   }
   .hreader {
     flex: 1 0 auto;

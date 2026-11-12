@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import type { ChatInfo } from '../../types.ts';
 import type { PaneView } from '../../lib/workspace.ts';
-import { IconChat, IconSearch, IconTerminal } from '../Icons.tsx';
+import { IconSearch } from '../Icons.tsx';
 
 const SIN_MOTIVO = 'La vista chat no está disponible en esta sesión.';
 
@@ -42,7 +42,6 @@ export function ViewSwitch({ view, onView, chat, full }: { view: PaneView; onVie
   return (
     <div className={`viewsw${full ? ' viewsw--full' : ''}`} role="group" aria-label="Vista de la terminal">
       <button type="button" className="viewsw__btn" aria-pressed={view === 'terminal'} onClick={() => onView('terminal')}>
-        <IconTerminal size={14} />
         Terminal
       </button>
       <button
@@ -57,7 +56,6 @@ export function ViewSwitch({ view, onView, chat, full }: { view: PaneView; onVie
         onFocus={sinChat ? entra : undefined}
         onBlur={sinChat ? sale : undefined}
       >
-        <IconChat size={14} />
         Chat
       </button>
       {sinChat && (

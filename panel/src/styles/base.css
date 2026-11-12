@@ -83,12 +83,6 @@ kbd {
   white-space: nowrap;
 }
 
-.label-mono {
-  font-family: var(--font-title);
-  font-size: var(--text-xs);
-  color: var(--fg-muted);
-}
-
 .mono-text {
   font-family: var(--font-term);
 }

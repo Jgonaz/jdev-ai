@@ -207,8 +207,8 @@ export function Sidebar({ style }: { style?: CSSProperties }) {
     <aside className="sidebar" aria-label="Proyectos y sesiones" style={style}>
       <RowTipBlock value={menuAbierto || conversacion.open}>
         <div className="sidebar__head">
-          <span className="label-mono">
-            ~/proyectos <span className="sidebar__count">({grupos.length})</span>
+          <span className="sidebar__label">
+            Proyectos <span className="sidebar__count">({grupos.length})</span>
           </span>
           <button
             type="button"

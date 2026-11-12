@@ -13,10 +13,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 24px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-panel);
+  gap: 6px 20px;
+  padding: 8px 14px;
+  /* Una sola barra sobria: sin línea inferior, sobre el mismo fondo que la aplicación. */
+  background: var(--bg);
 }
 .header__logo {
   color: var(--fg);
@@ -42,13 +42,13 @@
 .hdrbtn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 10px 0 12px;
-  border: 1px solid var(--line);
+  gap: 7px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid transparent;
   border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--fg);
+  background: transparent;
+  color: var(--fg-soft);
   font: inherit;
   font-size: var(--text-md);
   white-space: nowrap;
@@ -56,12 +56,13 @@
 }
 .hdrbtn:hover,
 .hdrbtn[aria-expanded='true'] {
-  border-color: var(--line-strong);
+  background: var(--bg-raised);
+  color: var(--fg);
 }
 /* Botón fantasma de la chuleta de atajos: solo el icono, a la altura de los demás controles. */
 .icon-btn.hdrghost {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border-radius: var(--radius);
 }
@@ -71,7 +72,7 @@
   color: var(--fg);
 }
 .hdrbtn__name {
-  font-weight: 600;
+  font-weight: 500;
 }
 .hdrbtn__caret {
   color: var(--fg-muted);
@@ -85,31 +86,37 @@
 }
 .hdrlim {
   gap: 14px;
-  padding: 0 12px;
+  padding: 0 10px;
+  color: var(--fg-muted);
 }
 .hdrlim--critical {
   border-color: color-mix(in srgb, var(--danger) 45%, var(--bg-panel));
   background: color-mix(in srgb, var(--danger) 8%, var(--bg-panel));
 }
+/* «5 h ▬▬ 11 %» en una sola línea, discreto: nombre, minibarra y porcentaje. */
 .lim {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 92px;
-}
-.lim__top {
-  display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-term);
   font-size: var(--text-xs);
 }
+.lim__top {
+  display: contents;
+}
 .lim__name {
+  order: 1;
   color: var(--fg-muted);
 }
+.lim__track {
+  order: 2;
+}
 .lim__pct {
+  order: 3;
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  color: var(--fg-soft);
 }
 .lim__pct--warn {
   color: var(--waiting-text);
@@ -119,9 +126,10 @@
   font-weight: 700;
 }
 .lim__track {
-  height: 4px;
+  width: 44px;
+  height: 3px;
   border-radius: 2px;
-  background: var(--line-soft);
+  background: var(--line);
   overflow: hidden;
 }
 .lim__track--critical {
@@ -131,7 +139,7 @@
   display: block;
   height: 100%;
   min-width: 2px;
-  background: var(--fg-muted);
+  background: var(--fg-soft);
 }
 .lim__fill--warn {
   background: var(--waiting);
@@ -146,9 +154,6 @@
     padding: 0 10px;
   }
   .lim {
-    width: auto;
-  }
-  .lim__top {
     gap: 5px;
   }
   .lim__track {
@@ -158,13 +163,13 @@
 /* Un poco más prieta: así la cabecera cabe en una fila hasta ~1180 px. */
 @media (max-width: 1279.98px) {
   .header {
-    gap: 16px;
+    gap: 6px 14px;
   }
   .nav {
     gap: 0;
   }
   .nav__link {
-    padding: 8px 9px;
+    padding: 6px 9px;
   }
   .header__right {
     gap: 8px;
@@ -180,7 +185,7 @@
   .header__right .hdrbtn:not(.hdrlim) {
     padding: 0 10px;
   }
-  .header__right .btn--accent {
+  .header__right .btn--sober {
     padding: 0 10px;
   }
 }
@@ -213,7 +218,7 @@
   width: 360px;
   min-width: 0;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   font-size: var(--text-sm2);
 }
 .hdrpop__note {
@@ -237,7 +242,7 @@
   letter-spacing: -0.6px;
 }
 .logo__tilde {
-  color: var(--fg-muted);
+  color: var(--fg-faint);
   font-weight: 400;
 }
 .logo__cursor {
@@ -251,11 +256,11 @@
 
 .nav {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 .nav__link {
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
+  padding: 6px 11px;
+  border-radius: var(--radius);
   color: var(--fg-muted);
 }
 a.nav__link:hover {
@@ -264,15 +269,17 @@ a.nav__link:hover {
 .nav__link[aria-current='page'] {
   color: var(--fg);
   background: var(--bg-raised);
+  font-weight: 500;
 }
 
 .banner {
   flex: none;
-  padding: 6px 16px;
+  margin: 0 var(--gap-card) var(--gap-card);
+  padding: 6px 14px;
+  border-radius: var(--radius);
   font-size: var(--text-sm2);
   background: var(--waiting-bg);
   color: var(--waiting-text);
-  border-bottom: 1px solid var(--waiting-line);
 }
 .banner--error {
   color: var(--danger);

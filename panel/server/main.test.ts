@@ -50,7 +50,7 @@ describe('servidor', () => {
   it('responde 200 con Bearer', async () => {
     const r = await fetch(`${base}/api/settings`, { headers: { Authorization: `Bearer ${token}` } });
     expect(r.status).toBe(200);
-    expect(((await r.json()) as Ajustes).theme.name).toBe('grafito');
+    expect(((await r.json()) as Ajustes).theme.name).toBe('carbon');
   });
 
   it('sirve sin token solo el manifiesto y los iconos de la PWA', async () => {

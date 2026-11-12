@@ -5,7 +5,7 @@ import { applyPatch, mergePatches } from './settingsPatch.ts';
 describe('applyPatch', () => {
   it('fusiona en profundidad sin mutar la base', () => {
     const r = applyPatch(DEFAULT_SETTINGS, { theme: { accent: 'menta' }, port: 5000 });
-    expect(r.theme).toEqual({ name: 'grafito', followSystem: false, accent: 'menta' });
+    expect(r.theme).toEqual({ name: 'carbon', followSystem: false, accent: 'menta' });
     expect(r.port).toBe(5000);
     expect(DEFAULT_SETTINGS.theme.accent).toBe('ambar');
   });

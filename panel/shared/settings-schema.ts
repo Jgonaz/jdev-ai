@@ -4,7 +4,7 @@
 
 export const DEFAULT_PORT = 4317;
 
-export const THEMES = ['grafito', 'fosforo', 'papel', 'contraste'] as const;
+export const THEMES = ['carbon', 'grafito', 'pizarra', 'fosforo', 'papel', 'contraste'] as const;
 export const ACCENTS = ['ambar', 'menta', 'lavanda', 'coral', 'cian'] as const;
 export const CURSORS = ['bloque', 'barra', 'subrayado'] as const;
 // 1, 2 y 4 son el número de terminales visibles; «last» recuerda la última usada.
@@ -102,7 +102,7 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: { name: 'grafito', followSystem: false, accent: 'ambar' },
+  theme: { name: 'carbon', followSystem: false, accent: 'ambar' },
   fonts: {
     ui: "'Instrument Sans', system-ui, sans-serif",
     title: "'Martian Mono', ui-monospace, monospace",

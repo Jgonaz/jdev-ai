@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from '../../shared/settings-schema.ts';
-import { appearanceAttrs, applyAppearance, resolveTheme } from './theme.ts';
+import { THEMES } from '../../shared/settings-schema.ts';
+import { THEME_CARDS, THEME_SCHEME, appearanceAttrs, applyAppearance, resolveTheme } from './theme.ts';
 import { matchShortcut } from './useShortcuts.ts';
 
 describe('resolveTheme', () => {
@@ -12,6 +13,19 @@ describe('resolveTheme', () => {
     const t = { name: 'contraste', followSystem: true, accent: 'ambar' } as const;
     expect(resolveTheme(t, true)).toBe('papel');
     expect(resolveTheme(t, false)).toBe('contraste');
+  });
+});
+
+describe('temas', () => {
+  it('Carbón es el tema por defecto y los seis temas tienen esquema y tarjeta en Ajustes', () => {
+    expect(DEFAULT_SETTINGS.theme.name).toBe('carbon');
+    expect([...THEMES].sort()).toEqual(['carbon', 'contraste', 'fosforo', 'grafito', 'papel', 'pizarra']);
+    for (const t of THEMES) {
+      expect(THEME_SCHEME[t], t).toMatch(/^(dark|light)$/);
+      expect(THEME_CARDS.filter((c) => c.id === t), t).toHaveLength(1);
+    }
+    expect(THEME_CARDS.find((c) => c.id === 'carbon')!.hint).toContain('por defecto');
+    expect(THEME_CARDS.find((c) => c.id === 'grafito')!.hint).not.toContain('por defecto');
   });
 });
 

@@ -11,16 +11,15 @@
   flex: none;
   display: flex;
   padding: 2px;
-  border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--bg-input);
+  background: var(--bg-seg);
 }
 .viewsw__btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 28px;
+  height: 26px;
   padding: 0 10px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -32,9 +31,9 @@
   color: var(--fg);
 }
 .viewsw__btn[aria-pressed='true'] {
-  background: var(--bg-raised);
+  background: var(--bg-seg-on);
   color: var(--fg);
-  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-weight: 500;
 }
 /* «Chat» no disponible: más tenue que «Terminal» pero con contraste de texto (>= 4,5:1 sobre el fondo del conmutador en todos los temas; --fg-dim no llegaba). */
 .viewsw__btn[aria-disabled='true'] {
@@ -81,12 +80,12 @@
 }
 .chatsearch-btn {
   flex: none;
-  border-color: var(--line-strong);
-  background: var(--bg-raised);
-  color: var(--fg);
+  color: var(--fg-soft);
 }
 .chatsearch-btn[aria-pressed='true'] {
-  border-color: var(--link);
+  background: var(--bg-raised);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--link);
 }
 .chatsearch-btn--full {
   width: 44px;
@@ -123,7 +122,7 @@
   display: flex;
   flex-direction: column;
   container-type: inline-size;
-  background: var(--bg);
+  background: var(--bg-card);
   font-family: var(--font-ui);
   font-size: var(--text-base);
   color: var(--fg);
@@ -718,14 +717,14 @@
   position: relative;
   flex: none;
   padding: 4px 14px 12px;
-  background: var(--bg);
+  background: var(--bg-card);
 }
 .chat__foot::before {
   content: '';
   position: absolute;
   inset: auto 0 100% 0;
   height: 28px;
-  background: linear-gradient(to bottom, transparent, var(--bg));
+  background: linear-gradient(to bottom, transparent, var(--bg-card));
   pointer-events: none;
 }
 .chat__composer {
