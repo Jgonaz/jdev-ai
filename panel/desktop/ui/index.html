@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>jdev-ai</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: Canvas;
+        color: CanvasText;
+      }
+      main {
+        max-width: 44rem;
+        padding: 2rem;
+      }
+      h1 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 0 0 0.75rem;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font: 0.85rem/1.5 Consolas, monospace;
+        margin: 0;
+        opacity: 0.85;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="titulo">Arrancando el panel…</h1>
+      <pre id="detalle" hidden></pre>
+    </main>
+    <script>
+      // La llama el programa si el servidor del panel no arranca.
+      window.mostrarError = (texto) => {
+        document.getElementById('titulo').textContent = 'No se pudo arrancar el panel';
+        const detalle = document.getElementById('detalle');
+        detalle.textContent = texto;
+        detalle.hidden = false;
+      };
+    </script>
+  </body>
+</html>

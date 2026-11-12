@@ -323,6 +323,20 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   tiene que estar en marcha; la cookie del token dura un año y se invalida al
   regenerarlo.
 
+- **Como programa de Windows.** `bin/panel-desktop build` compila desde WSL un
+  `jdev-ai.exe` y `bin/panel-desktop install` lo copia a
+  `%LOCALAPPDATA%\Programs\jdev-ai\` con un acceso directo en el menú Inicio.
+  Al abrirlo arranca el panel dentro de WSL y lo muestra en su propia ventana,
+  sin terminal ni navegador; si el panel ya estaba en marcha con `bin/panel`,
+  se conecta a él. Al cerrarlo para el servidor que arrancó (las sesiones
+  siguen en tmux). Los avisos salen como notificaciones de Windows, aunque al
+  pulsarlas no abren la sesión. Los enlaces externos se abren en el navegador
+  por defecto. Es opcional y solo para compilar hacen falta Rust con el target
+  `x86_64-pc-windows-msvc`, `cargo-xwin`, `clang`, `lld` y `llvm`; el script
+  indica lo que falte. La distro de WSL y la ruta del harness quedan grabadas
+  en el ejecutable: si cambian, vuelve a compilar e instalar. No hace falta
+  recompilar cuando cambia el panel.
+
 - **Sesiones en tmux.** Cada terminal es una sesión de un servidor tmux propio
   (`tmux -L jdev`). Cerrar el navegador o detener el panel no las termina, y
   puedes entrar desde cualquier terminal con `tmux -L jdev attach -t <sesión>`
@@ -686,7 +700,7 @@ publica: despliega desde la raíz del harness con `vercel deploy --prod`. El
 
 ## Validación del harness
 
-Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/session-done`, `bin/session-state`, `bin/session-statusline`, `bin/session-activity`, `bin/worktree`, `bin/panel` o los archivos que inyectan, ejecuta:
+Tras modificar `bin/agent`, `bin/session-status`, `bin/subagent-notice`, `bin/session-title`, `bin/session-done`, `bin/session-state`, `bin/session-statusline`, `bin/session-activity`, `bin/worktree`, `bin/panel`, `bin/panel-desktop` o los archivos que inyectan, ejecuta:
 
 ```sh
 bin/check

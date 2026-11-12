@@ -4,7 +4,7 @@ set -eu
 
 usage() {
     cat <<'EOF_USAGE'
-Uso: panel [--port N] [--open | --app] [--regenerate-token]
+Uso: panel [--port N] [--open | --app] [--regenerate-token] [--print-url]
 
 Arranca el panel gráfico de jdev-ai: una aplicación web local (solo en
 127.0.0.1, con token) para ver y usar las terminales de agente. Imprime la URL
@@ -27,6 +27,8 @@ Opciones:
                       una vez y usa «Instalar jdev-ai» en el menú del navegador.
   --regenerate-token  Genera un token nuevo (invalida el anterior) antes de
                       arrancar.
+  --print-url         Imprime la URL de acceso, con el token, y termina sin
+                      arrancar el panel. Sirve aunque ya esté en marcha.
   -h, --help          Muestra esta ayuda.
 
 Las sesiones viven en tmux (servidor -L jdev), así que sobreviven al cierre del
@@ -44,6 +46,7 @@ port=
 open_browser=
 app_mode=
 regenerate=
+print_url=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -60,6 +63,7 @@ while [ "$#" -gt 0 ]; do
         --open) open_browser=1 ;;
         --app) open_browser=1; app_mode=1 ;;
         --regenerate-token) regenerate=1 ;;
+        --print-url) print_url=1 ;;
         *) fail "opción desconocida: $1" ;;
     esac
     shift
@@ -115,7 +119,10 @@ fi
 # reciente que ella.
 dist_index="$panel_dir/dist/index.html"
 needs_build=
-if [ ! -f "$dist_index" ]; then
+if [ -n "$print_url" ]; then
+    # Solo se consulta la URL: no hace falta el cliente compilado.
+    :
+elif [ ! -f "$dist_index" ]; then
     needs_build=1
 elif [ -n "$(find "$panel_dir/src" "$panel_dir/index.html" -newer "$dist_index" -print -quit 2>/dev/null)" ]; then
     needs_build=1
@@ -130,6 +137,13 @@ fi
 if [ -n "$regenerate" ]; then
     node "$server" --regenerate-token --print-url >/dev/null || fail "no se pudo regenerar el token"
     printf 'Token regenerado.\n' >&2
+fi
+
+if [ -n "$print_url" ]; then
+    if [ -n "$port" ]; then
+        exec node "$server" --port "$port" --print-url
+    fi
+    exec node "$server" --print-url
 fi
 
 # Navegador del modo aplicación (--app): Chrome por defecto o Edge.

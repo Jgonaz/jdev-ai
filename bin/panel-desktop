@@ -1,0 +1,143 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+    cat <<'EOF_USAGE'
+Uso: panel-desktop build | install
+
+Compila e instala el programa de escritorio del panel para Windows: un
+jdev-ai.exe con ventana propia que arranca el panel dentro de WSL y lo muestra
+sin pasar por la terminal ni por el navegador. Es opcional: el panel se sigue
+pudiendo usar con «bin/panel».
+
+Órdenes:
+  build     Compila panel/desktop desde WSL para Windows. La distro de WSL y
+            la ruta de este harness quedan grabadas en el ejecutable: si
+            cambian, hay que volver a compilar e instalar.
+  install   Copia el ejecutable a %LOCALAPPDATA%\Programs\jdev-ai\, crea el
+            acceso directo «jdev-ai» en el menú Inicio y registra el nombre y
+            el icono de sus notificaciones. El programa tiene que estar cerrado.
+
+Requisitos de «build» (si falta alguno, lo indica y termina sin instalar nada):
+Rust con el target x86_64-pc-windows-msvc, cargo-xwin, clang, lld y llvm.
+EOF_USAGE
+}
+
+fail() {
+    printf 'Error: %s\n' "$1" >&2
+    exit 1
+}
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+harness_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+desktop_dir="$harness_root/panel/desktop"
+target=x86_64-pc-windows-msvc
+exe="$desktop_dir/target/$target/release/jdev-ai.exe"
+# Identificador de la aplicación: el mismo de panel/desktop/tauri.conf.json.
+app_id=dev.jdev-ai.panel
+
+# rustup instala en ~/.cargo/bin, que puede no estar en el PATH de esta shell.
+if [ -d "$HOME/.cargo/bin" ]; then
+    PATH="$HOME/.cargo/bin:$PATH"
+    export PATH
+fi
+
+build() {
+    [ -n "${WSL_DISTRO_NAME:-}" ] || fail "el programa de escritorio se compila desde WSL (falta WSL_DISTRO_NAME)"
+    # Las dos se escriben sin comillas en la orden que el programa pasa a
+    # wsl.exe: solo se aceptan caracteres que no necesitan escaparse.
+    case "$WSL_DISTRO_NAME" in
+        *[!A-Za-z0-9._-]*) fail "el nombre de la distro tiene caracteres no admitidos: $WSL_DISTRO_NAME" ;;
+    esac
+    case "$harness_root" in
+        *[!A-Za-z0-9/._-]*) fail "la ruta del harness tiene espacios o caracteres no admitidos: $harness_root" ;;
+    esac
+
+    missing=
+    if ! command -v cargo >/dev/null 2>&1 || ! command -v rustup >/dev/null 2>&1; then
+        missing="$missing
+  - Rust no está instalado. Instálalo con rustup: https://rustup.rs"
+    else
+        if ! rustup target list --installed 2>/dev/null | grep -qx "$target"; then
+            missing="$missing
+  - Falta el target de Windows. Instálalo con: rustup target add $target"
+        fi
+        if ! command -v cargo-xwin >/dev/null 2>&1; then
+            missing="$missing
+  - Falta cargo-xwin. Instálalo con: cargo install --locked cargo-xwin"
+        fi
+    fi
+    for tool in clang lld-link llvm-rc; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            missing="$missing
+  - Falta $tool. Instálalo con: sudo apt install clang lld llvm"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        printf 'Error: faltan requisitos para compilar el programa de escritorio:%s\n' "$missing" >&2
+        exit 1
+    fi
+
+    printf 'Compilando jdev-ai.exe (distro %s, harness %s)...\n' "$WSL_DISTRO_NAME" "$harness_root" >&2
+    JDEV_DESKTOP_DISTRO=$WSL_DISTRO_NAME JDEV_DESKTOP_HARNESS=$harness_root \
+        cargo xwin build --release --locked --target "$target" --manifest-path "$desktop_dir/Cargo.toml" >&2 ||
+        fail "falló la compilación"
+    printf 'Compilado: %s\nInstálalo con: bin/panel-desktop install\n' "$exe"
+}
+
+# Ejecuta un programa de Windows desde una carpeta de Windows: desde una ruta
+# de WSL, cmd.exe avisa de que no admite rutas UNC.
+win() {
+    (cd /mnt/c 2>/dev/null || cd /; "$@" </dev/null) | tr -d '\r'
+}
+
+install() {
+    [ -f "$exe" ] || fail "no hay ejecutable compilado: ejecuta antes «bin/panel-desktop build»"
+    for tool in cmd.exe powershell.exe reg.exe wslpath; do
+        command -v "$tool" >/dev/null 2>&1 || fail "no se encuentra $tool: la instalación se hace desde WSL"
+    done
+
+    local_app_data=$(win cmd.exe /c 'echo %LOCALAPPDATA%' 2>/dev/null | tail -n 1)
+    case "$local_app_data" in
+        [A-Za-z]:\\*) ;;
+        *) fail "no se pudo averiguar %LOCALAPPDATA%" ;;
+    esac
+    win_dir="$local_app_data\\Programs\\jdev-ai"
+    dir=$(wslpath -u "$win_dir")
+
+    mkdir -p "$dir"
+    cp "$exe" "$dir/jdev-ai.exe" 2>/dev/null ||
+        fail "no se pudo copiar el ejecutable a $win_dir: cierra el programa jdev-ai y repite"
+    cp "$harness_root/panel/public/icons/icon-192.png" "$dir/icon.png"
+
+    # En PowerShell, la comilla simple dentro de una cadena se escribe doble.
+    ps_dir=$(printf '%s' "$win_dir" | sed "s/'/''/g")
+    win powershell.exe -NoProfile -NonInteractive -Command "
+        \$acceso = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Programs') + '\\jdev-ai.lnk')
+        \$acceso.TargetPath = '$ps_dir\\jdev-ai.exe'
+        # Si ya había un acceso directo con ese nombre, CreateShortcut lo carga
+        # con sus argumentos y su icono: se pisan para que no queden los de antes.
+        \$acceso.Arguments = ''
+        \$acceso.IconLocation = '$ps_dir\\jdev-ai.exe,0'
+        \$acceso.WorkingDirectory = '$ps_dir'
+        \$acceso.Description = 'Panel de jdev-ai'
+        \$acceso.Save()
+    " >/dev/null || fail "no se pudo crear el acceso directo del menú Inicio"
+
+    # Sin este registro, Windows no muestra las notificaciones de un programa
+    # que no viene de un instalador.
+    clave="HKCU\\Software\\Classes\\AppUserModelId\\$app_id"
+    win reg.exe add "$clave" /v DisplayName /t REG_SZ /d jdev-ai /f >/dev/null &&
+        win reg.exe add "$clave" /v IconUri /t REG_SZ /d "$win_dir\\icon.png" /f >/dev/null ||
+        fail "no se pudo registrar el programa para las notificaciones"
+
+    printf 'Instalado en %s\nÁbrelo desde el menú Inicio: «jdev-ai».\n' "$win_dir"
+}
+
+case "${1:-}" in
+    build) [ "$#" -eq 1 ] || fail "build no admite argumentos"; build ;;
+    install) [ "$#" -eq 1 ] || fail "install no admite argumentos"; install ;;
+    -h|--help|"") usage ;;
+    *) fail "orden desconocida: $1" ;;
+esac
