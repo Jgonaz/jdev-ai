@@ -17,7 +17,7 @@ export const en: Dictionary = {
   panel: {
     title: 'A local panel to know which session is waiting for you',
     lead: 'With five terminals open, the hard part is knowing which one has stopped to ask you something. <code>bin/panel</code> gathers them in one window and flags it. Try it here: switch sessions or go from the terminal to the chat.',
-    note: 'The real panel runs on your machine: it only listens on 127.0.0.1 and asks for a token. The terminals live in tmux, so they are still there if you close it. It opens in the browser or, on Windows, as a standalone program with bin/panel-desktop. It needs Node 24, pnpm and tmux.',
+    note: 'The real panel runs on your machine: it only listens on 127.0.0.1 and asks for a token. The terminals live in tmux, so they are still there if you close it. It opens in the browser or, on Windows, as a standalone program built with Tauri (bin/panel-desktop). It needs Node 24, pnpm and tmux.',
     ui: {
       label: 'Simulation of the jdev-ai panel',
       bar: 'Simulation with sample data',
@@ -315,7 +315,7 @@ export const en: Dictionary = {
       { name: 'workflows/', text: 'When a change deserves a spec, a worktree or a design first' },
       { name: 'adapters/', text: 'The subagents, defined for Claude Code and Codex' },
       { name: 'bin/', text: 'The launcher, the panel, the worktrees and the validation' },
-      { name: 'panel/', text: 'A local web panel with the terminals of every project' },
+      { name: 'panel/', text: 'A local web panel with the terminals of every project, and its Windows program built with Tauri' },
       { name: 'projects/', text: 'Your repositories, each with its own .git. The harness does not version them' },
     ],
   },

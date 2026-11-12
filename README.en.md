@@ -74,10 +74,11 @@ rules/           Shared policies: delegation, worktrees, history, memory,
                  backlog, user guides, images, design, session title, session done, close
 workflows/       Common processes (feature.md: OpenSpec, worktree and design proposals)
 adapters/        Per-provider subagent definitions (claude, codex)
-bin/             agent, check, worktree, panel, session-status, session-state,
+bin/             agent, check, worktree, panel, panel-desktop, session-status, session-state,
                  session-statusline, session-activity, session-title, session-done,
                  subagent-notice
-panel/           Graphical panel (Node + React), with its own dependencies
+panel/           Graphical panel (Node + React), with its own dependencies;
+                 panel/desktop/ is its optional Windows program (Tauri, Rust)
 site/            Landing page at harness.jgonaz.dev (Astro, Spanish and English),
                  with its own dependencies; the harness does not need it to work
 openspec/        Specs and changes of the harness itself

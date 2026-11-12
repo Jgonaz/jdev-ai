@@ -269,7 +269,8 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 
 ## Panel gráfico
 
-`bin/panel` abre en el navegador un panel local que reúne las terminales de
+`bin/panel` abre en el navegador (o, en Windows, como programa propio hecho
+con [Tauri](https://tauri.app)) un panel local que reúne las terminales de
 agente de todos los proyectos: barra lateral con las sesiones agrupadas por
 proyecto, su título y su estado (te espera, trabajando, en reposo o hecha),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
@@ -323,7 +324,10 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   tiene que estar en marcha; la cookie del token dura un año y se invalida al
   regenerarlo.
 
-- **Como programa de Windows.** `bin/panel-desktop build` compila desde WSL un
+- **Como programa de Windows.** `panel/desktop/` es un envoltorio hecho con
+  [Tauri](https://tauri.app) (Rust): no reescribe el panel, muestra su
+  interfaz web en una ventana nativa con el motor WebView2 de Windows.
+  `bin/panel-desktop build` lo compila desde WSL como
   `jdev-ai.exe` y `bin/panel-desktop install` lo copia a
   `%LOCALAPPDATA%\Programs\jdev-ai\` con un acceso directo en el menú Inicio.
   Al abrirlo arranca el panel dentro de WSL y lo muestra en su propia ventana,
