@@ -824,8 +824,15 @@ describe('API de sesiones y terminal', () => {
       const { session } = (await r.json()) as { session: Sesion };
       creadas.push(session.name);
       expect(session).toMatchObject({ project: 'foo', agent: 'shell', worktree: '', title: 'Terminal', state: 'alive', tracked: false, alive: true });
-      const datos = (await tmuxCli('display-message', '-p', '-t', `=${session.name}:`, '#{pane_current_path}|#{@jdev_agent}|#{pane_current_command}')).stdout.trim();
-      expect(datos).toBe(`${realpathSync(proyecto())}|shell|sh`);
+      // La shell de login ejecuta antes /etc/profile, que puede lanzar otros programas (el «find» del
+      // aviso diario de Ubuntu): se espera a que el proceso en primer plano vuelva a ser la shell.
+      await vi.waitFor(
+        async () => {
+          const datos = (await tmuxCli('display-message', '-p', '-t', `=${session.name}:`, '#{pane_current_path}|#{@jdev_agent}|#{pane_current_command}')).stdout.trim();
+          expect(datos).toBe(`${realpathSync(proyecto())}|shell|sh`);
+        },
+        { timeout: 5000, interval: 50 },
+      );
       expect((await tmuxCli('show-environment', '-t', `=${session.name}`, 'JDEV_SURFACE')).stdout.trim()).toBe('JDEV_SURFACE=panel');
 
       const wt = await pedir({ project: 'foo', agent: 'shell', location: 'existing-worktree', feature: 'mi-feature' });
