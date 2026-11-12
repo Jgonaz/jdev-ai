@@ -18,8 +18,8 @@ export const es = {
   },
   panel: {
     title: 'Un panel local para saber qué sesión te espera',
-    lead: 'Con cinco terminales abiertas, lo difícil es saber cuál se ha parado a preguntarte algo. <code>bin/panel</code> las reúne en el navegador y lo marca. Pruébalo aquí: cambia de sesión o pasa de la terminal al chat.',
-    note: 'El panel real corre en tu máquina: solo escucha en 127.0.0.1 y pide un token. Las terminales viven en tmux, así que siguen ahí si cierras el navegador. Necesita Node 24, pnpm y tmux.',
+    lead: 'Con cinco terminales abiertas, lo difícil es saber cuál se ha parado a preguntarte algo. <code>bin/panel</code> las reúne en una ventana y lo marca. Pruébalo aquí: cambia de sesión o pasa de la terminal al chat.',
+    note: 'El panel real corre en tu máquina: solo escucha en 127.0.0.1 y pide un token. Las terminales viven en tmux, así que siguen ahí si lo cierras. Se abre en el navegador o, en Windows, como programa propio con bin/panel-desktop. Necesita Node 24, pnpm y tmux.',
     ui: {
       label: 'Simulación del panel de jdev-ai',
       bar: 'Simulación con datos de ejemplo',
