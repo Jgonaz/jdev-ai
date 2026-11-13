@@ -6,6 +6,7 @@ import { DirStore } from './dirstore.ts';
 import { claudeConfigDir } from './paths.ts';
 import { StateStore, deriveState, stateByTmuxSession } from './states.ts';
 import type { SessionState } from './states.ts';
+import { deleteConversationState } from './purge.ts';
 import { TitleReader, appendCustomTitle, defaultTitle, parseTitle, resolveTranscript } from './titles.ts';
 import { createSession, isPanelSessionName, killSession, listSessions, setSessionTitle } from './tmux.ts';
 import type { CreateOptions, SessionPlan, TmuxConfig } from './tmux.ts';
@@ -263,6 +264,12 @@ export class SessionService {
     return entry;
   }
 
+  /** Olvida el estado (hecha/abierta) de una conversación borrada definitivamente. */
+  async forgetConversation(clave: string): Promise<void> {
+    await deleteConversationState(this.conversationsDir, clave);
+    await this.conversations.refresh();
+  }
+
   /** Límites de la cuenta de la statusline más reciente de una sesión del panel; null si no se conocen. */
   accountLimits(): Account | null {
     return this.account;
@@ -441,7 +448,7 @@ export class SessionService {
         branch,
         state: deriveState(file, s.alive),
         tracked: file !== undefined,
-        title: parsed && parsed.title !== '' ? parsed.title : defaultTitle(s.project, s.agent, s.created),
+        title: parsed && parsed.title !== '' ? parsed.title : defaultTitle(s.project),
         done: resolveDone(entrada, parsed?.closed ?? false),
         conversationKey: clave,
         alive: s.alive,

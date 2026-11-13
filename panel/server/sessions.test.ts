@@ -182,7 +182,7 @@ describe('API de sesiones y terminal', () => {
         alive: true,
         command: 'bin/agent foo --codex --wt mi-feature',
       });
-      expect(cuerpo.session.title).toMatch(/^foo · Codex · \d\d:\d\d$/);
+      expect(cuerpo.session.title).toBe('foo · Nueva terminal');
 
       const lista = ((await (await api('GET', '/api/sessions')).json()) as { sessions: Sesion[] }).sessions;
       expect(lista.map((s) => s.name)).toEqual([nombre]);
@@ -823,7 +823,7 @@ describe('API de sesiones y terminal', () => {
       expect(r.status).toBe(201);
       const { session } = (await r.json()) as { session: Sesion };
       creadas.push(session.name);
-      expect(session).toMatchObject({ project: 'foo', agent: 'shell', worktree: '', title: 'Terminal', state: 'alive', tracked: false, alive: true });
+      expect(session).toMatchObject({ project: 'foo', agent: 'shell', worktree: '', title: 'foo · Nueva terminal', state: 'alive', tracked: false, alive: true });
       // La shell de login ejecuta antes /etc/profile, que puede lanzar otros programas (el «find» del
       // aviso diario de Ubuntu): se espera a que el proceso en primer plano vuelva a ser la shell.
       await vi.waitFor(

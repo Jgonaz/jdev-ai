@@ -174,20 +174,9 @@ kbd {
   border-radius: 0;
   color: var(--fg-muted);
 }
-/* Terminal de arranque en marcha: un punto en la esquina del icono (la forma, no solo el color). */
+/* Terminal de arranque en marcha: un ▶ (la forma, no solo el color) en el color del trabajo en curso. */
 .light--running {
-  position: relative;
-  overflow: visible;
-}
-.light--running::after {
-  content: '';
-  position: absolute;
-  top: -3px;
-  right: -4px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--working);
+  color: var(--working);
 }
 :root[data-lights='off'] .light {
   animation: none;

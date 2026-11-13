@@ -105,6 +105,9 @@ export const api = {
   /** Archiva o desarchiva una sesión del panel (por su nombre de tmux) o una conversación de «Anteriores» (por su id). */
   setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) =>
     request<ArchiveList>('/api/archive', { method: 'PUT', body: JSON.stringify({ kind, id, archived }) }),
+  /** Elimina definitivamente algo archivado: una conversación (su transcript) o una sesión (la termina y borra su transcript). */
+  deleteArchived: (kind: 'session' | 'conversation', id: string) =>
+    request<ArchiveList & { deleted: boolean }>('/api/archive', { method: 'DELETE', body: JSON.stringify({ kind, id, confirm: true }) }),
   /** Marca una conversación como hecha (con nota opcional) o la reabre. `clave` es la `conversationKey` de la sesión o el id de la conversación. */
   setConversationState: (clave: string, state: 'done' | 'open', note?: string) =>
     request<{ key: string; state: 'done' | 'open'; done: Done | null }>(`/api/conversations/${encodeURIComponent(clave)}/state`, {

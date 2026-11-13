@@ -6,11 +6,12 @@ import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { SessionInfo } from '../../types.ts';
 import type { MenuAction } from '../ContextMenu.tsx';
-import { IconArchive, IconCheck, IconClose, IconCopy, IconExternal, IconPencil, IconRestore, IconStop } from '../Icons.tsx';
+import { IconArchive, IconCheck, IconClose, IconCopy, IconExternal, IconPencil, IconRestore, IconStop, IconTrash } from '../Icons.tsx';
+import { DeleteArchivedDialog } from './DeleteArchivedDialog.tsx';
 import { RenameDialog } from './RenameDialog.tsx';
 import { TerminateDialog } from './TerminateDialog.tsx';
 
-type Dialogo = 'renombrar' | 'terminar' | null;
+type Dialogo = 'renombrar' | 'terminar' | 'eliminar' | null;
 
 export type SessionActions = {
   actions: MenuAction[];
@@ -31,8 +32,8 @@ export type SessionActions = {
  * contextual de la barra lateral y de las pestañas: Abrir (solo con `withOpen`
  * y si no está abierta en una pestaña), Renombrar, Copiar comando para
  * adjuntar, Marcar como hecha o Reabrir (no en las terminales sin agente),
- * Archivar o Desarchivar, Cerrar pestaña (solo si está abierta) y Terminar
- * sesión.
+ * Archivar o Desarchivar, Cerrar pestaña (solo si está abierta), Terminar
+ * sesión y, si está archivada, Eliminar definitivamente.
  */
 export function useSessionActions(session: SessionInfo, opciones: { withOpen?: boolean; onTabClosed?: () => void } = {}): SessionActions {
   const { closeTab, openSession, workspace } = useWorkspace();
@@ -120,11 +121,23 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
     danger: true,
     onSelect: () => setDialogo('terminar'),
   });
+  if (session.archived) {
+    actions.push({
+      id: 'eliminar',
+      label: 'Eliminar definitivamente…',
+      icon: <IconTrash size={14} />,
+      danger: true,
+      onSelect: () => setDialogo('eliminar'),
+    });
+  }
 
   const dialogs = (
     <>
       {dialogo === 'renombrar' && <RenameDialog session={session} onClose={() => setDialogo(null)} />}
       {dialogo === 'terminar' && <TerminateDialog session={session} onClose={() => setDialogo(null)} />}
+      {dialogo === 'eliminar' && (
+        <DeleteArchivedDialog target={{ kind: 'session', id: session.name, title: session.title, shell: isShell(session) }} onClose={() => setDialogo(null)} />
+      )}
     </>
   );
 

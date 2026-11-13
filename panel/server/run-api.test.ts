@@ -132,7 +132,7 @@ describe('API de arranque de proyectos', () => {
     expect(r.status).toBe(201);
     const { session, created } = (await r.json()) as { session: Sesion; created: boolean };
     expect(created).toBe(true);
-    expect(session).toMatchObject({ project: 'con-dev', agent: 'shell', title: 'dev · con-dev', run: 'npm run dev', alive: true });
+    expect(session).toMatchObject({ project: 'con-dev', agent: 'shell', title: 'npm run dev', run: 'npm run dev', alive: true });
     // El comando se escribe en la shell (queda a la vista y en su historial) y arranca.
     await vi.waitFor(async () => expect(await pantalla(session.name)).toMatch(/dev-listo/), { timeout: 15000 });
     expect((await pantalla(session.name))).toMatch(/npm run dev/);

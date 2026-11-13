@@ -21,8 +21,8 @@ export class RunError extends Error {
 export const STOP_WAIT_MS = 5000;
 const STOP_POLL_MS = 150;
 
-/** Título de la terminal de arranque de un proyecto. */
-export const runTitle = (proyecto: string): string => `dev · ${proyecto}`;
+/** Título de la terminal de arranque: su comando, que la distingue de las conversaciones del proyecto. */
+export const runTitle = (comando: string): string => comando;
 
 /** Terminal de arranque viva de un proyecto: la que lleva `run` y no ha terminado. */
 export function runSessionOf(lista: readonly SessionInfo[], proyecto: string): SessionInfo | undefined {
@@ -88,7 +88,7 @@ export class RunController {
       const sesion = await sessions.create(plan, {
         historyLimit: this.opts.historyLimit(),
         run: run.command,
-        title: runTitle(proyecto.name),
+        title: runTitle(run.command),
       });
       try {
         // Se escribe en la shell ya creada: el comando queda en su historial.

@@ -101,6 +101,7 @@ describe('terminal sin agente', () => {
     expect(stateChip(term, '3 min')).toBe('Terminal');
     expect(stateChip(sesion({ agent: 'shell', tracked: false, state: 'ended', alive: false }), '3 min')).toBe('Terminada');
     expect(sessionMeta(term)).toBe('wt f1 · terminal');
+    expect(sessionMeta({ ...term, run: 'pnpm dev' })).toBe('wt f1 · en marcha');
   });
 
   it('no cuenta en «te espera»', () => {
@@ -129,6 +130,20 @@ describe('groupSessions', () => {
     const grupos = groupSessions([sesion({ name: 'x', project: 'borrado' }), sesion({ name: 'y', project: 'balanz.io' })], proyectos);
     expect(grupos.map((g) => g.project.id)).toEqual(['balanz.io', 'borrado']);
     expect(grupos[1]!.project.mono).toBe('BO');
+  });
+
+  it('pone primero la terminal de arranque en marcha y conserva el orden del resto', () => {
+    const grupos = groupSessions(
+      [
+        sesion({ name: 'a' }),
+        sesion({ name: 'b', agent: 'shell', tracked: false, state: 'alive' }),
+        sesion({ name: 'dev', agent: 'shell', tracked: false, state: 'alive', run: 'pnpm dev' }),
+        sesion({ name: 'c' }),
+        sesion({ name: 'fin', agent: 'shell', tracked: false, state: 'ended', alive: false, run: 'pnpm dev' }),
+      ],
+      proyectos,
+    );
+    expect(grupos[0]!.sessions.map((s) => s.name)).toEqual(['dev', 'a', 'b', 'c', 'fin']);
   });
 
   it('puede ocultar las hechas', () => {

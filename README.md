@@ -543,7 +543,12 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   (barra, pestañas y «⋯») aparta una sesión o una conversación sin terminarla ni
   cerrar su pestaña: sale de su proyecto, de «Anteriores» y de «En segundo plano»
   y pasa a un apartado plegable «Archivadas (N)», debajo de «En segundo plano»,
-  desde el que se abre, se retoma o se desarchiva. Una sesión archivada que espera
+  desde el que se abre, se retoma o se desarchiva. Desde ahí, «Eliminar
+  definitivamente…» (con confirmación) borra del disco el transcript de Claude de
+  una conversación archivada y el de sus subagentes, y a una sesión archivada la
+  termina y borra también el suyo; no se puede deshacer ni retomar con
+  `claude --resume`, y no se permite si la conversación tuvo actividad en los
+  últimos 3 minutos (podría seguir abierta en otra ventana). Una sesión archivada que espera
   sigue contando en la cabecera, el título de la pestaña e Inicio; las demás no
   cuentan en los recuentos ni en las tarjetas de Inicio. Las conversaciones
   archivadas no gastan el límite de «Anteriores» (15 por proyecto; las archivadas
@@ -556,12 +561,16 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   un worktree existente, para lanzar comandos o servidores. No usa `bin/agent`, no
   admite worktree nuevo ni prompt, lleva un icono de terminal en lugar de la luz de
   estado y no cuenta en los avisos ni en los recuentos de Inicio. Funciona con
-  pestañas, renombrado, archivado y «En segundo plano».
+  pestañas, renombrado, archivado y «En segundo plano». Toda sesión nueva, con o
+  sin agente, se llama «<proyecto> · Nueva terminal» hasta que tiene título propio.
 - **Arrancar y parar un proyecto.** El botón ▶ junto al «+» de cada proyecto de la
-  barra lateral crea una terminal sin agente en su carpeta principal, titulada
-  «dev · <proyecto>», escribe en ella el comando de arranque (queda en el historial
-  de la shell) y la abre en una pestaña. Al cerrar la pestaña el servidor sigue en
-  «En segundo plano». El botón pasa a ■: envía `Ctrl+C`, espera hasta 5 s a que
+  barra lateral crea una terminal sin agente en su carpeta principal, titulada con
+  el comando de arranque (p. ej. «pnpm dev»), escribe en ella ese comando (queda en el historial
+  de la shell) y la abre en una pestaña. Para distinguirla de las sesiones de
+  agente, en la barra lateral lleva un ▶ verde en lugar de la luz de estado y su
+  meta dice «en marcha»; en su proyecto y en «En segundo plano» va siempre por
+  encima de las sesiones de agente. Al cerrar la pestaña el servidor sigue en
+  «En segundo plano». El botón pasa a un ■ rojo: envía `Ctrl+C`, espera hasta 5 s a que
   el proceso termine y termina la sesión en cualquier caso. Hay como mucho una
   terminal de arranque por proyecto; volver a arrancar abre la que ya está viva.
   El comando es el que escribas en Ajustes › Proyectos › «Comando de arranque»

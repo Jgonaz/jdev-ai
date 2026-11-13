@@ -29,6 +29,8 @@ type SessionsValue = {
   reloadRecent: () => void;
   /** Archiva o desarchiva una sesión del panel (por su nombre) o una conversación de «Anteriores» (por su id); lanza si el servidor la rechaza. */
   setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) => Promise<void>;
+  /** Elimina definitivamente una sesión o conversación archivada (no se puede deshacer). */
+  deleteArchived: (kind: 'session' | 'conversation', id: string) => Promise<void>;
   /** Marca una conversación como hecha (con nota opcional) o la reabre; lanza si el servidor lo rechaza. */
   setDone: (clave: string, state: 'done' | 'open', note?: string) => Promise<void>;
   /** Suscribe a los avisos `{type:'backlog', project}` de /ws/events; devuelve la baja. */
@@ -244,6 +246,13 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     setRecent((r) => applyArchive(r, lista));
   }, []);
 
+  // Lo eliminado sale de su lista al momento, sin esperar al evento ni a la recarga.
+  const deleteArchived = useCallback(async (kind: 'session' | 'conversation', id: string) => {
+    const lista = await api.deleteArchived(kind, id);
+    if (kind === 'conversation') setRecent((r) => applyArchive(r.filter((x) => x.id !== id), lista));
+    else setSessions((s) => applyArchive(s.filter((x) => x.name !== id), lista));
+  }, []);
+
   // La respuesta se aplica al momento, sin esperar al evento ni a la recarga.
   const setDone = useCallback(async (clave: string, state: 'done' | 'open', note?: string) => {
     const r = await api.setConversationState(clave, state, note);
@@ -253,8 +262,8 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const valor = useMemo<SessionsValue>(
-    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, setDone, onBacklogChange, onHistoryChange, onBacklogCommitPhase }),
-    [sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, setDone, onBacklogChange, onHistoryChange, onBacklogCommitPhase],
+    () => ({ sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, deleteArchived, setDone, onBacklogChange, onHistoryChange, onBacklogCommitPhase }),
+    [sessions, projects, tmuxSocket, home, loaded, connected, error, account, upsert, reloadProjects, recent, reloadRecent, setArchived, deleteArchived, setDone, onBacklogChange, onHistoryChange, onBacklogCommitPhase],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

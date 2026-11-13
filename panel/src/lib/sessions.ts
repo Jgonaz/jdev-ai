@@ -110,6 +110,16 @@ export type ProjectGroup = { project: ProjectInfo; sessions: SessionInfo[] };
  * (el harness primero). Los proyectos sin sesiones no se listan y los marcados
  * como no visibles se omiten; las sesiones de proyectos desconocidos van al final.
  */
+/** Terminal de arranque de su proyecto que sigue en marcha (botón ▶ de la barra lateral). */
+export function isRunning(s: Pick<SessionInfo, 'run' | 'alive' | 'state'>): boolean {
+  return typeof s.run === 'string' && s.alive && s.state !== 'ended';
+}
+
+/** Primero las terminales de arranque en marcha; el resto conserva su orden (sort es estable). */
+export function runningFirst<T>(items: readonly T[], sesion: (i: T) => Pick<SessionInfo, 'run' | 'alive' | 'state'>): T[] {
+  return [...items].sort((a, b) => Number(isRunning(sesion(b))) - Number(isRunning(sesion(a))));
+}
+
 export function groupSessions(
   sessions: readonly SessionInfo[],
   projects: readonly ProjectInfo[],
@@ -121,21 +131,23 @@ export function groupSessions(
   for (const project of projects) {
     if (!project.visible) continue;
     const propias = visibles.filter((s) => s.project === project.id);
-    if (propias.length > 0) grupos.push({ project, sessions: propias });
+    if (propias.length > 0) grupos.push({ project, sessions: runningFirst(propias, (x) => x) });
   }
   const huerfanas = new Map<string, SessionInfo[]>();
   for (const s of visibles) {
     if (conocidos.has(s.project)) continue;
     huerfanas.set(s.project, [...(huerfanas.get(s.project) ?? []), s]);
   }
-  for (const [id, lista] of huerfanas) grupos.push({ project: fallbackProject(id), sessions: lista });
+  for (const [id, lista] of huerfanas) grupos.push({ project: fallbackProject(id), sessions: runningFirst(lista, (x) => x) });
   return grupos;
 }
 
 /** Línea de metadatos: «wt zona-segura-ios · claude», «main · codex». */
-export function sessionMeta(s: Pick<SessionInfo, 'worktree' | 'branch' | 'agent'>): string {
+export function sessionMeta(s: Pick<SessionInfo, 'worktree' | 'branch' | 'agent'> & { run?: string | null }): string {
   const lugar = s.worktree ? `wt ${s.worktree}` : (s.branch ?? 'principal');
-  return `${lugar} · ${s.agent === SHELL_AGENT ? 'terminal' : s.agent}`;
+  if (s.agent !== SHELL_AGENT) return `${lugar} · ${s.agent}`;
+  // La terminal de arranque se distingue de una terminal cualquiera también en el texto.
+  return `${lugar} · ${typeof s.run === 'string' ? 'en marcha' : 'terminal'}`;
 }
 
 /** Dónde trabaja la sesión, para la cabecera de la terminal. */

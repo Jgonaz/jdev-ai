@@ -1,5 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -95,7 +95,7 @@ describe('API de archivadas', () => {
     expect((await fetch(`${base}/api/archive`, { method: 'PUT', body: '{}' })).status).toBe(401);
     const r = await api('GET', '/api/archive');
     expect(r.status).toBe(405);
-    expect(r.headers.get('allow')).toBe('PUT');
+    expect(r.headers.get('allow')).toBe('PUT, DELETE');
     expect((await api('POST', '/api/archive', {})).status).toBe(405);
     expect((await archivar('session', 'jdev-foo-1', true).then((x) => x.status))).toBe(404);
     // Con origen ajeno ni se evalúa.
@@ -201,5 +201,54 @@ describe('API de archivadas', () => {
     await vi.waitFor(() => {
       expect(JSON.parse(readFileSync(join(tmp, 'config', 'archived.json'), 'utf8')).sessions).toEqual([]);
     });
+  });
+
+  it('elimina definitivamente una conversación archivada: transcript, subagentes y estado', async () => {
+    const transcripts = join(tmp, 'claude', 'projects', projectSlug(join(harness, 'projects', 'foo')));
+    const id = '33333333-aaaa-4bbb-8ccc-000000000003';
+    const ruta = join(transcripts, `${id}.jsonl`);
+    writeFileSync(ruta, '{"type":"user","message":{"content":"borrar"}}\n');
+    mkdirSync(join(transcripts, id, 'subagents'), { recursive: true });
+    writeFileSync(join(transcripts, id, 'subagents', 'agent-1.jsonl'), '{}\n');
+    // Actividad antigua: si no, podría seguir abierta en otra ventana.
+    const antes = new Date(Date.now() - 10 * 60 * 1000);
+    utimesSync(ruta, antes, antes);
+    const borrar = (kind: string, cid: unknown, confirm?: unknown) => api('DELETE', '/api/archive', { kind, id: cid, ...(confirm === undefined ? {} : { confirm }) });
+
+    // Solo con confirmación y solo si está archivada.
+    expect((await borrar('conversation', id)).status).toBe(400);
+    expect((await borrar('conversation', id, true)).status).toBe(404);
+    expect(existsSync(ruta)).toBe(true);
+
+    expect((await archivar('conversation', id, true)).status).toBe(200);
+    const r = await borrar('conversation', id, true);
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as Lista & { deleted: boolean })).toMatchObject({ deleted: true, conversations: [] });
+    expect(existsSync(ruta)).toBe(false);
+    expect(existsSync(join(transcripts, id))).toBe(false);
+    expect((await recientes()).some((x) => x.id === id)).toBe(false);
+  });
+
+  it('no elimina una conversación archivada con actividad reciente', async () => {
+    const transcripts = join(tmp, 'claude', 'projects', projectSlug(join(harness, 'projects', 'foo')));
+    const id = '44444444-aaaa-4bbb-8ccc-000000000004';
+    writeFileSync(join(transcripts, `${id}.jsonl`), '{"type":"user","message":{"content":"abierta"}}\n');
+    expect((await archivar('conversation', id, true)).status).toBe(200);
+    const r = await api('DELETE', '/api/archive', { kind: 'conversation', id, confirm: true });
+    expect(r.status).toBe(409);
+    expect(existsSync(join(transcripts, `${id}.jsonl`))).toBe(true);
+  });
+
+  it('elimina definitivamente una sesión archivada: la termina', async () => {
+    const c = await api('POST', '/api/sessions', { project: 'foo', agent: 'shell', location: 'main' });
+    expect(c.status).toBe(201);
+    const s = ((await c.json()) as { session: Sesion }).session;
+    // Sin archivar no se elimina.
+    expect((await api('DELETE', '/api/archive', { kind: 'session', id: s.name, confirm: true })).status).toBe(404);
+    expect((await archivar('session', s.name, true)).status).toBe(200);
+    expect((await api('DELETE', '/api/archive', { kind: 'session', id: s.name, confirm: true })).status).toBe(200);
+    const { stdout } = await tmuxCli('list-sessions', '-F', '#{session_name}').catch(() => ({ stdout: '' }));
+    expect(stdout.trim().split('\n')).not.toContain(s.name);
+    expect(JSON.parse(readFileSync(join(tmp, 'config', 'archived.json'), 'utf8')).sessions).toEqual([]);
   });
 });

@@ -251,17 +251,8 @@ export async function stripClosedMark(reader: TitleReader, realPath: string, ses
   return true;
 }
 
-const AGENT_NAMES: Record<string, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  copilot: 'Copilot',
-  opencode: 'OpenCode',
-};
-
-// Título legible cuando la sesión no tiene ninguno: proyecto, agente y hora.
-export function defaultTitle(project: string, agent: string, created: number): string {
-  // Una terminal sin agente no tiene qué distinguir: el proyecto ya se ve junto al título.
-  if (agent === 'shell') return 'Terminal';
-  const hora = new Date(created).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-  return `${project || 'sesión'} · ${AGENT_NAMES[agent] ?? (agent || 'agente')} · ${hora}`;
+// Título de una sesión nueva que aún no tiene ninguno (ni propio ni generado por
+// el agente): el proyecto y «Nueva terminal», igual con o sin agente.
+export function defaultTitle(project: string): string {
+  return `${project || 'sesión'} · Nueva terminal`;
 }

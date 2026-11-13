@@ -36,7 +36,8 @@ import type { Overview } from './overview.ts';
 import { RunController, RunError } from './runner.ts';
 import { listProjects } from './projects.ts';
 import type { Project } from './projects.ts';
-import { RecentIndex, SESSION_ID } from './recent.ts';
+import { POSSIBLY_OPEN_MS, RecentIndex, SESSION_ID } from './recent.ts';
+import { deleteTranscript } from './purge.ts';
 import { SHELL_AGENT, SessionService } from './sessions.ts';
 import { DEFAULT_PORT, readSettings, updateSettings } from './settings.ts';
 import { checkSessionTitle } from '../shared/session-title.ts';
@@ -1135,9 +1136,14 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   // desarchiva una sesión del panel (su nombre de tmux) o una conversación de
   // «Anteriores» (su id de Claude) y responde con la lista actual. No toca la
   // sesión ni el transcript: solo la lista de archived.json.
+  //
+  // DELETE /api/archive {kind, id, confirm: true}: elimina definitivamente algo
+  // archivado. Una conversación pierde su transcript de Claude (y el de sus
+  // subagentes); una sesión archivada se termina y pierde también el suyo, si
+  // tiene. No se puede deshacer: solo sobre archivadas y con confirmación.
   async function archiveApi(req: IncomingMessage, res: ServerResponse, metodo: string): Promise<void> {
-    if (metodo !== 'PUT') {
-      res.setHeader('Allow', 'PUT');
+    if (metodo !== 'PUT' && metodo !== 'DELETE') {
+      res.setHeader('Allow', 'PUT, DELETE');
       sendJson(res, 405, { error: 'método no permitido' });
       return;
     }
@@ -1148,7 +1154,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       sendJson(res, 400, { error: 'kind debe ser «session» o «conversation»' });
       return;
     }
-    if (typeof archived !== 'boolean') {
+    if (metodo === 'PUT' && typeof archived !== 'boolean') {
       sendJson(res, 400, { error: 'archived debe ser true o false' });
       return;
     }
@@ -1158,14 +1164,24 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       });
       return;
     }
+    if (metodo === 'DELETE') {
+      if (cuerpo.confirm !== true) {
+        sendJson(res, 400, { error: 'Falta la confirmación: envía {"confirm":true}.' });
+        return;
+      }
+      await purgeArchived(res, kind, id);
+      return;
+    }
+    // Ya validado arriba para PUT (el único método que llega aquí).
+    const archivar = archived as boolean;
     try {
       if (kind === 'session') {
-        if (!(await sesiones.setArchived(id, archived))) {
+        if (!(await sesiones.setArchived(id, archivar))) {
           sendJson(res, 404, { error: 'la sesión no existe' });
           return;
         }
       } else {
-        archivo.setConversation(id, archived);
+        archivo.setConversation(id, archivar);
       }
     } catch (e) {
       console.error('Error guardando las archivadas:', e);
@@ -1175,6 +1191,66 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     // Las sesiones ya viajan por su propio evento; esto avisa a otras ventanas de que recarguen las conversaciones.
     broadcast({ type: 'archive' });
     sendJson(res, 200, archivo.snapshot());
+  }
+
+  async function purgeArchived(res: ServerResponse, kind: 'session' | 'conversation', id: string): Promise<void> {
+    const projectsDir = join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects');
+    const proyectos = await sesiones.projectList();
+    let clave: string | null = id;
+    let transcript: string | null;
+    if (kind === 'session') {
+      const sesion = (await sesiones.refresh()).find((x) => x.name === id);
+      if (!sesion || !sesion.archived) {
+        sendJson(res, 404, { error: 'la sesión no existe o no está archivada' });
+        return;
+      }
+      clave = isConversationId(sesion.conversationKey) ? sesion.conversationKey : null;
+      transcript = clave === null ? null : (sesiones.transcriptOf(clave) ?? (await recientes.transcriptPath(proyectos, clave)));
+      // Primero se termina: así el agente no sigue escribiendo en el transcript que se va a borrar.
+      if (sesion.alive && !(await sesiones.kill(id))) {
+        sendJson(res, 404, { error: 'la sesión no existe' });
+        return;
+      }
+      await sesiones.setArchived(id, false).catch(() => {});
+      if (clave === null) await sesiones.forgetConversation(sesion.conversationKey);
+    } else {
+      if (!archivo.hasConversation(id)) {
+        sendJson(res, 404, { error: 'la conversación no está archivada' });
+        return;
+      }
+      if (sesiones.panelSessionIds().has(id)) {
+        sendJson(res, 409, { error: 'La conversación está abierta en una sesión del panel: termínala antes de eliminarla.' });
+        return;
+      }
+      transcript = await recientes.transcriptPath(proyectos, id);
+      if (transcript !== null) {
+        try {
+          if (Date.now() - statSync(transcript).mtimeMs < POSSIBLY_OPEN_MS) {
+            sendJson(res, 409, { error: 'La conversación ha tenido actividad hace muy poco y podría seguir abierta en otra ventana. Ciérrala y vuelve a intentarlo.' });
+            return;
+          }
+        } catch {
+          transcript = null;
+        }
+      }
+    }
+    try {
+      if (clave !== null && transcript !== null) await deleteTranscript(transcript, clave, projectsDir);
+      if (clave !== null) {
+        await sesiones.forgetConversation(clave);
+        archivo.setConversation(clave, false);
+      }
+    } catch (e) {
+      if (e instanceof TranscriptRejected) {
+        sendJson(res, 400, { error: e.message });
+        return;
+      }
+      console.error('Error eliminando la conversación archivada:', e);
+      sendJson(res, 500, { error: 'No se pudo eliminar la conversación.' });
+      return;
+    }
+    broadcast({ type: 'archive' });
+    sendJson(res, 200, { deleted: true, ...archivo.snapshot() });
   }
 
   // PUT /api/conversations/:clave/state {state: 'done' | 'open', note?}: marca una

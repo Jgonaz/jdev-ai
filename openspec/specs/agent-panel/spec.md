@@ -653,6 +653,8 @@ Las conversaciones archivadas SHALL NOT contar en el límite de «Anteriores»: 
 
 La lista de archivadas SHALL guardarse en la configuración del panel y conservarse al reiniciarlo. Las sesiones archivadas que dejan de existir SHALL salir de la lista.
 
+El menú contextual de lo archivado SHALL ofrecer además «Eliminar definitivamente…», que SHALL pedir confirmación. En una conversación SHALL borrar del disco su transcript de Claude y el de sus subagentes; en una sesión SHALL terminarla y borrar también su transcript, si lo tiene. SHALL NOT poder eliminarse lo que no está archivado, ni una conversación con actividad en los últimos minutos o abierta en una sesión del panel.
+
 #### Scenario: Archivar una sesión viva
 
 - **WHEN** la persona archiva una sesión de Claude que sigue trabajando
@@ -672,6 +674,11 @@ La lista de archivadas SHALL guardarse en la configuración del panel y conserva
 
 - **WHEN** la persona retoma una conversación de «Archivadas»
 - **THEN** se crea la sesión en el panel y la conversación deja de estar archivada
+
+#### Scenario: Eliminar definitivamente una conversación archivada
+
+- **WHEN** la persona elige «Eliminar definitivamente…» en una conversación de «Archivadas» y lo confirma
+- **THEN** su transcript se borra del disco, la conversación desaparece de «Archivadas» y ya no se puede retomar
 
 #### Scenario: Sesión archivada que trabaja
 
@@ -764,14 +771,14 @@ El panel SHALL hacerlo solo para sesiones del panel. Lo que no encuentre SHALL e
 
 El diálogo Nueva sesión, el menú del agente por defecto de la cabecera y el ajuste del agente por defecto SHALL ofrecer «Terminal (sin agente)» como una opción más. Elegirla SHALL abrir una sesión de tmux del panel con una shell normal de la persona, para lanzar comandos o servidores, en la carpeta del proyecto (el propio harness incluido) o en la de un worktree existente. La sesión SHALL crearse como las demás (nombre, proyecto, worktree, fecha y superficie `panel`) y SHALL lanzar la shell de login interactiva de la persona (`$SHELL -l`, o `bash -l` si no hay `SHELL`) en lugar de `bin/agent`. El diálogo SHALL mostrar el comando antes de ejecutarlo y SHALL NOT ofrecer worktree nuevo ni prompt inicial. El servidor SHALL rechazar con un error 400 un worktree nuevo, un prompt, retomar una sesión o una carpeta que no exista.
 
-Una terminal sin agente SHALL llevar un icono de terminal en lugar de la luz de estado, en la barra lateral, las pestañas, «En segundo plano», «Archivadas» y el tooltip, y su título por defecto SHALL ser «Terminal». SHALL NOT tener statusline, seguimiento ni estado de turnos, aunque se lance un agente dentro de ella. SHALL NOT contar en los avisos (cabecera, título de la pestaña, notificaciones y sonidos) ni en los recuentos y las tarjetas de Inicio. Si la shell termina, la sesión SHALL mostrarse como terminada igual que las demás.
+Una terminal sin agente SHALL llevar un icono de terminal en lugar de la luz de estado, en la barra lateral, las pestañas, «En segundo plano», «Archivadas» y el tooltip, y su título por defecto SHALL ser «<proyecto> · Nueva terminal», como el de cualquier sesión nueva sin título. SHALL NOT tener statusline, seguimiento ni estado de turnos, aunque se lance un agente dentro de ella. SHALL NOT contar en los avisos (cabecera, título de la pestaña, notificaciones y sonidos) ni en los recuentos y las tarjetas de Inicio. Si la shell termina, la sesión SHALL mostrarse como terminada igual que las demás.
 
 Una terminal sin agente SHALL funcionar con pestañas, distribuciones, scroll, renombrado, copia del comando para adjuntar, archivado y terminar sesión. «Retomar» y «Anteriores» SHALL NOT aplicarse.
 
 #### Scenario: Abrir una terminal en un proyecto
 
 - **WHEN** la persona elige balanz.io, «Terminal (sin agente)», checkout principal y confirma
-- **THEN** se abre una terminal nueva con su shell de login interactiva en la carpeta de balanz.io, llamada «Terminal», con un icono de terminal en lugar de la luz
+- **THEN** se abre una terminal nueva con su shell de login interactiva en la carpeta de balanz.io, llamada «balanz.io · Nueva terminal», con un icono de terminal en lugar de la luz
 
 #### Scenario: Terminal en un worktree existente
 
@@ -889,7 +896,9 @@ Cada proyecto de la barra lateral SHALL tener un botón para arrancar su comando
 
 1. Crear una terminal sin agente en la carpeta principal del proyecto.
 2. Ejecutar el comando dentro de la shell.
-3. Abrir la terminal en una pestaña, titulada «dev · <proyecto>».
+3. Abrir la terminal en una pestaña, titulada con el comando de arranque.
+
+En la barra lateral, la terminal de arranque SHALL distinguirse de las sesiones de agente: SHALL llevar un ▶ en el color de «en marcha» en lugar de la luz de estado y su meta SHALL decir «en marcha». En su proyecto y en «En segundo plano» SHALL ir siempre por encima de las sesiones de agente. Mientras esté viva, el botón de parar SHALL mostrarse en el color de peligro.
 
 La terminal SHALL seguir en marcha en segundo plano al cerrar su pestaña.
 
@@ -902,7 +911,7 @@ El comando de arranque SHALL ser el comando propio del proyecto configurado en A
 #### Scenario: Arrancar un proyecto con script dev
 
 - **WHEN** la persona pulsa ▶ en un proyecto con `pnpm-lock.yaml` y un script `dev`
-- **THEN** se abre la terminal «dev · <proyecto>» ejecutando `pnpm dev` y el botón pasa a ■
+- **THEN** se abre la terminal «pnpm dev» ejecutando `pnpm dev` y el botón pasa a un ■ rojo
 
 #### Scenario: Dejarlo en segundo plano
 

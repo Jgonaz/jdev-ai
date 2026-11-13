@@ -6,7 +6,8 @@ import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { RecentSession } from '../../types.ts';
 import { ContextMenu } from '../ContextMenu.tsx';
 import type { MenuAction } from '../ContextMenu.tsx';
-import { IconArchive, IconCheck, IconClock, IconRestore } from '../Icons.tsx';
+import { IconArchive, IconCheck, IconClock, IconRestore, IconTrash } from '../Icons.tsx';
+import { DeleteArchivedDialog } from './DeleteArchivedDialog.tsx';
 
 type Target = { id: number; recent: RecentSession; x: number; y: number; origin: HTMLElement | null };
 
@@ -18,7 +19,8 @@ const ERROR_MS = 4000;
 /**
  * Menú contextual de las conversaciones de «Anteriores» y de «Archivadas»
  * (clic derecho, tecla ContextMenu o Mayús+F10): Retomar, Marcar como hecha o
- * Reabrir, y Archivar o Desarchivar. Como el de las sesiones, el llamador pasa `onContextMenu` y
+ * Reabrir, Archivar o Desarchivar y, si está archivada, Eliminar
+ * definitivamente. Como el de las sesiones, el llamador pasa `onContextMenu` y
  * `onKeyDown` a cada fila y coloca `menu` una sola vez; `open` indica si hay un
  * menú abierto.
  */
@@ -75,6 +77,7 @@ function Host({ target, onDone }: { target: Target; onDone: (id: number) => void
   const [error, setError] = useState<string | null>(null);
   // Mientras una acción de red sigue en curso el anfitrión no se retira: así un fallo se avisa.
   const [busy, setBusy] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const devolverFoco = useRef(false);
 
   // Un fallo se avisa unos segundos y se retira.
@@ -85,10 +88,10 @@ function Host({ target, onDone }: { target: Target; onDone: (id: number) => void
   }, [error]);
 
   useEffect(() => {
-    if (menuAbierto || busy || error) return;
+    if (menuAbierto || busy || error || eliminando) return;
     if (devolverFoco.current && origin?.isConnected) origin.focus();
     onDone(id);
-  }, [menuAbierto, busy, error, origin, id, onDone]);
+  }, [menuAbierto, busy, error, eliminando, origin, id, onDone]);
 
   const conAviso = (accion: Promise<unknown>, fallo: string) => {
     setBusy(true);
@@ -112,6 +115,9 @@ function Host({ target, onDone }: { target: Target; onDone: (id: number) => void
       onSelect: () => conAviso(setArchived('conversation', recent.id, !recent.archived), 'No se pudo archivar la conversación.'),
     },
   ];
+  if (recent.archived) {
+    actions.push({ id: 'eliminar', label: 'Eliminar definitivamente…', icon: <IconTrash size={14} />, danger: true, onSelect: () => setEliminando(true) });
+  }
 
   return (
     <>
@@ -133,6 +139,7 @@ function Host({ target, onDone }: { target: Target; onDone: (id: number) => void
           }}
         />
       )}
+      {eliminando && <DeleteArchivedDialog target={{ kind: 'conversation', id: recent.id, title: recent.title }} onClose={() => setEliminando(false)} />}
       {error && (
         <div className="ctxmenu__error" role="alert" style={{ left: x, top: y }}>
           {error}

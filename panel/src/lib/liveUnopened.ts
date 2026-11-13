@@ -1,5 +1,5 @@
 import type { ProjectInfo, SessionInfo, VisualState } from '../types.ts';
-import { fallbackProject, visualState } from './sessions.ts';
+import { fallbackProject, isRunning, visualState } from './sessions.ts';
 import { safeStorage } from './workspace.ts';
 
 /** Sesión viva que no está en ninguna pestaña, lista para mostrar. */
@@ -20,8 +20,8 @@ export function isLive(s: Pick<SessionInfo, 'alive' | 'state'>): boolean {
 const RANK: Record<VisualState, number> = { waiting: 0, working: 1, idle: 2, alive: 2, shell: 2, done: 3, ended: 4 };
 
 /**
- * Sesiones vivas que no están abiertas en pestañas, ordenadas por estado y
- * después por actividad reciente. Los proyectos ocultos no cuentan, salvo las
+ * Sesiones vivas que no están abiertas en pestañas: primero las terminales de
+ * arranque en marcha y después por estado y actividad reciente. Los proyectos ocultos no cuentan, salvo las
  * sesiones que esperan (siempre cuentan, como en los avisos); `hideDone` omite
  * las hechas. Las archivadas no están aquí: tienen su propia sección. Una sesión de un proyecto desconocido se muestra con uno genérico.
  */
@@ -45,6 +45,7 @@ export function liveUnopened(
   }
   return items.sort(
     (a, b) =>
+      Number(isRunning(b.session)) - Number(isRunning(a.session)) ||
       RANK[a.state] - RANK[b.state] || b.session.updatedAt - a.session.updatedAt || a.session.name.localeCompare(b.session.name),
   );
 }

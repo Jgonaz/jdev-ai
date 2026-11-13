@@ -171,3 +171,18 @@ describe('plegado recordado', () => {
     expect(() => saveLiveCollapsed(true, null)).not.toThrow();
   });
 });
+
+describe('liveUnopened con terminales de arranque', () => {
+  it('las pone por encima de las de agente, también de las que esperan', () => {
+    const lista = liveUnopened(
+      [
+        sesion('espera', { state: 'waiting', updatedAt: 3000 }),
+        sesion('dev', { agent: 'shell', tracked: false, state: 'alive', run: 'pnpm dev', updatedAt: 0 }),
+        sesion('trabaja', { state: 'working', updatedAt: 2000 }),
+      ],
+      proyectos,
+      [],
+    );
+    expect(nombres(lista)).toEqual(['dev', 'espera', 'trabaja']);
+  });
+});
