@@ -55,6 +55,10 @@
   --line: #1f1f23;
   --line-strong: #2c2c31;
   --line-soft: #19191c;
+  /* Mapa de actividad: borde de los discos usados y sin usar. En los temas claros, más tenue que --line-strong,
+     para que el mapa tenga el mismo peso que en los oscuros. */
+  --map-disc: #45454c;
+  --map-disc-idle: #2c2c31;
   --fg: #ececee;
   --fg-soft: #c9c9ce;
   --fg-muted: #8e8e96;
@@ -142,6 +146,8 @@
   --line: #2a2f35;
   --line-strong: #3a4048;
   --line-soft: #22262b;
+  --map-disc: #4d555e;
+  --map-disc-idle: #3a4048;
   --fg: #e8e6e1;
   --fg-soft: #c9c6bf;
   --fg-muted: #9aa1a9;
@@ -229,6 +235,8 @@
   --line: #2c3440;
   --line-strong: #3d4756;
   --line-soft: #242b35;
+  --map-disc: #566375;
+  --map-disc-idle: #3d4756;
   --fg: #e6e9ee;
   --fg-soft: #c8ced7;
   --fg-muted: #a3adba;
@@ -316,6 +324,8 @@
   --line: #34302a;
   --line-strong: #4a453c;
   --line-soft: #2a2721;
+  --map-disc: #625b4d;
+  --map-disc-idle: #4a453c;
   --fg: #efe8da;
   --fg-soft: #d3ccbd;
   --fg-muted: #a39b8b;
@@ -403,6 +413,8 @@
   --line: #cfc6b0;
   --line-strong: #857a62;
   --line-soft: #ddd5c1;
+  --map-disc: #b3a98f;
+  --map-disc-idle: #d3cab4;
   --fg: #1f2328;
   --fg-soft: #3a3f45;
   --fg-muted: #565c63;
@@ -493,6 +505,8 @@
   --line: #b0b0b0;
   --line-strong: #ffffff;
   --line-soft: #8a8a8a;
+  --map-disc: #ffffff;
+  --map-disc-idle: #ffffff;
   --fg: #ffffff;
   --fg-soft: #f0f0f0;
   --fg-muted: #cfcfcf;

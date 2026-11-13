@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { AgentEvent } from '../../../shared/follow.ts';
 import type { Station } from '../../../shared/stations.ts';
@@ -26,6 +26,7 @@ import {
 import type { NowLine, Pulse, Tone } from '../../lib/mapView.ts';
 import { useElementWidth } from '../../lib/useElementWidth.ts';
 import { useMediaQuery } from '../../lib/useMediaQuery.ts';
+import { Collapsible } from '../Collapsible.tsx';
 
 export type ActivityMapProps = {
   /** Eventos ligeros de la conversación, en orden (`ConversationEntry.mapEvents`). */
@@ -45,7 +46,13 @@ export type ActivityMapProps = {
   subagents: number;
   /** La vista está a la vista: sin ella no hay pulsos ni repintados. */
   active: boolean;
+  /** Desplegable «Actividad reciente» abierto. El mapa y la línea de «ahora» se mantienen al día aunque esté cerrado. */
+  listOpen: boolean;
+  onListToggle: (open: boolean) => void;
 };
+
+/** Ancho del bloque de textos del núcleo (cabe dentro del disco de radio 41). */
+const NUCLEO_TEXTO = 100;
 
 const tinta = (t: Tone): CSSProperties => ({ stroke: toneColor(t) });
 const relleno = (t: Tone): CSSProperties => ({ fill: toneColor(t) });
@@ -107,12 +114,11 @@ function Pulses({ pulsos, activo, alPodar }: { pulsos: readonly Pulse[]; activo:
 /**
  * Mapa de actividad de una sesión de Claude (diseño «Mapa de actividad»): el núcleo con el anillo de contexto, las nueve
  * estaciones con sus radios, la ruta reciente, halos y manecillas de lo que sigue en marcha, y debajo la línea de «ahora»
- * y las últimas filas. El dibujo (SVG) es decorativo y las filas son su equivalente textual.
+ * y, en un desplegable, las últimas filas. El dibujo (SVG) es decorativo y las filas son su equivalente textual.
  */
-export function ActivityMap({ events, total, epoch, synced, state, percent, model, subagents, active }: ActivityMapProps) {
+export function ActivityMap({ events, total, epoch, synced, state, percent, model, subagents, active, listOpen, onListToggle }: ActivityMapProps) {
   const reducido = useMediaQuery('(prefers-reduced-motion: reduce)');
   const visible = useDocumentVisible();
-  const idLista = useId();
   const interrumpida = state === 'other';
 
   // La hora se refresca con cada evento nuevo y, mientras haya algo que se mueva, cada segundo.
@@ -204,7 +210,16 @@ export function ActivityMap({ events, total, epoch, synced, state, percent, mode
               <path key={i} d={l.d} fill="none" strokeWidth={l.width} strokeOpacity={l.opacity} strokeLinecap="round" style={tinta(l.tone)} />
             ))}
             {onda > 0 && !reducido && (
-              <circle key={onda} className="map__wave" cx={CENTRO.x} cy={CENTRO.y} r={ANILLO_R} fill="none" strokeWidth={1.5} style={tinta('accent')} />
+              <circle
+                key={onda}
+                className="map__wave"
+                cx={CENTRO.x}
+                cy={CENTRO.y}
+                r={ANILLO_R}
+                fill="none"
+                strokeWidth={1.5}
+                style={{ ...tinta('accent'), transformOrigin: `${CENTRO.x}px ${CENTRO.y}px` }}
+              />
             )}
             <Pulses pulsos={pulsos} activo={active && visible && !reducido} alPodar={podar} />
             {estaciones.flatMap((s) =>
@@ -241,7 +256,8 @@ export function ActivityMap({ events, total, epoch, synced, state, percent, mode
             )}
           </svg>
 
-          <div className="map__core">
+          {/* Centrado en el centro del mapa, sea cual sea su alto. */}
+          <div className="map__core" style={{ left: CENTRO.x - NUCLEO_TEXTO / 2, top: CENTRO.y, width: NUCLEO_TEXTO }}>
             <span className="map__pct" style={color(anillo.text)}>
               {anillo.label}
             </span>
@@ -253,7 +269,7 @@ export function ActivityMap({ events, total, epoch, synced, state, percent, mode
 
           <ul className="map__stations" aria-label="Estaciones">
             {estaciones.map((s) => (
-              <li key={s.id} className="map__st" style={{ left: s.left, top: s.top }} data-station={s.id}>
+              <li key={s.id} className={`map__st${s.labelUp ? ' map__st--up' : ''}`} style={{ left: s.left, top: s.top }} data-station={s.id}>
                 <span className="map__disc" style={{ borderColor: toneColor(s.ring), ...color(s.iconTone) }}>
                   <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d={s.icon} fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
@@ -269,14 +285,16 @@ export function ActivityMap({ events, total, epoch, synced, state, percent, mode
                     </span>
                   )}
                 </span>
-                <span className="map__name" style={color(s.labelTone)}>
-                  {s.name}
-                </span>
-                {s.usesLabel !== '' && (
-                  <span className="map__uses" style={color(s.usesTone)}>
-                    {s.usesLabel}
+                <span className="map__label">
+                  <span className="map__name" style={color(s.labelTone)}>
+                    {s.name}
                   </span>
-                )}
+                  {s.usesLabel !== '' && (
+                    <span className="map__uses" style={color(s.usesTone)}>
+                      {s.usesLabel}
+                    </span>
+                  )}
+                </span>
                 {(s.running || s.errors > 0) && (
                   <span className="sr-only">
                     {[s.running ? (s.count !== '' ? `${s.count.slice(1)} en marcha` : 'en marcha') : '', s.errors > 0 ? `${s.errors} ${s.errors === 1 ? 'error' : 'errores'}` : '']
@@ -302,13 +320,7 @@ export function ActivityMap({ events, total, epoch, synced, state, percent, mode
         </span>
       </div>
 
-      <section className="map__list" aria-labelledby={idLista}>
-        <div className="map__listhead">
-          <h3 id={idLista} className="map__h">
-            Actividad reciente
-          </h3>
-          <span className="map__n">{filas.length > 0 ? filas.length : ''}</span>
-        </div>
+      <Collapsible title="Actividad reciente" summary={filas.length > 0 ? String(filas.length) : ''} label={filas.length > 0 ? `Actividad reciente (${filas.length})` : undefined} open={listOpen} onToggle={onListToggle}>
         {filas.length === 0 ? (
           // Sin leer aún la conversación (o si falló), la nota de arriba lo explica: no se afirma que no haya actividad.
           synced && <p className="map__empty">Aún no hay actividad. El mapa se llena en cuanto el agente use una herramienta.</p>
@@ -333,7 +345,7 @@ export function ActivityMap({ events, total, epoch, synced, state, percent, mode
             ))}
           </ul>
         )}
-      </section>
+      </Collapsible>
     </div>
   );
 }

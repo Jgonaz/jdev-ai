@@ -38,20 +38,25 @@ const vistas = (events: AgentEvent[], now: number, over: Partial<{ interrupted: 
 const de = (vs: ReturnType<typeof vistas>, id: Station) => vs.find((v) => v.id === id)!;
 
 describe('geometría', () => {
+  it('las etiquetas de la mitad superior van encima del disco, para que su radio no las pise', () => {
+    const v = vistas([], T0);
+    expect(v.filter((e) => e.labelUp).map((e) => e.id)).toEqual(['tu', 'modelo', 'skills']);
+  });
+
   it('las nueve estaciones van de 40 en 40 grados desde arriba, a 118 px del centro', () => {
-    expect(stationPoint('tu')).toMatchObject({ x: 156, y: 45 });
+    expect(stationPoint('tu')).toMatchObject({ x: 156, y: 66 });
     for (const id of ['tu', 'modelo', 'memoria', 'archivos', 'shell', 'red', 'navegador', 'agentes', 'skills'] as const) {
       const p = stationPoint(id);
-      expect(Math.hypot(p.x - 156, p.y - 163)).toBeCloseTo(118, 0);
+      expect(Math.hypot(p.x - 156, p.y - 184)).toBeCloseTo(118, 0);
     }
   });
 
   it('el radio va del borde del anillo de contexto (50) al borde del disco (20)', () => {
     const e = spokeEnds('tu');
-    expect(e).toEqual({ x1: 156, y1: 113, x2: 156, y2: 65 });
+    expect(e).toEqual({ x1: 156, y1: 134, x2: 156, y2: 86 });
     const d = spokeEnds('archivos');
     const p = stationPoint('archivos');
-    expect(Math.hypot(d.x1 - 156, d.y1 - 163)).toBeCloseTo(50, 0);
+    expect(Math.hypot(d.x1 - 156, d.y1 - 184)).toBeCloseTo(50, 0);
     expect(Math.hypot(d.x2 - p.x, d.y2 - p.y)).toBeCloseTo(20, 0);
   });
 
@@ -175,7 +180,7 @@ describe('ruta', () => {
     const l = routeLegs(ruta(['tu', 0], ['shell', 1]), s(2))[0]!;
     const q = /Q ([\d.]+) ([\d.]+)/.exec(l.d)!;
     expect(Number(q[1])).toBeCloseTo(mx + (156 - mx) * 0.45, 1);
-    expect(Number(q[2])).toBeCloseTo(my + (163 - my) * 0.45, 1);
+    expect(Number(q[2])).toBeCloseTo(my + (184 - my) * 0.45, 1);
   });
 
   it('con la ruta apagada del todo no queda ningún tramo; sin paradas suficientes, tampoco', () => {

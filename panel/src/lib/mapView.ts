@@ -17,9 +17,10 @@ import type { Level } from './statusline.ts';
 // ---------------------------------------------------------------------- Geometría
 
 export const MAP_W = 312;
-export const MAP_H = 330;
+export const MAP_H = 362;
 const CX = 156;
-const CY = 163;
+// Centro algo más bajo que la mitad: la etiqueta de Tú va encima de su disco, por fuera del halo.
+const CY = 184;
 /** Radio del círculo donde se colocan las estaciones. */
 const RADIO = 118;
 /** Radio del disco de una estación. */
@@ -96,8 +97,9 @@ const TONE_VARS: Record<Tone, string> = {
   faint: '--fg-faint',
   dim: '--fg-dim',
   line: '--line',
-  idle: '--line-strong',
-  used: '--line-card-active',
+  // Discos: variables propias del mapa (en Papel, más tenues que las líneas de la interfaz).
+  idle: '--map-disc-idle',
+  used: '--map-disc',
   accent: '--agent-claude',
   // Memoria: el tinte del enlace, que pasa contraste en los seis temas (el verdoso del diseño solo existe en Carbón y Papel).
   memory: '--link',
@@ -135,6 +137,8 @@ export type StationView = {
   running: boolean;
   lit: boolean;
   halo: Halo | null;
+  /** La etiqueta va encima del disco: en la mitad superior el radio llega por abajo y la pisaría. */
+  labelUp: boolean;
 };
 
 /** Arco que parte de las 12 y recorre la fracción `f` de la circunferencia (0 < f < 1). */
@@ -201,6 +205,7 @@ export function stationViews(board: Board, { now, interrupted, errorPulses, thin
       errors: st.errors,
       running: enMarcha,
       lit,
+      labelUp: o.s < -0.5,
       halo: enMarcha
         ? { x: o.x, y: o.y, tone: tint, inner: fi > 0.02 ? arcPath(o.x, o.y, 26, fi) : null, outer: fo > 0.02 ? arcPath(o.x, o.y, 30, fo) : null }
         : piensa

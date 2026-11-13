@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionInfo } from '../../types.ts';
-import { MapPanel } from './MapPanel.tsx';
-import { RightViewSwitch } from './RightViewSwitch.tsx';
+import { forgetConversation } from '../../lib/useConversation.ts';
+import { MapPanel, noMapReason } from './MapPanel.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -25,6 +25,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => raiz.unmount());
   contenedor.remove();
+  forgetConversation('jdev-demo-1');
 });
 
 const sesion = (over: Partial<SessionInfo> = {}): SessionInfo => ({
@@ -49,36 +50,43 @@ const sesion = (over: Partial<SessionInfo> = {}): SessionInfo => ({
   chat: { available: true, reason: null },
   ...over,
 });
-const monta = (s: SessionInfo | null, active = true) =>
+const monta = (s: SessionInfo, active = true, activityOpen = false, onActivityToggle: (o: boolean) => void = () => undefined) =>
   act(async () => {
-    raiz.render(createElement(MapPanel, { session: s, active }));
+    raiz.render(createElement(MapPanel, { session: s, active, activityOpen, onActivityToggle }));
   });
 
 describe('MapPanel: estados sin mapa', () => {
-  it('sin terminal activa', async () => {
-    await monta(null);
-    expect(contenedor.textContent).toContain('Abre una terminal de Claude');
-    expect(conversation).not.toHaveBeenCalled();
-  });
-
-  it('sesión de Codex: explica que el mapa es solo para sesiones de Claude del panel', async () => {
-    await monta(sesion({ agent: 'codex', chat: { available: false, reason: 'solo Claude' } }));
-    expect(contenedor.textContent).toContain('El mapa solo está disponible para las sesiones de Claude lanzadas desde el panel.');
-    expect(contenedor.textContent).toContain('Esta es una sesión de Codex.');
+  it('sesión de Codex: una línea que explica que el mapa es solo para sesiones de Claude del panel, sin recuadro grande', async () => {
+    const s = sesion({ agent: 'codex', chat: { available: false, reason: 'solo Claude' } });
+    await monta(s);
+    expect(contenedor.textContent).toBe('Sin mapa: solo está disponible para las sesiones de Claude lanzadas desde el panel.');
+    expect(contenedor.querySelector('.context__nomap')).not.toBeNull();
+    expect(contenedor.querySelector('.map__none')).toBeNull();
     expect(contenedor.querySelector('.map__svg')).toBeNull();
     expect(conversation).not.toHaveBeenCalled();
   });
 
-  it('terminal sin agente', async () => {
-    await monta(sesion({ agent: 'shell' }));
-    expect(contenedor.textContent).toContain('Esta es una terminal sin agente.');
+  it('terminal sin agente: la misma nota', async () => {
+    const s = sesion({ agent: 'shell' });
+    await monta(s);
+    expect(contenedor.textContent).toBe(noMapReason(s));
+    expect(contenedor.textContent).toContain('Sin mapa');
+    expect(conversation).not.toHaveBeenCalled();
   });
 
   it('conversación no disponible: usa el motivo que trae la sesión', async () => {
     await monta(sesion({ chat: { available: false, reason: 'Aún no hay transcripción: espera.' } }));
-    expect(contenedor.textContent).toContain('Aún no hay transcripción: espera.');
+    expect(contenedor.textContent).toBe('Mapa no disponible: Aún no hay transcripción: espera.');
     expect(contenedor.querySelector('.map__svg')).toBeNull();
     expect(conversation).not.toHaveBeenCalled();
+  });
+
+  it('conversación no disponible sin motivo: texto por defecto', () => {
+    expect(noMapReason(sesion({ chat: { available: false, reason: null } }))).toBe('Mapa no disponible: la conversación de esta sesión no está disponible.');
+  });
+
+  it('una sesión de Claude con conversación tiene mapa (sin motivo)', () => {
+    expect(noMapReason(sesion())).toBeNull();
   });
 });
 
@@ -104,17 +112,39 @@ describe('MapPanel: sesión de Claude', () => {
   });
 });
 
-describe('RightViewSwitch', () => {
-  it('dos botones con aria-pressed y el cambio de vista', async () => {
-    const onView = vi.fn();
-    await act(async () => {
-      raiz.render(createElement(RightViewSwitch, { view: 'map', onView }));
+describe('MapPanel: «Actividad reciente»', () => {
+  it('empieza cerrado y el mapa se actualiza igualmente con lo que lee de la conversación', async () => {
+    conversation.mockResolvedValue({
+      sessionId: 's1',
+      from: 10,
+      size: 10,
+      reset: false,
+      more: false,
+      events: [{ type: 'tool', id: 'a', tool: 'Bash', verb: 'Ejecuto', target: 'pnpm test', at: Date.now() - 5000, station: 'shell' }],
     });
-    const [contexto, mapa] = [...contenedor.querySelectorAll<HTMLButtonElement>('button')];
-    expect([contexto!.textContent, contexto!.getAttribute('aria-pressed')]).toEqual(['Contexto', 'false']);
-    expect([mapa!.textContent, mapa!.getAttribute('aria-pressed')]).toEqual(['Mapa', 'true']);
-    expect(contenedor.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Vista del panel derecho');
-    await act(async () => contexto!.click());
-    expect(onView).toHaveBeenCalledWith('context');
+    await monta(sesion(), true, false);
+    const boton = contenedor.querySelector<HTMLButtonElement>('.collapsible__btn')!;
+    expect(boton.getAttribute('aria-expanded')).toBe('false');
+    expect(boton.getAttribute('aria-label')).toBe('Actividad reciente (1)');
+    expect(contenedor.querySelector('.map__rows')).toBeNull();
+    expect(contenedor.querySelector('.map__nowtext')!.textContent).toBe('Shell · pnpm test');
+    expect(contenedor.querySelector('[data-station="shell"]')!.textContent).toContain('en marcha');
+  });
+
+  it('abierto muestra las filas y avisa al cerrar', async () => {
+    conversation.mockResolvedValue({
+      sessionId: 's1',
+      from: 10,
+      size: 10,
+      reset: false,
+      more: false,
+      events: [{ type: 'tool', id: 'a', tool: 'Bash', verb: 'Ejecuto', target: 'pnpm test', at: Date.now() - 5000, station: 'shell' }],
+    });
+    const alAlternar = vi.fn();
+    await monta(sesion(), true, true, alAlternar);
+    expect(contenedor.querySelector('.collapsible__btn')!.getAttribute('aria-expanded')).toBe('true');
+    expect(contenedor.querySelectorAll('.map__row')).toHaveLength(1);
+    await act(async () => contenedor.querySelector<HTMLButtonElement>('.collapsible__btn')!.click());
+    expect(alAlternar).toHaveBeenCalledWith(false);
   });
 });

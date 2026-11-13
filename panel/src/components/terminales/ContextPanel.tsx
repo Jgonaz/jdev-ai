@@ -1,131 +1,62 @@
-import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { rememberHistoryFilters } from '../../lib/history.ts';
-import { historyHref, projectHref } from '../../lib/route.ts';
-import { attachCommand, fallbackProject, sessionPlace } from '../../lib/sessions.ts';
 import { ownerSession } from '../../lib/follow.ts';
+import { attachCommand, fallbackProject } from '../../lib/sessions.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
-import { IconCopy } from '../Icons.tsx';
-import { MapPanel } from './MapPanel.tsx';
-import { RightViewSwitch } from './RightViewSwitch.tsx';
+import { Collapsible } from '../Collapsible.tsx';
+import { MapPanel, noMapReason } from './MapPanel.tsx';
+import { SessionDetails } from './SessionDetails.tsx';
 
 /**
- * Panel derecho de Terminales: el contexto de la terminal activa (solo datos que ya conoce el panel) o el mapa de
- * actividad de su sesión, según el selector de la cabecera (se recuerda). `hidden` es que la pantalla está oculta.
+ * Panel derecho de Terminales: la sesión activa (o, en una pestaña de seguimiento, la que la lanzó) con su mapa de
+ * actividad, la línea de «ahora» y dos desplegables, «Actividad reciente» y «Sesión», abiertos por defecto y con el
+ * estado recordado. Sin mapa (Codex, terminal sin agente, conversación no disponible) va una nota con el motivo y «Sesión»
+ * a la vista. `hidden` es que la pantalla está oculta.
  */
 export function ContextPanel({ style, hidden = false }: { style?: CSSProperties; hidden?: boolean }) {
   const { sessions, projects, tmuxSocket } = useSessions();
   const { workspace, contextOverlay, closeContextOverlay, prefs, setPrefs, dialogOpen } = useWorkspace();
-  const vista = prefs.rightView;
-  const [copiado, setCopiado] = useState(false);
-  // Con una pestaña de seguimiento activa, el contexto es el de la sesión que la lanzó.
-  const sesion = sessions.find((s) => s.name === ownerSession(workspace.active));
+  const sesion = sessions.find((s) => s.name === ownerSession(workspace.active)) ?? null;
   const proyecto = sesion ? (projects.find((p) => p.id === sesion.project) ?? fallbackProject(sesion.project)) : null;
   const comando = sesion && tmuxSocket ? attachCommand(sesion.name, tmuxSocket) : '';
-
-  const copiar = async () => {
-    try {
-      await navigator.clipboard.writeText(comando);
-      setCopiado(true);
-      window.setTimeout(() => setCopiado(false), 1600);
-    } catch {
-      // Sin permiso para el portapapeles: el comando sigue visible para copiarlo a mano.
-    }
-  };
+  const motivo = sesion ? noMapReason(sesion) : null;
 
   return (
     <aside
       className={`context${contextOverlay ? ' context--overlay' : ''}`}
-      aria-label={vista === 'map' ? 'Mapa de actividad' : 'Contexto del proyecto'}
+      aria-label="Sesión y actividad"
       style={style}
       onKeyDown={(e) => {
         if (contextOverlay && e.key === 'Escape') closeContextOverlay();
       }}
     >
-      <div className="context__switch">
-        <RightViewSwitch view={vista} onView={(v) => setPrefs({ rightView: v })} />
-      </div>
-
-      {vista === 'map' ? (
+      {sesion && proyecto ? (
         <>
-          {sesion && (
-            <div className="context__who">
-              <span className="context__whoname">{sesion.title}</span>
-              <span className="context__whoagent">{sesion.agent === 'shell' ? 'terminal' : sesion.agent}</span>
+          <div className="context__who">
+            <span className="context__whoname">{sesion.title}</span>
+            <span className="context__whoagent">{sesion.agent === 'shell' ? 'terminal' : sesion.agent}</span>
+          </div>
+          <MapPanel session={sesion} active={!hidden && !dialogOpen} activityOpen={prefs.mapActivityOpen} onActivityToggle={(o) => setPrefs({ mapActivityOpen: o })} />
+          {motivo !== null ? (
+            <div className="context__ses context__ses--plain">
+              <SessionDetails session={sesion} project={proyecto} command={comando} />
+            </div>
+          ) : (
+            <div className="context__ses">
+              <Collapsible
+                title="Sesión"
+                summary={`${proyecto.name} · ${sesion.branch ?? 'desconocida'}`}
+                label={`Sesión, ${proyecto.name}, ${sesion.branch ?? 'rama desconocida'}`}
+                open={prefs.mapSessionOpen}
+                onToggle={(o) => setPrefs({ mapSessionOpen: o })}
+              >
+                <SessionDetails session={sesion} project={proyecto} command={comando} />
+              </Collapsible>
             </div>
           )}
-          {/* Solo con la vista Mapa a la vista se lee la conversación; sin ella, el sondeo se detiene. */}
-          <MapPanel session={sesion ?? null} active={!hidden && !dialogOpen} />
         </>
       ) : (
-        <>
-          <div className="context__head">
-            <span className="context__eyebrow">Contexto</span>
-            <span className="context__name">{proyecto?.name ?? 'Sin terminal activa'}</span>
-            {sesion && <span className="context__branch">{sessionPlace(sesion)}</span>}
-          </div>
-
-          {sesion && proyecto ? (
-            <>
-              <section className="context__section" aria-labelledby="ctx-sesion">
-                <h2 id="ctx-sesion" className="context__h">
-                  Sesión
-                </h2>
-                <dl className="context__dl">
-                  <dt>Proyecto</dt>
-                  <dd>{proyecto.name}</dd>
-                  <dt>Rama</dt>
-                  <dd className="mono-text">{sesion.branch ?? 'desconocida'}</dd>
-                  <dt>Worktree</dt>
-                  <dd className="mono-text">{sesion.worktree || 'checkout principal'}</dd>
-                  <dt>Agente</dt>
-                  <dd>{sesion.agent === 'shell' ? 'Terminal (sin agente)' : sesion.agent}</dd>
-                  {proyecto.path && (
-                    <>
-                      <dt>Ruta</dt>
-                      <dd className="mono-text context__path">{proyecto.path}</dd>
-                    </>
-                  )}
-                </dl>
-              </section>
-              <section className="context__section" aria-labelledby="ctx-adjuntar">
-                <h2 id="ctx-adjuntar" className="context__h">
-                  Adjuntar desde otra terminal
-                </h2>
-                <code className="context__cmd">{comando || 'Cargando…'}</code>
-                <button type="button" className="btn btn--ghost btn--sm" disabled={!comando} onClick={() => void copiar()}>
-                  <IconCopy size={14} />
-                  {copiado ? 'Copiado' : 'Copiar comando'}
-                </button>
-              </section>
-            </>
-          ) : (
-            <p className="context__empty">Abre una terminal para ver aquí su proyecto, rama y worktree.</p>
-          )}
-
-          {proyecto && (
-            <section className="context__section context__section--last" aria-labelledby="ctx-enlaces">
-              <h2 id="ctx-enlaces" className="context__h">
-                Backlog e historial
-              </h2>
-              <div className="context__links">
-                <a className="btn btn--ghost btn--sm" href={projectHref('backlog', proyecto.id)} aria-label={`Ver backlog de ${proyecto.name}`}>
-                  Ver backlog
-                </a>
-                {/* Historial abre con el filtro recordado: se deja solo el de este proyecto. */}
-                <a
-                  className="btn btn--ghost btn--sm"
-                  href={historyHref()}
-                  onClick={() => rememberHistoryFilters({ project: proyecto.id })}
-                  aria-label={`Historial de ${proyecto.name}`}
-                >
-                  Historial del proyecto
-                </a>
-              </div>
-            </section>
-          )}
-        </>
+        <p className="context__empty">Abre una terminal para ver aquí su mapa de actividad y su sesión.</p>
       )}
     </aside>
   );

@@ -1098,7 +1098,9 @@ El servidor SHALL ofrecer la lista de cambios y el diff de un archivo solo para 
 
 ### Requirement: Mapa de actividad de una sesión
 
-El panel derecho de Terminales SHALL ofrecer, junto a «Contexto», una vista «Mapa» de la sesión activa. Ambas compartirán hueco y ancho y se elegirán con un selector que el panel recuerda. Con una pestaña de seguimiento activa, el mapa SHALL ser el de la sesión que la lanzó.
+El panel derecho de Terminales SHALL ser un solo panel de la sesión activa, sin selector de vistas. Mostrará, por este orden, el nombre de la sesión y su agente, el mapa de actividad, la línea de lo que se ejecuta en ese momento y dos desplegables: «Actividad reciente (N)» y «Sesión». Los dos empezarán abiertos y el panel SHALL recordar si cada uno está abierto. El panel SHALL empezar a la altura de las tarjetas de terminal, bajo la barra de pestañas. Con una pestaña de seguimiento activa, el panel SHALL ser el de la sesión que la lanzó.
+
+«Sesión» SHALL mostrar el proyecto, la rama, el worktree, el agente y la ruta del proyecto, el comando para adjuntar la sesión desde otra terminal con un botón para copiarlo, y los enlaces al backlog y al historial del proyecto.
 
 El mapa SHALL mostrar un núcleo central y las estaciones Tú, Modelo, Memoria, Archivos, Shell, Red, Navegador, Agentes y Skills, y SHALL reflejar en directo la conversación de la sesión:
 
@@ -1111,13 +1113,13 @@ El mapa SHALL mostrar un núcleo central y las estaciones Tú, Modelo, Memoria, 
 - un anillo alrededor del núcleo SHALL mostrar el porcentaje de contexto, con los mismos umbrales de color que la barra de la cabecera;
 - cada subagente activo SHALL verse como un punto en la estación Agentes.
 
-Bajo el mapa SHALL mostrarse lo que se ejecuta en ese momento y las últimas 16 filas de actividad, con su estado (en marcha, hecha o fallida) y su duración. Las llamadas terminadas y consecutivas en una misma estación SHALL agruparse en una fila.
+«Actividad reciente» SHALL mostrar las últimas 16 filas de actividad, con su estado (en marcha, hecha o fallida) y su duración. Las llamadas terminadas y consecutivas en una misma estación SHALL agruparse en una fila. El mapa SHALL seguir actualizándose aunque el desplegable esté cerrado.
 
 Las etiquetas SHALL mostrar solo nombres (archivo, host de una URL, nombre del comando o de la herramienta), nunca contenidos.
 
 El mapa SHALL usar los colores del tema activo. Con movimiento reducido, SHALL prescindir de pulsos, desplazamientos y giros, y conservar los encendidos y los fundidos. SHALL NOT animarse mientras no sea visible ni cuando no haya nada en movimiento.
 
-El mapa SHALL obtenerse solo de la conversación que el panel ya lee para la vista chat, y solo para sesiones de Claude lanzadas desde el panel. En las demás, la vista SHALL explicar por qué no hay mapa.
+El mapa SHALL obtenerse solo de la conversación que el panel ya lee para la vista chat, y solo para sesiones de Claude lanzadas desde el panel. En las demás, el panel SHALL mostrar una línea con el motivo y la información de «Sesión» a la vista, sin desplegable. Sin terminal activa, SHALL mostrar solo un aviso.
 
 #### Scenario: El agente edita un archivo
 
@@ -1146,8 +1148,13 @@ El mapa SHALL obtenerse solo de la conversación que el panel ya lee para la vis
 
 #### Scenario: Sesión de Codex
 
-- **WHEN** la persona elige «Mapa» con una sesión de Codex activa
-- **THEN** la vista explica que el mapa solo está disponible para sesiones de Claude del panel
+- **WHEN** la sesión activa es de Codex
+- **THEN** el panel explica en una línea que el mapa solo está disponible para sesiones de Claude del panel y muestra a la vista el proyecto, la rama, el comando para adjuntar y los enlaces
+
+#### Scenario: Ver la actividad y la sesión
+
+- **WHEN** la persona cierra «Sesión» y recarga el panel
+- **THEN** «Sesión» sigue cerrado, «Actividad reciente (11)» sigue abierto con las 11 filas y el mapa se mantiene arriba
 
 #### Scenario: Sesión retomada
 

@@ -483,9 +483,18 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
 
   La terminal sigue conectada mientras ves el chat. En las sesiones de Codex y
   en las terminales sin agente el conmutador está desactivado y explica por qué.
-- **Mapa de actividad.** El panel derecho de Terminales tiene un selector
-  «Contexto / Mapa», que se recuerda. El mapa muestra en directo qué hace la
-  sesión de Claude activa (o la que lanzó la pestaña de seguimiento activa):
+- **Mapa de actividad.** El panel derecho de Terminales muestra la sesión activa
+  (o la que lanzó la pestaña de seguimiento activa). Arriba están su nombre y
+  agente, el mapa y la línea de lo que se ejecuta ahora. Debajo hay dos
+  desplegables, abiertos de entrada, que recuerdan si los cierras:
+  - «Actividad reciente (N)», con las filas de actividad;
+  - «Sesión», con el proyecto, la rama, el worktree, el agente, la ruta, el
+    comando para adjuntar la sesión desde otra terminal y los enlaces al backlog
+    y al historial del proyecto.
+
+  Sin mapa (Codex, terminal sin agente), una línea explica el motivo y la sesión
+  se muestra a la vista. El mapa muestra en directo qué hace la sesión de
+  Claude:
   - **Estaciones:** alrededor del núcleo están Tú, Modelo, Memoria, Archivos,
     Shell, Red, Navegador, Agentes y Skills. Cada herramienta lanza un pulso a
     su estación al empezar y de vuelta al terminar, y los errores y rechazos se
@@ -499,8 +508,8 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   - **Núcleo:** el anillo de contexto usa los mismos colores que la cabecera, y
     cada subagente activo gira como un punto alrededor de Agentes.
 
-  Debajo están lo que se ejecuta ahora y las últimas 16 filas de actividad. Las
-  llamadas seguidas a la misma estación se agrupan en una sola fila. Las
+  La actividad reciente guarda las últimas 16 filas. Las llamadas seguidas a la
+  misma estación se agrupan en una sola fila. Las
   etiquetas solo nombran (el archivo, el comando o el host), nunca muestran
   contenidos.
 

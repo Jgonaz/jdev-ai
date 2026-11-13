@@ -55,6 +55,8 @@ const props = (over: Partial<ActivityMapProps> = {}): ActivityMapProps => ({
   model: 'Opus 5.5',
   subagents: 0,
   active: true,
+  listOpen: true,
+  onListToggle: () => undefined,
   ...over,
 });
 const pinta = (p: ActivityMapProps) =>
@@ -150,6 +152,40 @@ describe('ActivityMap: lista de actividad', () => {
     expect(contenedor.textContent).not.toContain('secreto');
     expect(q('.map__nowtext')!.getAttribute('aria-live')).toBe('polite');
     expect(q('.map__nowtext')!.textContent).toBe('Shell · curl');
+  });
+});
+
+describe('ActivityMap: desplegable de actividad', () => {
+  const ev = () => {
+    const ahora = Date.now();
+    return [tool('a', 'archivos', ahora - 10_000, 'src/App.tsx'), result('a', ahora - 9700), tool('b', 'shell', ahora - 42_000, 'pnpm test')];
+  };
+
+  it('el botón lleva el recuento, aria-expanded y avisa del cambio', async () => {
+    const onListToggle = vi.fn();
+    await pinta(props({ events: ev(), total: 3, listOpen: false, onListToggle }));
+    const boton = q<HTMLButtonElement>('.collapsible__btn')!;
+    expect(boton.getAttribute('aria-label')).toBe('Actividad reciente (2)');
+    expect(q('.collapsible__summary')!.textContent).toBe('2');
+    expect(boton.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => boton.click());
+    expect(onListToggle).toHaveBeenCalledWith(true);
+  });
+
+  it('cerrado no pinta filas, pero el mapa y la línea de ahora siguen al día', async () => {
+    const base = ev();
+    await pinta(props({ events: base, total: 3, listOpen: false }));
+    expect(q('.map__rows')).toBeNull();
+    expect(q('.map__empty')).toBeNull();
+    expect(q('.map__nowtext')!.textContent).toBe('Shell · pnpm test');
+    expect(q('[data-station="shell"] .map__count')).toBeNull();
+    expect(qa('.map__svg circle[r="31"]')).toHaveLength(1);
+    // Llega otra llamada con el desplegable aún cerrado: la estación y la línea se actualizan.
+    const nuevos = [...base, tool('c', 'red', Date.now() - 1000, 'https://a.b/c')];
+    await pinta(props({ events: nuevos, total: 4, listOpen: false }));
+    expect(q('.collapsible__btn')!.getAttribute('aria-label')).toBe('Actividad reciente (3)');
+    expect(qa('.map__svg circle[r="31"]')).toHaveLength(2);
+    expect(q('.map__rows')).toBeNull();
   });
 });
 

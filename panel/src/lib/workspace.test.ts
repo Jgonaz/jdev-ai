@@ -181,33 +181,44 @@ describe('persistencia', () => {
     };
     expect(loadWorkspace(roto)).toBeNull();
     expect(() => saveWorkspace(EMPTY_WORKSPACE, roto)).not.toThrow();
-    expect(loadUiPrefs(roto)).toEqual({ contextOpen: true, hideDone: false, rightView: 'context' });
+    expect(loadUiPrefs(roto)).toEqual({ contextOpen: true, hideDone: false, mapActivityOpen: true, mapSessionOpen: true });
   });
 
   it('preferencias de interfaz', () => {
-    saveUiPrefs({ contextOpen: false, hideDone: true, rightView: 'context' });
-    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true, rightView: 'context' });
+    saveUiPrefs({ contextOpen: false, hideDone: true, mapActivityOpen: false, mapSessionOpen: false });
+    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true, mapActivityOpen: false, mapSessionOpen: false });
     localStorage.setItem('jdev-panel:ui', '{"contextOpen":"sí"}');
-    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false, rightView: 'context' });
+    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false, mapActivityOpen: true, mapSessionOpen: true });
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
-  it('recuerda la vista del panel derecho y ante un valor desconocido vuelve a Contexto', () => {
-    saveUiPrefs({ contextOpen: true, hideDone: false, rightView: 'map' });
-    expect(loadUiPrefs().rightView).toBe('map');
-    localStorage.setItem('jdev-panel:ui', '{"rightView":"otra"}');
-    expect(loadUiPrefs().rightView).toBe('context');
+  it('recuerda el estado de los desplegables del panel derecho y ante un valor inválido vuelve a abiertos', () => {
+    saveUiPrefs({ contextOpen: true, hideDone: false, mapActivityOpen: true, mapSessionOpen: false });
+    expect(loadUiPrefs()).toMatchObject({ mapActivityOpen: true, mapSessionOpen: false });
+    saveUiPrefs({ contextOpen: true, hideDone: false, mapActivityOpen: false, mapSessionOpen: true });
+    expect(loadUiPrefs()).toMatchObject({ mapActivityOpen: false, mapSessionOpen: true });
+    localStorage.setItem('jdev-panel:ui', '{"mapActivityOpen":"sí","mapSessionOpen":1}');
+    expect(loadUiPrefs()).toMatchObject({ mapActivityOpen: true, mapSessionOpen: true });
+  });
+
+  it('ignora la antigua rightView sin romper la carga y la descarta al guardar', () => {
+    localStorage.setItem('jdev-panel:ui', '{"contextOpen":false,"rightView":"map"}');
+    const p = loadUiPrefs();
+    expect(p).toEqual({ contextOpen: false, hideDone: false, mapActivityOpen: true, mapSessionOpen: true });
+    expect('rightView' in p).toBe(false);
+    saveUiPrefs(p);
+    expect(localStorage.getItem('jdev-panel:ui')).not.toContain('rightView');
   });
 
   it('migra la preferencia anterior hideClosed a hideDone', () => {
     localStorage.setItem('jdev-panel:ui', '{"contextOpen":false,"hideClosed":true}');
-    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true, rightView: 'context' });
+    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true, mapActivityOpen: true, mapSessionOpen: true });
     // La nueva manda si conviven.
     localStorage.setItem('jdev-panel:ui', '{"contextOpen":true,"hideClosed":true,"hideDone":false}');
-    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false, rightView: 'context' });
+    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false, mapActivityOpen: true, mapSessionOpen: true });
     // Al guardar desaparece el nombre anterior.
     saveUiPrefs(loadUiPrefs());
-    expect(localStorage.getItem('jdev-panel:ui')).toBe('{"contextOpen":true,"hideDone":false,"rightView":"context"}');
+    expect(localStorage.getItem('jdev-panel:ui')).toBe('{"contextOpen":true,"hideDone":false,"mapActivityOpen":true,"mapSessionOpen":true}');
   });
 });
 

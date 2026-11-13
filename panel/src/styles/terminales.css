@@ -1,4 +1,6 @@
 .workspace {
+  /* Alto de la barra de pestañas (pestañas y botones de 30 px): el panel derecho empieza a la altura de las tarjetas. */
+  --tabsbar-h: 30px;
   position: relative;
   flex: 1;
   min-height: 0;
@@ -243,6 +245,7 @@
 /* ---------- Pestañas y distribución ---------- */
 .tabsbar {
   flex: 0 0 auto;
+  min-height: var(--tabsbar-h);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -884,85 +887,20 @@
   flex: 0 1 var(--right-w, var(--context-w));
   min-width: 280px;
   margin-left: var(--gap-card);
+  margin-top: calc(var(--tabsbar-h) + var(--gap-card));
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  border: 1px solid var(--line-card);
+  /* Muestra la sesión activa: lleva el mismo borde que la tarjeta de terminal con el foco. */
+  border: 1px solid var(--line-card-active);
   border-radius: var(--radius-card);
   background: var(--bg-card);
 }
-.context__head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px 16px;
-}
-.context__eyebrow {
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-}
-.context__name {
-  font-size: calc(15px * var(--u));
-  font-weight: 600;
-}
-.context__branch {
-  font-family: var(--font-term);
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-}
-.context__section {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px 16px;
-  border-top: 1px solid var(--line-soft);
-}
-.context__h {
-  font-size: var(--text-md);
-  font-weight: 600;
-}
-.context__dl {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 14px;
-  width: 100%;
-  font-size: var(--text-md);
-}
-.context__dl dt {
-  color: var(--fg-muted);
-}
-.context__dl dd {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.context__path {
-  font-size: var(--text-sm);
-}
-.context__cmd {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--fg-soft);
-  font-size: var(--text-sm2);
-  overflow-wrap: anywhere;
-}
-.context__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
 .context__empty {
-  padding: 0 16px;
+  padding: 14px 16px 0;
   color: var(--fg-muted);
   font-size: var(--text-md);
   line-height: 1.5;
-}
-.context__empty {
-  padding-top: 14px;
 }
 
 /* ---------- Estado vacío ---------- */
@@ -1238,7 +1176,8 @@
 .context--overlay {
   min-width: 0;
   position: absolute;
-  top: 38px; /* bajo la barra de pestañas, para no tapar su botón */
+  top: calc(var(--tabsbar-h) + var(--gap-card)); /* bajo la barra de pestañas, para no tapar su botón */
+  margin-top: 0;
   right: var(--gap-card);
   bottom: var(--gap-card);
   z-index: 20;
@@ -1365,6 +1304,7 @@
   min-width: 280px;
   min-height: 0;
   margin-left: var(--gap-card);
+  margin-top: calc(var(--tabsbar-h) + var(--gap-card));
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line-card);
@@ -1570,7 +1510,8 @@
 .viewer--overlay {
   min-width: 0;
   position: absolute;
-  top: 38px;
+  top: calc(var(--tabsbar-h) + var(--gap-card));
+  margin-top: 0;
   right: var(--gap-card);
   bottom: var(--gap-card);
   margin-left: 0;
