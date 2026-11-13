@@ -181,26 +181,33 @@ describe('persistencia', () => {
     };
     expect(loadWorkspace(roto)).toBeNull();
     expect(() => saveWorkspace(EMPTY_WORKSPACE, roto)).not.toThrow();
-    expect(loadUiPrefs(roto)).toEqual({ contextOpen: true, hideDone: false });
+    expect(loadUiPrefs(roto)).toEqual({ contextOpen: true, hideDone: false, rightView: 'context' });
   });
 
   it('preferencias de interfaz', () => {
-    saveUiPrefs({ contextOpen: false, hideDone: true });
-    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true });
+    saveUiPrefs({ contextOpen: false, hideDone: true, rightView: 'context' });
+    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true, rightView: 'context' });
     localStorage.setItem('jdev-panel:ui', '{"contextOpen":"sí"}');
-    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false });
+    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false, rightView: 'context' });
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('recuerda la vista del panel derecho y ante un valor desconocido vuelve a Contexto', () => {
+    saveUiPrefs({ contextOpen: true, hideDone: false, rightView: 'map' });
+    expect(loadUiPrefs().rightView).toBe('map');
+    localStorage.setItem('jdev-panel:ui', '{"rightView":"otra"}');
+    expect(loadUiPrefs().rightView).toBe('context');
   });
 
   it('migra la preferencia anterior hideClosed a hideDone', () => {
     localStorage.setItem('jdev-panel:ui', '{"contextOpen":false,"hideClosed":true}');
-    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true });
+    expect(loadUiPrefs()).toEqual({ contextOpen: false, hideDone: true, rightView: 'context' });
     // La nueva manda si conviven.
     localStorage.setItem('jdev-panel:ui', '{"contextOpen":true,"hideClosed":true,"hideDone":false}');
-    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false });
+    expect(loadUiPrefs()).toEqual({ contextOpen: true, hideDone: false, rightView: 'context' });
     // Al guardar desaparece el nombre anterior.
     saveUiPrefs(loadUiPrefs());
-    expect(localStorage.getItem('jdev-panel:ui')).toBe('{"contextOpen":true,"hideDone":false}');
+    expect(localStorage.getItem('jdev-panel:ui')).toBe('{"contextOpen":true,"hideDone":false,"rightView":"context"}');
   });
 });
 

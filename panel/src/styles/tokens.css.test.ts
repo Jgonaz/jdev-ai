@@ -57,6 +57,15 @@ describe('temas', () => {
     ['--working-text', '--working-bg'],
     ['--working-text', '--bg-card'],
     ['--link', '--bg-card'],
+    // Mapa de actividad: el acento, Memoria (el tinte del enlace), el aviso y el texto sobre el relleno rojo del contador de errores.
+    ['--agent-claude', '--bg-card'],
+    ['--agent-claude', '--bg-surface'],
+    ['--link', '--bg-surface'],
+    ['--waiting-text', '--bg-card'],
+    ['--waiting-text', '--bg-surface'],
+    ['--fg-soft', '--bg-surface'],
+    ['--fg', '--bg-surface'],
+    ['--danger-ink', '--danger'],
     ['--term-text', '--term-bg'],
   ];
   for (const nombre of ['carbon', 'grafito', 'pizarra', 'fosforo', 'papel', 'contraste']) {
@@ -64,6 +73,13 @@ describe('temas', () => {
       for (const [a, b] of PARES) expect(contraste(color(nombre, a), color(nombre, b)), `${a} sobre ${b}`).toBeGreaterThanOrEqual(4.5);
     });
   }
+
+  it('el texto de error del mapa (--danger-text, o --danger donde el tema no lo redefine) llega a 4,5:1 sobre las tarjetas y los discos', () => {
+    for (const nombre of temas.keys()) {
+      const texto = /--danger-text:\s*(#[0-9a-fA-F]{6})/.exec(temas.get(nombre)!)?.[1] ?? color(nombre, '--danger');
+      for (const fondo of ['--bg-card', '--bg-surface']) expect(contraste(texto, color(nombre, fondo)), `${nombre}: texto de error sobre ${fondo}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 
   it('la tarjeta activa se distingue de las demás en todos los temas', () => {
     // El borde de Carbón (#45454c, del diseño) queda en 2:1: no es el único aviso (la pestaña activa va rellena), pero sí claramente más claro.

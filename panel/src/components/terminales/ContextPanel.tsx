@@ -7,11 +7,17 @@ import { ownerSession } from '../../lib/follow.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import { IconCopy } from '../Icons.tsx';
+import { MapPanel } from './MapPanel.tsx';
+import { RightViewSwitch } from './RightViewSwitch.tsx';
 
-/** Contexto de la terminal activa: solo datos que ya conoce el panel. */
-export function ContextPanel({ style }: { style?: CSSProperties }) {
+/**
+ * Panel derecho de Terminales: el contexto de la terminal activa (solo datos que ya conoce el panel) o el mapa de
+ * actividad de su sesión, según el selector de la cabecera (se recuerda). `hidden` es que la pantalla está oculta.
+ */
+export function ContextPanel({ style, hidden = false }: { style?: CSSProperties; hidden?: boolean }) {
   const { sessions, projects, tmuxSocket } = useSessions();
-  const { workspace, contextOverlay, closeContextOverlay } = useWorkspace();
+  const { workspace, contextOverlay, closeContextOverlay, prefs, setPrefs, dialogOpen } = useWorkspace();
+  const vista = prefs.rightView;
   const [copiado, setCopiado] = useState(false);
   // Con una pestaña de seguimiento activa, el contexto es el de la sesión que la lanzó.
   const sesion = sessions.find((s) => s.name === ownerSession(workspace.active));
@@ -31,76 +37,95 @@ export function ContextPanel({ style }: { style?: CSSProperties }) {
   return (
     <aside
       className={`context${contextOverlay ? ' context--overlay' : ''}`}
-      aria-label="Contexto del proyecto"
+      aria-label={vista === 'map' ? 'Mapa de actividad' : 'Contexto del proyecto'}
       style={style}
       onKeyDown={(e) => {
         if (contextOverlay && e.key === 'Escape') closeContextOverlay();
       }}
     >
-      <div className="context__head">
-        <span className="context__eyebrow">Contexto</span>
-        <span className="context__name">{proyecto?.name ?? 'Sin terminal activa'}</span>
-        {sesion && <span className="context__branch">{sessionPlace(sesion)}</span>}
+      <div className="context__switch">
+        <RightViewSwitch view={vista} onView={(v) => setPrefs({ rightView: v })} />
       </div>
 
-      {sesion && proyecto ? (
+      {vista === 'map' ? (
         <>
-          <section className="context__section" aria-labelledby="ctx-sesion">
-            <h2 id="ctx-sesion" className="context__h">
-              Sesión
-            </h2>
-            <dl className="context__dl">
-              <dt>Proyecto</dt>
-              <dd>{proyecto.name}</dd>
-              <dt>Rama</dt>
-              <dd className="mono-text">{sesion.branch ?? 'desconocida'}</dd>
-              <dt>Worktree</dt>
-              <dd className="mono-text">{sesion.worktree || 'checkout principal'}</dd>
-              <dt>Agente</dt>
-              <dd>{sesion.agent === 'shell' ? 'Terminal (sin agente)' : sesion.agent}</dd>
-              {proyecto.path && (
-                <>
-                  <dt>Ruta</dt>
-                  <dd className="mono-text context__path">{proyecto.path}</dd>
-                </>
-              )}
-            </dl>
-          </section>
-          <section className="context__section" aria-labelledby="ctx-adjuntar">
-            <h2 id="ctx-adjuntar" className="context__h">
-              Adjuntar desde otra terminal
-            </h2>
-            <code className="context__cmd">{comando || 'Cargando…'}</code>
-            <button type="button" className="btn btn--ghost btn--sm" disabled={!comando} onClick={() => void copiar()}>
-              <IconCopy size={14} />
-              {copiado ? 'Copiado' : 'Copiar comando'}
-            </button>
-          </section>
+          {sesion && (
+            <div className="context__who">
+              <span className="context__whoname">{sesion.title}</span>
+              <span className="context__whoagent">{sesion.agent === 'shell' ? 'terminal' : sesion.agent}</span>
+            </div>
+          )}
+          {/* Solo con la vista Mapa a la vista se lee la conversación; sin ella, el sondeo se detiene. */}
+          <MapPanel session={sesion ?? null} active={!hidden && !dialogOpen} />
         </>
       ) : (
-        <p className="context__empty">Abre una terminal para ver aquí su proyecto, rama y worktree.</p>
-      )}
-
-      {proyecto && (
-        <section className="context__section context__section--last" aria-labelledby="ctx-enlaces">
-          <h2 id="ctx-enlaces" className="context__h">
-            Backlog e historial
-          </h2>
-          <div className="context__links">
-            <a className="btn btn--ghost btn--sm" href={projectHref('backlog', proyecto.id)} aria-label={`Ver backlog de ${proyecto.name}`}>
-              Ver backlog
-            </a>
-            {/* Historial abre con el filtro recordado: se deja solo el de este proyecto. */}
-            <a
-              className="btn btn--ghost btn--sm"
-              href={historyHref()}
-              onClick={() => rememberHistoryFilters({ project: proyecto.id })}
-              aria-label={`Historial de ${proyecto.name}`}
-            >
-              Historial del proyecto
-            </a>
+        <>
+          <div className="context__head">
+            <span className="context__eyebrow">Contexto</span>
+            <span className="context__name">{proyecto?.name ?? 'Sin terminal activa'}</span>
+            {sesion && <span className="context__branch">{sessionPlace(sesion)}</span>}
           </div>
-        </section>
+
+          {sesion && proyecto ? (
+            <>
+              <section className="context__section" aria-labelledby="ctx-sesion">
+                <h2 id="ctx-sesion" className="context__h">
+                  Sesión
+                </h2>
+                <dl className="context__dl">
+                  <dt>Proyecto</dt>
+                  <dd>{proyecto.name}</dd>
+                  <dt>Rama</dt>
+                  <dd className="mono-text">{sesion.branch ?? 'desconocida'}</dd>
+                  <dt>Worktree</dt>
+                  <dd className="mono-text">{sesion.worktree || 'checkout principal'}</dd>
+                  <dt>Agente</dt>
+                  <dd>{sesion.agent === 'shell' ? 'Terminal (sin agente)' : sesion.agent}</dd>
+                  {proyecto.path && (
+                    <>
+                      <dt>Ruta</dt>
+                      <dd className="mono-text context__path">{proyecto.path}</dd>
+                    </>
+                  )}
+                </dl>
+              </section>
+              <section className="context__section" aria-labelledby="ctx-adjuntar">
+                <h2 id="ctx-adjuntar" className="context__h">
+                  Adjuntar desde otra terminal
+                </h2>
+                <code className="context__cmd">{comando || 'Cargando…'}</code>
+                <button type="button" className="btn btn--ghost btn--sm" disabled={!comando} onClick={() => void copiar()}>
+                  <IconCopy size={14} />
+                  {copiado ? 'Copiado' : 'Copiar comando'}
+                </button>
+              </section>
+            </>
+          ) : (
+            <p className="context__empty">Abre una terminal para ver aquí su proyecto, rama y worktree.</p>
+          )}
+
+          {proyecto && (
+            <section className="context__section context__section--last" aria-labelledby="ctx-enlaces">
+              <h2 id="ctx-enlaces" className="context__h">
+                Backlog e historial
+              </h2>
+              <div className="context__links">
+                <a className="btn btn--ghost btn--sm" href={projectHref('backlog', proyecto.id)} aria-label={`Ver backlog de ${proyecto.name}`}>
+                  Ver backlog
+                </a>
+                {/* Historial abre con el filtro recordado: se deja solo el de este proyecto. */}
+                <a
+                  className="btn btn--ghost btn--sm"
+                  href={historyHref()}
+                  onClick={() => rememberHistoryFilters({ project: proyecto.id })}
+                  aria-label={`Historial de ${proyecto.name}`}
+                >
+                  Historial del proyecto
+                </a>
+              </div>
+            </section>
+          )}
+        </>
       )}
     </aside>
   );

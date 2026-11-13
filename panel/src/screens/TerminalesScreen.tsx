@@ -124,7 +124,7 @@ export function TerminalesScreen({ hidden }: { hidden: boolean }) {
         {viewer ? (
           <ImageViewer target={viewer} style={derecho.style('--right-w', !contextOverlay)} />
         ) : (
-          contextVisible && <ContextPanel style={derecho.style('--right-w', !contextOverlay)} />
+          contextVisible && <ContextPanel style={derecho.style('--right-w', !contextOverlay)} hidden={hidden} />
         )}
       </div>
     </div>

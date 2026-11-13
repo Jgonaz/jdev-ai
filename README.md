@@ -483,6 +483,34 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
 
   La terminal sigue conectada mientras ves el chat. En las sesiones de Codex y
   en las terminales sin agente el conmutador está desactivado y explica por qué.
+- **Mapa de actividad.** El panel derecho de Terminales tiene un selector
+  «Contexto / Mapa», que se recuerda. El mapa muestra en directo qué hace la
+  sesión de Claude activa (o la que lanzó la pestaña de seguimiento activa):
+  - **Estaciones:** alrededor del núcleo están Tú, Modelo, Memoria, Archivos,
+    Shell, Red, Navegador, Agentes y Skills. Cada herramienta lanza un pulso a
+    su estación al empezar y de vuelta al terminar, y los errores y rechazos se
+    ven en rojo.
+  - **Llamadas en curso:** las estaciones con llamadas en marcha llevan un halo
+    con manecillas de tiempo (una vuelta por minuto y otra por diez) y `×N` si
+    hay varias a la vez. Los errores dejan un contador rojo hasta tu siguiente
+    mensaje.
+  - **Uso acumulado:** el radio de cada estación engorda con el uso y una ruta
+    une las últimas estaciones visitadas, que se apaga a los 40 s.
+  - **Núcleo:** el anillo de contexto usa los mismos colores que la cabecera, y
+    cada subagente activo gira como un punto alrededor de Agentes.
+
+  Debajo están lo que se ejecuta ahora y las últimas 16 filas de actividad. Las
+  llamadas seguidas a la misma estación se agrupan en una sola fila. Las
+  etiquetas solo nombran (el archivo, el comando o el host), nunca muestran
+  contenidos.
+
+  El mapa sale de la misma conversación que lee la vista chat, sin más lecturas
+  de disco, y solo existe para las sesiones de Claude del panel. Respeta el tema
+  y el movimiento reducido, y no anima nada mientras no se ve ni cuando no hay
+  movimiento.
+
+  La clasificación por estaciones y el dibujo están adaptados de
+  [lot-map](https://github.com/alexeyw/lot-map) (MIT, © 2026 Aleksei Volodin).
 - **Conversaciones anteriores.** Dentro de cada proyecto de la barra lateral,
   bajo sus sesiones en marcha, un apartado plegado «Anteriores (N)» lista (tres,
   con «Ver más») las conversaciones de Claude Code que no están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de

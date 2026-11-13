@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { ApiError, api } from '../api.ts';
-import type { ConversationResponse } from '../../shared/follow.ts';
+import type { AgentEvent, ConversationResponse } from '../../shared/follow.ts';
+import { MAP_MAX_EVENTS, lightMapEvent } from './activityMap.ts';
 import { EMPTY_CHAT, applyChatEvents, conversationDelay } from './chat.ts';
 import type { ChatModel } from './chat.ts';
 import { errorDelay } from './follow.ts';
@@ -10,6 +11,10 @@ export type ConversationEntry = {
   /** Id de la sesión de Claude a la que pertenece lo leído; null hasta la primera respuesta. */
   sessionId: string | null;
   chat: ChatModel;
+  /** Eventos ligeros (sin textos ni salidas) para el mapa de actividad; los últimos `MAP_MAX_EVENTS`. */
+  mapEvents: readonly AgentEvent[];
+  /** Eventos que han llegado al mapa desde el último reinicio, también los ya descartados: la diferencia entre dos lecturas son los eventos nuevos. */
+  mapTotal: number;
   /** Byte desde el que pedir lo siguiente. */
   from: number;
   /** Tamaño de la transcripción en la última respuesta (para el progreso de la primera carga). */
@@ -29,6 +34,8 @@ export type ConversationEntry = {
 export const EMPTY_CONVERSATION: ConversationEntry = {
   sessionId: null,
   chat: EMPTY_CHAT,
+  mapEvents: [],
+  mapTotal: 0,
   from: 0,
   size: 0,
   synced: false,
@@ -48,12 +55,16 @@ export function applyConversation(previa: ConversationEntry, r: ConversationResp
   const base = { lastOk: ahora, error: null, failures: 0, version: previa.version + 1, sessionId: r.sessionId, size: r.size };
   // Otra sesión pedida desde un byte que no era el 0: esta respuesta no empieza al principio del archivo.
   if (cambioSesion && !r.reset && previa.from !== 0) {
-    return { ...base, chat: EMPTY_CHAT, from: 0, synced: false };
+    return { ...base, chat: EMPTY_CHAT, mapEvents: [], mapTotal: 0, from: 0, synced: false };
   }
   const empezar = r.reset || cambioSesion;
+  const ligeros = r.events.flatMap((e) => lightMapEvent(e) ?? []);
+  const mapEvents = empezar ? ligeros : ligeros.length === 0 ? previa.mapEvents : previa.mapEvents.concat(ligeros);
   return {
     ...base,
     chat: applyChatEvents(previa.chat, r.events, empezar),
+    mapEvents: mapEvents.length > MAP_MAX_EVENTS ? mapEvents.slice(-MAP_MAX_EVENTS) : mapEvents,
+    mapTotal: (empezar ? 0 : previa.mapTotal) + ligeros.length,
     from: r.from,
     synced: r.more ? (empezar ? false : previa.synced) : true,
   };
@@ -80,11 +91,90 @@ export function forgetConversation(nombre: string): void {
   entradas.delete(nombre);
 }
 
+/** Quien lee la conversación de una sesión (el chat, el mapa…): `trabajando` marca el ritmo del sondeo. */
+export type ConversationReader = { trabajando: { current: boolean } };
+
+type Sondeo = { lectores: Set<ConversationReader>; ahora: () => void; parar: () => void };
+const sondeos = new Map<string, Sondeo>();
+
+/** Un sondeo por sesión, que sirve a todos los que la leen: pregunta cada segundo si alguno ve trabajar al agente y cada 3 s si no. */
+function arrancaSondeo(nombre: string, lectores: Set<ConversationReader>): Sondeo {
+  let parado = false;
+  let temporizador: number | undefined;
+  let enVuelo = false;
+  const control = new AbortController();
+  const entrada = () => entradas.get(nombre) ?? EMPTY_CONVERSATION;
+  const trabajando = () => [...lectores].some((l) => l.trabajando.current);
+
+  const paso = async () => {
+    if (parado || enVuelo) return;
+    window.clearTimeout(temporizador);
+    if (document.visibilityState !== 'visible') {
+      temporizador = window.setTimeout(() => void paso(), 1000);
+      return;
+    }
+    enVuelo = true;
+    let espera: number;
+    try {
+      const previa = entrada();
+      const r = await api.conversation(nombre, previa.from, control.signal);
+      if (parado) return;
+      const nueva = applyConversation(previa, r, Date.now());
+      guarda(nombre, nueva);
+      // Hasta estar al día se sigue pidiendo sin esperar (también tras cambiar de sesión de Claude).
+      espera = conversationDelay(!nueva.synced, trabajando());
+    } catch (e) {
+      if (parado) return;
+      const previa = entrada();
+      const mensaje = e instanceof ApiError ? e.message : 'No se pudo leer la conversación.';
+      const fallos = previa.failures + 1;
+      guarda(nombre, { ...previa, error: mensaje, failures: fallos, version: previa.version + 1 });
+      espera = errorDelay(fallos);
+    } finally {
+      enVuelo = false;
+    }
+    temporizador = window.setTimeout(() => void paso(), espera);
+  };
+  void paso();
+  return {
+    lectores,
+    ahora: () => void paso(),
+    parar: () => {
+      parado = true;
+      control.abort();
+      window.clearTimeout(temporizador);
+    },
+  };
+}
+
+/**
+ * Se suma a la lectura de la conversación de una sesión y devuelve cómo dejarla. El sondeo es uno por sesión,
+ * lo comparten quienes la leen a la vez (el chat y el mapa) y se detiene cuando se va el último.
+ */
+export function subscribeConversation(nombre: string, lector: ConversationReader): { refrescar: () => void; dejar: () => void } {
+  let sondeo = sondeos.get(nombre);
+  if (!sondeo) {
+    sondeo = arrancaSondeo(nombre, new Set());
+    sondeos.set(nombre, sondeo);
+  }
+  const propio = sondeo;
+  propio.lectores.add(lector);
+  return {
+    refrescar: () => propio.ahora(),
+    dejar: () => {
+      propio.lectores.delete(lector);
+      if (propio.lectores.size > 0) return;
+      propio.parar();
+      if (sondeos.get(nombre) === propio) sondeos.delete(nombre);
+    },
+  };
+}
+
 /**
  * Lee la conversación de una sesión de Claude mientras `activo` y la página son visibles: la primera
  * vez, por trozos hasta el final; después, de forma incremental, cada segundo si el agente trabaja
  * y cada 3 s si no. Un fallo no borra lo que ya se ve. `refrescar` pregunta ya (tras enviar un
- * mensaje o pulsar «Reintentar»).
+ * mensaje o pulsar «Reintentar»). Si varias vistas leen la misma sesión a la vez comparten el sondeo.
  */
 export function useConversation(nombre: string, activo: boolean, trabajando: boolean): ConversationEntry & { refrescar: () => void } {
   const ritmo = useRef(trabajando);
@@ -93,47 +183,10 @@ export function useConversation(nombre: string, activo: boolean, trabajando: boo
 
   useEffect(() => {
     if (!activo) return;
-    let parado = false;
-    let temporizador: number | undefined;
-    let enVuelo = false;
-    const control = new AbortController();
-    const entrada = () => entradas.get(nombre) ?? EMPTY_CONVERSATION;
-
-    const paso = async () => {
-      if (parado || enVuelo) return;
-      window.clearTimeout(temporizador);
-      if (document.visibilityState !== 'visible') {
-        temporizador = window.setTimeout(() => void paso(), 1000);
-        return;
-      }
-      enVuelo = true;
-      let espera: number;
-      try {
-        const previa = entrada();
-        const r = await api.conversation(nombre, previa.from, control.signal);
-        if (parado) return;
-        const nueva = applyConversation(previa, r, Date.now());
-        guarda(nombre, nueva);
-        // Hasta estar al día se sigue pidiendo sin esperar (también tras cambiar de sesión de Claude).
-        espera = conversationDelay(!nueva.synced, ritmo.current);
-      } catch (e) {
-        if (parado) return;
-        const previa = entrada();
-        const mensaje = e instanceof ApiError ? e.message : 'No se pudo leer la conversación.';
-        const fallos = previa.failures + 1;
-        guarda(nombre, { ...previa, error: mensaje, failures: fallos, version: previa.version + 1 });
-        espera = errorDelay(fallos);
-      } finally {
-        enVuelo = false;
-      }
-      temporizador = window.setTimeout(() => void paso(), espera);
-    };
-    ahora.current = () => void paso();
-    void paso();
+    const { refrescar, dejar } = subscribeConversation(nombre, { trabajando: ritmo });
+    ahora.current = refrescar;
     return () => {
-      parado = true;
-      control.abort();
-      window.clearTimeout(temporizador);
+      dejar();
       ahora.current = () => undefined;
     };
   }, [nombre, activo]);

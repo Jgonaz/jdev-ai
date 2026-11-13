@@ -186,11 +186,17 @@ export function safeStorage(): Storage | null {
 }
 
 /** Preferencias de interfaz que se recuerdan en este navegador. */
-export type UiPrefs = { contextOpen: boolean; hideDone: boolean };
+export type RightView = 'context' | 'map';
+export type UiPrefs = {
+  contextOpen: boolean;
+  hideDone: boolean;
+  /** Qué enseña el panel derecho de Terminales: el contexto de la sesión o su mapa de actividad. */
+  rightView: RightView;
+};
 const UI_KEY = 'jdev-panel:ui';
 
 export function loadUiPrefs(storage: Pick<Storage, 'getItem'> | null = safeStorage()): UiPrefs {
-  const defecto: UiPrefs = { contextOpen: true, hideDone: false };
+  const defecto: UiPrefs = { contextOpen: true, hideDone: false, rightView: 'context' };
   try {
     // `hideClosed` es el nombre anterior de `hideDone` («Ocultar cerradas»): se migra al leer.
     const v = JSON.parse(storage?.getItem(UI_KEY) ?? 'null') as (Partial<UiPrefs> & { hideClosed?: unknown }) | null;
@@ -198,6 +204,7 @@ export function loadUiPrefs(storage: Pick<Storage, 'getItem'> | null = safeStora
     return {
       contextOpen: typeof v?.contextOpen === 'boolean' ? v.contextOpen : defecto.contextOpen,
       hideDone: oculta,
+      rightView: v?.rightView === 'map' ? 'map' : defecto.rightView,
     };
   } catch {
     return defecto;

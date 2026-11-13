@@ -1,18 +1,27 @@
 // Lo que el servidor sirve en GET /api/sessions/:name/follow/:kind/:id y el
 // cliente interpreta. Módulo sin dependencias de Node.
 
+import type { Station } from './stations.ts';
+
+export type { Station };
+
 export type FollowKind = 'agent' | 'shell';
 export type FollowState = 'running' | 'finished';
 
 /** Un evento de un subagente, ya interpretado por el servidor. */
 export type AgentEvent =
   | { type: 'task'; text: string }
-  | { type: 'tool'; id: string; tool: string; verb: string; target: string; detail?: string; at: number | null }
+  /**
+   * `station` es la estación del mapa de actividad, calculada con la entrada completa de la herramienta. Falta en
+   * los eventos de servidores antiguos: el cliente la deduce entonces del nombre.
+   */
+  | { type: 'tool'; id: string; tool: string; verb: string; target: string; detail?: string; at: number | null; station?: Station }
   /**
    * Resultado de una herramienta: se asocia por `id` (puede llegar en otra respuesta). `lines` cuenta las
    * líneas con texto. `output` (solo en la conversación de una sesión) es el texto, recortado, para buscar en él.
+   * `at` es la hora de la línea del transcript (para la duración de la llamada); falta en servidores antiguos.
    */
-  | { type: 'result'; id: string; error: boolean; summary: string; lines: number; output?: string }
+  | { type: 'result'; id: string; error: boolean; summary: string; lines: number; output?: string; at?: number | null }
   | { type: 'message'; text: string; at: number | null }
   /** Mensaje de la persona (solo en la conversación de una sesión). `images` cuenta las imágenes adjuntas, si hay. */
   | { type: 'user'; text: string; at: number | null; images?: number }

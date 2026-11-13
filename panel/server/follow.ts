@@ -15,6 +15,7 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { openRegularFile } from './safefile.ts';
 import { resolveTranscript } from './titles.ts';
 import { FOLLOW_ID } from '../shared/follow.ts';
+import { classifyTool } from '../shared/stations.ts';
 import type { AgentEvent, AgentFollow, ConversationResponse, ShellFollow } from '../shared/follow.ts';
 import type { FollowTargets } from './usage.ts';
 
@@ -127,6 +128,8 @@ export function describeTool(nombre: string, entrada: Record<string, unknown> | 
       return { verb: 'Delego', target: cadena(e.description) ?? cadena(e.subagent_type) ?? '' };
     case 'WebFetch':
       return { verb: 'Consulto', target: cadena(e.url) ?? '' };
+    case 'Skill':
+      return { verb: 'Uso la skill', target: cadena(e.skill) ?? '' };
     default: {
       // Herramientas MCP: «mcp__<servidor>__<herramienta>» se muestra como «Uso <servidor> · <herramienta>».
       const mcp = /^mcp__(.+?)__(.+)$/.exec(nombre);
@@ -297,6 +300,7 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
               error: bloque.is_error === true,
               summary: primeraLinea(resultado, MAX_SUMMARY),
               lines: resultado.split('\n').filter((l) => l.trim() !== '').length,
+              at,
               ...(conversacion && resultado.trim() !== '' ? { output: recorta(resultado.trim(), MAX_OUTPUT) } : {}),
             });
           } else if (conversacion) {
@@ -341,6 +345,7 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
             target: recorta(h.target, MAX_TARGET),
             ...(h.detail ? { detail: h.detail } : {}),
             at,
+            station: classifyTool(nombre, entrada ?? {}),
           });
         }
       }

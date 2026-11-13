@@ -34,8 +34,31 @@ describe('parseAgentLines', () => {
 
   it('el resultado se asocia por id y marca el error', () => {
     const r = eventos().filter((x): x is Extract<AgentEvent, { type: 'result' }> => x.type === 'result');
-    expect(r.find((x) => x.id === 't4')).toEqual({ type: 'result', id: 't4', error: true, summary: "LiveInput.tsx:48 'scrollIntoView' no se usa", lines: 2 });
+    expect(r.find((x) => x.id === 't4')).toEqual({ type: 'result', id: 't4', error: true, summary: "LiveInput.tsx:48 'scrollIntoView' no se usa", lines: 2, at: expect.any(Number) });
     expect(r.find((x) => x.id === 't1')).toMatchObject({ error: false, lines: 3 });
+  });
+
+  it('cada herramienta lleva su estación, calculada con la entrada completa, en ambos modos', () => {
+    const t = [
+      usar('a', 'Read', { file_path: '/home/u/proyecto/a.ts' }),
+      usar('b', 'Bash', { command: 'pnpm test\ngh pr view 12' }),
+      usar('c', 'mcp__playwright__browser_click', {}),
+      usar('d', 'Agent', { description: 'x' }),
+      usar('e', 'Edit', { file_path: '/home/u/.claude/projects/-home-u-proyecto/memory/MEMORY.md' }),
+      usar('f', 'Herramienta', {}),
+    ].join('\n');
+    for (const conversacion of [false, true]) {
+      // En la conversación se descartan las líneas de subagentes: se reescriben como de la sesión principal.
+      const e = parseAgentLines(conversacion ? t.replaceAll('"isSidechain":true', '"isSidechain":false') : t, { primero: false, cwd: null, conversacion }).filter((x): x is Extract<AgentEvent, { type: 'tool' }> => x.type === 'tool');
+      expect(e.map((x) => x.station)).toEqual(['archivos', 'red', 'navegador', 'agentes', 'memoria', 'shell']);
+    }
+  });
+
+  it('el resultado lleva la hora de su línea, o null si no la tiene', () => {
+    const e = parseAgentLines([usar('a', 'Read', {}), resultado('a', 'ok'), JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'b', content: 'x' }] } })].join('\n'), { primero: false, cwd: null });
+    const [tool, r1, r2] = e as [Extract<AgentEvent, { type: 'tool' }>, Extract<AgentEvent, { type: 'result' }>, Extract<AgentEvent, { type: 'result' }>];
+    expect(r1.at).toBeGreaterThan(tool.at!);
+    expect(r2.at).toBeNull();
   });
 
   it('los mensajes son los text del asistente y el informe final de SubagentHandback; sin razonamiento ni tipos internos', () => {
@@ -77,6 +100,7 @@ describe('parseAgentLines', () => {
     expect(describeTool('Glob', { pattern: '**/*.ts' }, cwd)).toEqual({ verb: 'Busco', target: '**/*.ts' });
     expect(describeTool('Agent', { description: 'Revisar', subagent_type: 'qa' }, cwd)).toEqual({ verb: 'Delego', target: 'Revisar' });
     expect(describeTool('WebFetch', { url: 'https://x.dev' }, cwd)).toEqual({ verb: 'Consulto', target: 'https://x.dev' });
+    expect(describeTool('Skill', { skill: 'artifact-design', args: 'algo' }, cwd)).toEqual({ verb: 'Uso la skill', target: 'artifact-design' });
     expect(describeTool('mcp__playwright__browser_click', { a: 1 }, cwd)).toEqual({ verb: 'Uso', target: 'playwright · browser_click' });
     expect(describeTool('Desconocida', { a: 1 }, cwd)).toEqual({ verb: 'Desconocida', target: '' });
     expect(describeTool('Read', null, cwd)).toEqual({ verb: 'Leo', target: '' });
