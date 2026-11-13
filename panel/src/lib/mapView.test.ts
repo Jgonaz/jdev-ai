@@ -51,12 +51,12 @@ describe('geometría', () => {
     }
   });
 
-  it('el radio va del borde del anillo de contexto (50) al borde del disco (20)', () => {
+  it('el radio va del borde del anillo de contexto (44) al borde del disco (20)', () => {
     const e = spokeEnds('tu');
-    expect(e).toEqual({ x1: 156, y1: 134, x2: 156, y2: 86 });
+    expect(e).toEqual({ x1: 156, y1: 140, x2: 156, y2: 86 });
     const d = spokeEnds('archivos');
     const p = stationPoint('archivos');
-    expect(Math.hypot(d.x1 - 156, d.y1 - 184)).toBeCloseTo(50, 0);
+    expect(Math.hypot(d.x1 - 156, d.y1 - 184)).toBeCloseTo(44, 0);
     expect(Math.hypot(d.x2 - p.x, d.y2 - p.y)).toBeCloseTo(20, 0);
   });
 
@@ -200,8 +200,8 @@ describe('anillo de contexto', () => {
   });
 
   it('el arco es la fracción de la circunferencia; sin dato, vacío y sin porcentaje', () => {
-    const c = Math.round(2 * Math.PI * 50 * 10) / 10;
-    expect(contextRing(50).dash).toBe(`${Math.round(c * 5) / 10} ${c}`);
+    const c = Math.round(2 * Math.PI * 44 * 10) / 10;
+    expect(contextRing(50).dash).toBe(`${Math.round(Math.PI * 44 * 10) / 10} ${c}`);
     expect(contextRing(null)).toMatchObject({ dash: `0 ${c}`, label: '', ring: 'soft' });
     expect(contextRing(150).dash).toBe(`${c} ${c}`);
   });

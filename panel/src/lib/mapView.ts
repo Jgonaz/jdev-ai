@@ -1,7 +1,7 @@
 // Lo que dibuja el mapa de actividad, calculado a partir de `buildBoard`: geometría de las estaciones, radios, ruta,
 // halos, pulsos, textos de las filas y formato de las duraciones. Funciones puras y sin DOM: el componente solo pinta.
 //
-// La geometría y los tiempos (círculo de radio 118, discos de 40 px, núcleo de 41, anillo de contexto de 50, ruta en
+// La geometría y los tiempos (círculo de radio 118, discos de 40 px, núcleo de 41, anillo de contexto de 44, ruta en
 // curvas cuadráticas, halos y manecillas) siguen el diseño aprobado en Claude Design, que adapta el dibujo de
 // `hooks/draw.ts` de lot-map (https://github.com/alexeyw/lot-map, MIT, © 2026 Aleksei Volodin; su aviso completo va
 // en `shared/stations.ts`).
@@ -25,8 +25,8 @@ const CY = 184;
 const RADIO = 118;
 /** Radio del disco de una estación. */
 const DISCO = 20;
-/** Radio del anillo de contexto, que es donde nacen los radios. */
-const ANILLO = 50;
+/** Radio del anillo de contexto, que es donde nacen los radios. Va pegado al núcleo (41): su trazo de 3 cubre de 42,5 a 45,5 y los radios no pasan entre los dos. */
+const ANILLO = 44;
 /** Centro del mapa. */
 export const CENTRO = { x: CX, y: CY };
 export const ANILLO_R = ANILLO;
