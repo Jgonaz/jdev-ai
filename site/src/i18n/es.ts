@@ -11,7 +11,9 @@ export const es = {
   },
   header: { language: 'Idioma' },
   open: {
-    title: 'Un harness para trabajar con agentes de código en varios proyectos.',
+    title: 'Un harness, todos tus agentes.',
+    subtitle: 'Extensible, personalizable.',
+    hub: 'Esquema: un único AGENTS.md compartido por Claude Code, Codex, Copilot y OpenCode.',
     lead: 'Reglas compartidas, subagentes, worktrees y un panel local para Claude Code, Codex, Copilot y OpenCode. Son archivos Markdown y scripts de shell: no añade nada a tus proyectos.',
     badge: 'Código abierto · Licencia MIT',
     steps: 'Los tres pasos para empezar',
@@ -44,6 +46,9 @@ export const es = {
       alive: '3 vivas · 1 visible',
       noProjects: 'No hay proyectos visibles.',
       noProjectsAction: 'Abrir Ajustes › Proyectos',
+      expand: 'Toca para verlo en horizontal',
+      expandLabel: 'Ver el panel a pantalla completa',
+      close: 'Cerrar',
       noScript: 'Este panel simulado necesita JavaScript para cambiar de pantalla.',
     },
     // Pantalla Inicio de la simulación. `open` abre una sesión y `screen` otra pantalla.
@@ -264,7 +269,7 @@ export const es = {
   },
   map: {
     rail: 'Mapa de actividad',
-    title: 'Ve qué hace el agente sin leer la terminal',
+    title: 'Controla qué hace el agente sin leer la terminal.',
     lead: 'En el panel, cada sesión de Claude tiene un mapa en directo: cada herramienta viaja a su estación, lo que sigue en marcha cuenta el tiempo y los fallos se ven en rojo. Debajo, una sesión de ejemplo de principio a fin.',
     session: 'Corregir tests del parser',
     agent: 'claude',

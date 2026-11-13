@@ -1,0 +1,154 @@
+---
+// Envoltorio del panel simulado. En escritorio no hace nada. En móvil pinta el panel
+// tal cual se ve en escritorio (1144 px de ancho, el de la columna de la landing),
+// reducido para caber, y al tocarlo lo abre girado 90° a pantalla completa para leerlo
+// en horizontal. El panel responde a su contenedor (@container pn), no a la ventana,
+// así que con el ancho fijo se ve igual que en escritorio. Sin JS se queda como está.
+interface Props {
+  expand: string;
+  expandLabel: string;
+  close: string;
+}
+
+const { expand, expandLabel, close } = Astro.props;
+---
+
+<div class="pn-stage" data-pn-stage>
+  <div class="pn-stage__box" aria-label={expandLabel} data-pn-box>
+    <div class="pn-stage__frame" data-pn-frame>
+      <div class="pn-stage__size" data-pn-size>
+        <div class="pn-stage__fit" data-pn-fit>
+          <slot />
+        </div>
+      </div>
+    </div>
+    <button type="button" class="pn-stage__close" data-pn-close aria-label={close}>
+      <span aria-hidden="true">×</span>
+    </button>
+  </div>
+  <button type="button" class="pn-stage__open" data-pn-open aria-label={expandLabel}>
+    <span>{expand}</span>
+  </button>
+</div>
+
+<script>
+  // Ancho del panel en escritorio: la columna de 1200 px menos el margen de 28 px por lado.
+  const DESKTOP = 1144;
+  // Abierto, se reservan 8 px a la izquierda y una franja de 52 px a la derecha para el botón de cerrar.
+  const GUTTER = 60;
+  const mobile = window.matchMedia('(max-width: 760px)');
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  for (const stage of document.querySelectorAll<HTMLElement>('[data-pn-stage]')) {
+    const q = <T extends HTMLElement>(sel: string) => stage.querySelector<T>(sel)!;
+    const box = q('[data-pn-box]');
+    const frame = q('[data-pn-frame]');
+    const size = q('[data-pn-size]');
+    const fit = q('[data-pn-fit]');
+    const openBtn = q<HTMLButtonElement>('[data-pn-open]');
+    const closeBtn = q<HTMLButtonElement>('[data-pn-close]');
+    let open = false;
+    let busy = false;
+
+    // Escala y medidas según el modo. Abierto en vertical, el marco mide la pantalla
+    // al revés (alto × ancho) y se gira; en horizontal no hace falta girarlo.
+    const layout = () => {
+      const mini = mobile.matches && !open;
+      stage.toggleAttribute('data-mini', mini);
+      box.inert = mini;
+      if (!mini && !open) {
+        stage.style.removeProperty('--pn-k');
+        size.style.removeProperty('height');
+        frame.style.removeProperty('width');
+        frame.style.removeProperty('height');
+        return;
+      }
+      let k: number;
+      if (open) {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const turn = h > w;
+        stage.toggleAttribute('data-turn', turn);
+        const long = turn ? h : w;
+        const short = turn ? w : h;
+        frame.style.width = `${long}px`;
+        frame.style.height = `${short}px`;
+        k = Math.min(1, (long - GUTTER) / DESKTOP);
+      } else {
+        k = stage.clientWidth / DESKTOP;
+      }
+      stage.style.setProperty('--pn-k', String(k));
+      size.style.height = `${fit.offsetHeight * k}px`;
+    };
+
+    new ResizeObserver(layout).observe(fit);
+    window.addEventListener('resize', layout);
+    mobile.addEventListener('change', layout);
+    layout();
+
+    // Transformación final del marco abierto: centrado y, en vertical, girado.
+    const target = () => `translate(-50%, -50%) rotate(${stage.hasAttribute('data-turn') ? 90 : 0}deg)`;
+
+    // Transformación que hace coincidir el marco abierto con la miniatura (FLIP): mismo
+    // ancho, sin girar y con la esquina superior izquierda donde estaba la miniatura.
+    const fromMini = (rect: DOMRect, kOpen: number) => {
+      const s = rect.width / (DESKTOP * kOpen);
+      const fw = frame.offsetWidth * s;
+      const fh = frame.offsetHeight * s;
+      const dx = rect.left + fw / 2 - window.innerWidth / 2;
+      const dy = rect.top + fh / 2 - window.innerHeight / 2;
+      return `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${s})`;
+    };
+
+    const animate = (from: string, to: string, back = false) => {
+      const opts: KeyframeAnimationOptions = { duration: 480, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' };
+      const veil = box.animate({ opacity: back ? [1, 0] : [0, 1] }, { duration: 300, fill: 'both', delay: back ? 180 : 0 });
+      const move = frame.animate({ transform: [from, to] }, opts);
+      return Promise.all([move.finished, veil.finished]).then(() => veil.cancel());
+    };
+
+    const show = async () => {
+      if (open || busy) return;
+      const rect = size.getBoundingClientRect();
+      open = true;
+      busy = true;
+      // La miniatura deja su hueco reservado para que la página no salte al sacarla del flujo.
+      stage.style.height = `${stage.offsetHeight}px`;
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      stage.setAttribute('data-open', '');
+      document.documentElement.classList.add('pn-locked');
+      layout();
+      frame.scrollTop = 0;
+      closeBtn.focus({ preventScroll: true });
+      if (!calm.matches) await animate(fromMini(rect, Number(stage.style.getPropertyValue('--pn-k'))), target());
+      busy = false;
+    };
+
+    const hide = async () => {
+      if (!open || busy) return;
+      busy = true;
+      if (!calm.matches && mobile.matches) {
+        const rect = openBtn.getBoundingClientRect();
+        frame.scrollTop = 0;
+        await animate(target(), fromMini(rect, Number(stage.style.getPropertyValue('--pn-k'))), true);
+      }
+      open = false;
+      stage.removeAttribute('data-open');
+      stage.removeAttribute('data-turn');
+      stage.style.removeProperty('height');
+      box.removeAttribute('role');
+      box.removeAttribute('aria-modal');
+      document.documentElement.classList.remove('pn-locked');
+      layout();
+      busy = false;
+      if (mobile.matches) openBtn.focus({ preventScroll: true });
+    };
+
+    openBtn.addEventListener('click', show);
+    closeBtn.addEventListener('click', hide);
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hide();
+    });
+  }
+</script>

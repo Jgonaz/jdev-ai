@@ -9,7 +9,9 @@ export const en: Dictionary = {
   },
   header: { language: 'Language' },
   open: {
-    title: 'A harness for working with coding agents across several projects.',
+    title: 'One harness, all your agents.',
+    subtitle: 'Extensible, customizable.',
+    hub: 'Diagram: a single AGENTS.md shared by Claude Code, Codex, Copilot and OpenCode.',
     lead: 'Shared rules, subagents, worktrees and a local panel for Claude Code, Codex, Copilot and OpenCode. It is Markdown files and shell scripts: it adds nothing to your projects.',
     badge: 'Open source · MIT License',
     steps: 'The three steps to get started',
@@ -42,6 +44,9 @@ export const en: Dictionary = {
       alive: '3 live · 1 visible',
       noProjects: 'No projects are visible.',
       noProjectsAction: 'Open Settings › Projects',
+      expand: 'Tap to view it in landscape',
+      expandLabel: 'View the panel full screen',
+      close: 'Close',
       noScript: 'This simulated panel needs JavaScript to switch screens.',
     },
     home: {
@@ -258,7 +263,7 @@ export const en: Dictionary = {
   },
   map: {
     rail: 'Activity map',
-    title: 'See what the agent is doing without reading the terminal',
+    title: 'Keep track of what the agent does without reading the terminal.',
     lead: 'In the panel, every Claude session has a live map: each tool travels to its station, whatever is still running counts its time, and failures show up in red. Below, a sample session from start to finish.',
     session: 'Fix the parser tests',
     agent: 'claude',

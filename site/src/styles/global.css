@@ -46,12 +46,40 @@ html {
 }
 
 body {
+  position: relative;
   margin: 0;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-ui);
   font-size: 18px;
   line-height: 1.6;
+}
+
+/* Fondo: cuadrícula tenue que se desvanece hacia abajo y dos halos tenues: ámbar detrás del esquema y verde azulado arriba a la izquierda. */
+body::before,
+body::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  pointer-events: none;
+}
+
+body::before {
+  height: 1400px;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-position: center top;
+  mask-image: radial-gradient(ellipse 75% 60% at 50% 0%, #000 30%, transparent 100%);
+}
+
+body::after {
+  height: 900px;
+  background:
+    radial-gradient(ellipse 38% 45% at 78% 22%, rgba(240, 178, 90, 0.045), transparent 70%),
+    radial-gradient(ellipse 45% 50% at 15% 10%, rgba(108, 195, 181, 0.05), transparent 70%);
 }
 
 h1,
@@ -96,12 +124,13 @@ code {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  color: var(--link);
+  color: var(--fg);
+  text-decoration-color: var(--accent);
   text-underline-offset: 4px;
 }
 
 .link:hover {
-  color: var(--link-hover);
+  color: var(--accent-text);
 }
 
 .label,
@@ -150,7 +179,7 @@ h2 {
   justify-content: space-between;
   gap: 8px 24px;
   padding-block: 20px;
-  border-bottom: 1px solid var(--fg);
+  border-bottom: 1px solid var(--line-strong);
 }
 
 .masthead a {
@@ -217,6 +246,29 @@ h1 {
   text-wrap: balance;
 }
 
+.open__head {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 32px;
+}
+
+.open__title {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.open__sub {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--fg-muted);
+}
+
 .open__lead {
   max-width: 32em;
   font-size: clamp(18px, 1.5vw, 20px);
@@ -280,7 +332,7 @@ h1 {
   grid-template-columns: 180px minmax(0, 1fr);
   gap: 20px 56px;
   padding-block: clamp(40px, 5vw, 72px);
-  border-top: 1px solid var(--fg);
+  border-top: 1px solid var(--line-strong);
   scroll-margin-top: 16px;
 }
 
@@ -288,6 +340,12 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 28px;
+}
+
+/* Sin la raya de arriba: el panel sigue directamente a la apertura. */
+.section--flush {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .rail {
@@ -323,9 +381,10 @@ h1 {
 }
 
 .panel-intro {
+  margin-top: 20px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: end;
+  align-items: start;
   gap: 16px 56px;
 }
 
@@ -492,7 +551,7 @@ td.no {
   justify-content: space-between;
   gap: 8px 32px;
   padding-block: 24px 40px;
-  border-top: 1px solid var(--fg);
+  border-top: 1px solid var(--line-strong);
   font-size: 15px;
   color: var(--fg-muted);
 }
@@ -504,6 +563,14 @@ td.no {
 }
 
 @media (max-width: 900px) {
+  .open__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .open__head > .hub {
+    display: none;
+  }
+
   .open,
   .section,
   .panel-intro,
@@ -1288,13 +1355,13 @@ td.no {
   margin-left: auto;
 }
 
-@media (max-width: 1100px) {
+@container pn (max-width: 1044px) {
   .pn-limits {
     display: none;
   }
 }
 
-@media (max-width: 760px) {
+@container pn (max-width: 704px) {
   .pn-agent,
   .pn-new {
     display: none;
@@ -1663,7 +1730,7 @@ td.no {
   color: var(--link-hover);
 }
 
-@media (max-width: 1000px) {
+@container pn (max-width: 944px) {
   .pn-home {
     flex-direction: column;
   }
@@ -1770,7 +1837,7 @@ td.no {
 .pn-hist__reader {
   flex: 1;
   min-width: 0;
-  padding: 26px clamp(18px, 4vw, 56px) 32px;
+  padding: 26px clamp(18px, 5cqi, 56px) 32px;
 }
 
 .pn-hist__reader article {
@@ -1865,7 +1932,7 @@ td.no {
   color: var(--fg-soft);
 }
 
-@media (max-width: 760px) {
+@container pn (max-width: 704px) {
   .pn-hist {
     flex-direction: column;
   }
@@ -2331,7 +2398,7 @@ td.no {
   list-style: decimal;
 }
 
-@media (max-width: 900px) {
+@container pn (max-width: 844px) {
   .pn-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2352,7 +2419,7 @@ td.no {
   }
 }
 
-@media (max-width: 760px) {
+@container pn (max-width: 704px) {
   .pn-proj {
     flex-direction: column;
   }
@@ -2416,7 +2483,7 @@ td.no {
 .pn-set__body {
   flex: 1;
   min-width: 0;
-  padding: 26px clamp(18px, 4vw, 56px) 32px;
+  padding: 26px clamp(18px, 5cqi, 56px) 32px;
 }
 
 .pn-set__body section {
@@ -2993,7 +3060,7 @@ td.no {
   font-size: 15px;
 }
 
-@media (max-width: 760px) {
+@container pn (max-width: 704px) {
   .pn-set__nav {
     width: auto;
     flex-direction: row;
@@ -3103,7 +3170,7 @@ td.no {
 }
 
 /* Anchos intermedios y móvil: el menú del panel pasa a su propia fila y se ve entero. */
-@media (max-width: 900px) {
+@container pn (max-width: 844px) {
   .pn-head {
     flex-wrap: wrap;
   }
@@ -3120,7 +3187,7 @@ td.no {
   }
 }
 
-@media (max-width: 760px) {
+@container pn (max-width: 704px) {
   .pn-status__tmux {
     max-width: 100%;
     padding: 4px 10px;
@@ -3599,12 +3666,13 @@ td.no {
 }
 
 .map-note a {
-  color: var(--link);
+  color: var(--fg);
+  text-decoration-color: var(--accent);
   text-underline-offset: 4px;
 }
 
 .map-note a:hover {
-  color: var(--link-hover);
+  color: var(--accent-text);
 }
 
 /* Panel simulado: panel derecho de Terminales con el mapa, «Actividad reciente» y «Sesión». */
@@ -3925,7 +3993,7 @@ td.no {
 }
 
 /* Por debajo de este ancho no cabe junto a la barra lateral y la terminal; en móvil el mapa ya está en su sección. */
-@media (max-width: 1100px) {
+@container pn (max-width: 1044px) {
   .pn-context {
     display: none;
   }
@@ -3948,7 +4016,7 @@ td.no {
 }
 
 /* Con el panel derecho, la pantalla Terminales es algo más alta para que se vea el comienzo de «Actividad reciente». */
-@media (min-width: 1101px) {
+@container pn (min-width: 1045px) {
   .pn-screen[data-screen='terminales'] {
     min-height: 740px;
   }
@@ -3957,4 +4025,111 @@ td.no {
 .map-play[hidden],
 .map-play [hidden] {
   display: none;
+}
+
+/* Envoltorio del panel (PanelStage): el panel responde a este contenedor, no a la ventana.
+   En móvil se pinta a ancho de escritorio reducido y, al tocarlo, se abre girado a pantalla completa. */
+
+.pn-stage {
+  position: relative;
+}
+
+.pn-stage__fit {
+  container: pn / inline-size;
+}
+
+.pn-stage__open,
+.pn-stage__close {
+  display: none;
+}
+
+.pn-stage[data-mini] .pn-stage__size,
+.pn-stage[data-open] .pn-stage__size {
+  overflow: hidden;
+}
+
+.pn-stage[data-mini] .pn-stage__fit,
+.pn-stage[data-open] .pn-stage__fit {
+  width: 1144px;
+  transform: scale(var(--pn-k, 1));
+  transform-origin: 0 0;
+}
+
+.pn-stage[data-mini] .pn-stage__open {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 14px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  cursor: zoom-in;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pn-stage__open span {
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(15, 17, 19, 0.88);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.pn-locked,
+.pn-locked body {
+  overflow: hidden;
+}
+
+.pn-stage[data-open] .pn-stage__box {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #070708;
+}
+
+.pn-stage[data-open] .pn-stage__frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  transform: translate(-50%, -50%);
+}
+
+.pn-stage[data-open][data-turn] .pn-stage__frame {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.pn-stage[data-open] .pn-stage__size {
+  width: calc(1144px * var(--pn-k, 1));
+  margin: 8px auto 8px 8px;
+}
+
+.pn-stage[data-open] .pn-stage__close {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(15, 17, 19, 0.9);
+  color: var(--fg);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Girado, la franja derecha del panel cae abajo en la pantalla: el botón queda en su esquina superior derecha. */
+.pn-stage[data-open][data-turn] .pn-stage__close {
+  top: auto;
+  bottom: 8px;
 }

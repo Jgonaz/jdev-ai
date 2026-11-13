@@ -1,6 +1,8 @@
 ---
 import '../styles/global.css';
 import Panel from './Panel.astro';
+import PanelStage from './PanelStage.astro';
+import HeroHub from './HeroHub.astro';
 import ActivityMapSection from './ActivityMapSection.astro';
 import { es } from '../i18n/es';
 import { en } from '../i18n/en';
@@ -59,7 +61,13 @@ const canonical = new URL(home[lang], Astro.site);
 
       <main>
         <section class="open">
-          <h1>{t.open.title}</h1>
+          <div class="open__head">
+            <div class="open__title">
+              <h1>{t.open.title}</h1>
+              <p class="open__sub">{t.open.subtitle}</p>
+            </div>
+            <HeroHub label={t.open.hub} />
+          </div>
           <p class="open__lead">{t.open.lead}</p>
           <div class="open__side">
             <pre class="code" tabindex="0"><span class="p">$</span> git clone {repo}.git</pre>
@@ -70,12 +78,14 @@ const canonical = new URL(home[lang], Astro.site);
           </div>
         </section>
 
-        <section id="panel" class="section section--wide">
+        <section id="panel" class="section section--wide section--flush">
+          <PanelStage expand={t.panel.ui.expand} expandLabel={t.panel.ui.expandLabel} close={t.panel.ui.close}>
+            <Panel t={t.panel} mapNames={t.map.stations} lang={lang} />
+          </PanelStage>
           <div class="panel-intro">
             <h2>{t.panel.title}</h2>
             <p set:html={t.panel.lead} />
           </div>
-          <Panel t={t.panel} mapNames={t.map.stations} lang={lang} />
           <p class="note">{t.panel.note}</p>
         </section>
 
