@@ -2125,3 +2125,30 @@
 .pane__crash strong {
   color: var(--fg);
 }
+
+/* Clic en la imagen del visor: ampliación a pantalla completa. */
+.viewer__area .viewer__img {
+  cursor: zoom-in;
+}
+.viewer__area--pan .viewer__img {
+  cursor: inherit;
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--overlay);
+  cursor: zoom-out;
+}
+.lightbox:focus {
+  outline: none;
+}
+/* Llena la ventana sin deformarse, también si la imagen es más pequeña que ella. */
+.lightbox__img {
+  width: 100%;
+  height: calc(100vh - 48px);
+  object-fit: contain;
+}

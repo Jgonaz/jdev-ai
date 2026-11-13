@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ApiError, imageUrl, probeImage } from '../../api.ts';
 import { neighbour, splitPath } from '../../lib/imageStrip.ts';
 import { clampScale, describeMeta, fitScale, percent, scrollAfterZoom, stepScale, wheelScale, AREA_PADDING, MAX_SCALE, MIN_SCALE } from '../../lib/imageZoom.ts';
 import type { ImageMeta, Size } from '../../lib/imageZoom.ts';
+import { useFocusTrap } from '../../lib/useFocusTrap.ts';
 import { useImages } from '../../state/ImagesContext.tsx';
 import type { ViewerTarget } from '../../state/ImagesContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
@@ -11,6 +13,9 @@ import { IconClose, IconCopy, IconExternal, IconImage, IconZoomIn, IconZoomOut }
 
 type Carga = { tipo: 'cargando' } | { tipo: 'ok'; meta: ImageMeta } | { tipo: 'error'; mensaje: string };
 type Modo = 'fit' | number;
+
+/** Desplazamiento máximo, en píxeles, para que soltar el puntero cuente como clic y no como arrastre. */
+const UMBRAL_CLIC = 4;
 
 /**
  * Visor lateral de imágenes. Ocupa el lugar del panel de Contexto mientras está
@@ -28,12 +33,15 @@ export function ImageViewer({ target, style }: { target: ViewerTarget; style?: C
   const [puedeArrastrar, setPuedeArrastrar] = useState(false);
   const [arrastrando, setArrastrando] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [ampliada, setAmpliada] = useState(false);
   // Ruta real que devolvió el servidor: identifica la imagen en la tira aunque se abriera con una ruta relativa.
   const [resuelta, setResuelta] = useState<string | null>(null);
   const [rotas, setRotas] = useState<ReadonlySet<string>>(new Set());
   const areaRef = useRef<HTMLDivElement>(null);
   const lista = useRef<HTMLDivElement>(null);
   const arrastre = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  // Dónde empezó la pulsación sobre la imagen: si el puntero apenas se mueve, es un clic que la amplía.
+  const pulsacion = useRef<{ x: number; y: number } | null>(null);
   // Foco con el que estaba la persona al abrir: Esc se lo devuelve.
   const previo = useRef<Element | null>(document.activeElement);
 
@@ -53,6 +61,7 @@ export function ImageViewer({ target, style }: { target: ViewerTarget; style?: C
     setResuelta(null);
     setModo('fit');
     setCopiado(false);
+    setAmpliada(false);
     escalaPrevia.current = 0;
     areaRef.current?.scrollTo(0, 0);
     probeImage(path, session, ctl.signal)
@@ -146,7 +155,9 @@ export function ImageViewer({ target, style }: { target: ViewerTarget; style?: C
 
   const alPulsarPuntero = (e: ReactPointerEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    if (e.button !== 0 || !puedeArrastrar) return;
+    if (e.button !== 0) return;
+    pulsacion.current = e.target instanceof HTMLImageElement ? { x: e.clientX, y: e.clientY } : null;
+    if (!puedeArrastrar) return;
     el.setPointerCapture(e.pointerId);
     arrastre.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
     setArrastrando(true);
@@ -157,9 +168,12 @@ export function ImageViewer({ target, style }: { target: ViewerTarget; style?: C
     e.currentTarget.scrollLeft = a.left - (e.clientX - a.x);
     e.currentTarget.scrollTop = a.top - (e.clientY - a.y);
   };
-  const alSoltarPuntero = () => {
+  const alSoltarPuntero = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const p = pulsacion.current;
+    pulsacion.current = null;
     arrastre.current = null;
     setArrastrando(false);
+    if (e.type === 'pointerup' && p && Math.hypot(e.clientX - p.x, e.clientY - p.y) <= UMBRAL_CLIC) setAmpliada(true);
   };
 
   const alPulsarTecla = (e: ReactKeyboardEvent<HTMLElement>) => {
@@ -272,6 +286,7 @@ export function ImageViewer({ target, style }: { target: ViewerTarget; style?: C
           <img
             key={url}
             className="viewer__img"
+            title="Clic para ampliar"
             src={url}
             alt={name}
             draggable={false}
@@ -288,6 +303,8 @@ export function ImageViewer({ target, style }: { target: ViewerTarget; style?: C
           </span>
         )}
       </div>
+
+      {ampliada && carga.tipo === 'ok' && <ImagenAmpliada url={url} name={name} onClose={() => setAmpliada(false)} />}
 
       <div className="viewer__strip">
         <span className="viewer__strip-title">imágenes de esta terminal ({imagenes.length})</span>
@@ -319,5 +336,20 @@ export function ImageViewer({ target, style }: { target: ViewerTarget; style?: C
         </div>
       </div>
     </aside>
+  );
+}
+
+/** Imagen a pantalla completa, ajustada a la ventana. Se cierra con un clic en cualquier parte o con Esc. */
+function ImagenAmpliada({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const cerrar = useRef(onClose);
+  cerrar.current = onClose;
+  // Esc se atrapa antes de que llegue al visor: cierra la ampliación, no el visor. El foco vuelve a la imagen.
+  useFocusTrap(ref, () => cerrar.current());
+  return createPortal(
+    <div ref={ref} className="lightbox" role="dialog" aria-modal="true" aria-label={`Imagen ampliada: ${name}`} tabIndex={-1} title="Clic o Esc para cerrar" onClick={onClose}>
+      <img className="lightbox__img" src={url} alt={name} draggable={false} />
+    </div>,
+    document.body,
   );
 }
