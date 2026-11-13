@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DragEvent, RefObject } from 'react';
+import type { RefObject } from 'react';
 import type { Terminal } from '@xterm/xterm';
-import { uploadImage } from '../../api.ts';
 import type { UploadedImage } from '../../api.ts';
-import { hasFiles, pastedImages, validateUpload } from '../../lib/attachments.ts';
+import { pastedImages } from '../../lib/attachments.ts';
+import { uploadImages } from '../../lib/uploadImages.ts';
+import { useFileDrop } from './useFileDrop.ts';
 
 type NoticeBody = { kind: 'ok'; items: UploadedImage[] } | { kind: 'error'; message: string };
 export type Notice = NoticeBody & { id: number };
@@ -17,9 +18,7 @@ export type Notice = NoticeBody & { id: number };
  */
 export function useImageAttach(host: RefObject<HTMLDivElement | null>, term: RefObject<Terminal | null>, shown: boolean) {
   const [notices, setNotices] = useState<Notice[]>([]);
-  const [dragging, setDragging] = useState(false);
   const nextId = useRef(1);
-  const depth = useRef(0);
 
   const dismiss = useCallback((id: number) => setNotices((n) => n.filter((x) => x.id !== id)), []);
   const push = useCallback((aviso: NoticeBody) => {
@@ -33,22 +32,7 @@ export function useImageAttach(host: RefObject<HTMLDivElement | null>, term: Ref
 
   const attach = useCallback(
     async (archivos: File[]) => {
-      const validos: { archivo: File; tipo: string }[] = [];
-      const motivos: string[] = [];
-      for (const archivo of archivos) {
-        const r = validateUpload(archivo);
-        if (r.ok) validos.push({ archivo, tipo: r.type });
-        else motivos.push(r.reason);
-      }
-      const subidas: UploadedImage[] = [];
-      for (const { archivo, tipo } of validos) {
-        try {
-          subidas.push(await uploadImage(archivo, tipo));
-        } catch (e) {
-          const detalle = e instanceof Error ? e.message : 'No se pudo subir la imagen.';
-          motivos.push(`«${archivo.name || 'La imagen'}»: ${detalle}`);
-        }
-      }
+      const { subidas, motivos } = await uploadImages(archivos);
       const t = term.current;
       if (subidas.length > 0 && t) {
         // paste() respeta el pegado entre corchetes; el espacio final deja escribir a continuación.
@@ -80,32 +64,7 @@ export function useImageAttach(host: RefObject<HTMLDivElement | null>, term: Ref
     return () => el.removeEventListener('paste', alPegar, true);
   }, [host]);
 
-  // Arrastrar: solo reacciona a archivos; el texto arrastrado sigue como siempre.
-  const dropProps = {
-    onDragEnter: (e: DragEvent) => {
-      if (!hasFiles(e.dataTransfer.types)) return;
-      e.preventDefault();
-      depth.current++;
-      setDragging(true);
-    },
-    onDragOver: (e: DragEvent) => {
-      if (!hasFiles(e.dataTransfer.types)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    },
-    onDragLeave: (e: DragEvent) => {
-      if (!hasFiles(e.dataTransfer.types)) return;
-      depth.current = Math.max(0, depth.current - 1);
-      if (depth.current === 0) setDragging(false);
-    },
-    onDrop: (e: DragEvent) => {
-      if (!hasFiles(e.dataTransfer.types)) return;
-      e.preventDefault();
-      depth.current = 0;
-      setDragging(false);
-      void attach(Array.from(e.dataTransfer.files));
-    },
-  };
+  const { dragging, dropProps } = useFileDrop(attach);
 
   return { notices, dismiss, dragging, dropProps };
 }

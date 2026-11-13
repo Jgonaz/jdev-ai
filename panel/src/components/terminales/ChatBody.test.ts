@@ -611,3 +611,174 @@ describe('ChatBody: búsqueda en conversaciones largas', () => {
     expect(contenedor.querySelector('.chat__count-hits')?.textContent).toBe('1 de 2.500 · resalte parcial');
   });
 });
+
+// ---------------------------------------------------------------------- Indicador de trabajo
+
+describe('ChatBody: indicador de trabajo', () => {
+  // Función: la hora se toma al ejecutar cada prueba, no al cargar el archivo.
+  const turno = (): AgentEvent[] => [
+    { type: 'user', text: 'Haz algo', at: Date.now() - 5000 },
+    { type: 'usage', id: 'msg_a', output: 12, at: null },
+    { type: 'usage', id: 'msg_a', output: 3400, at: null },
+    { type: 'message', text: 'Empiezo.', at: null },
+  ];
+
+  it('mientras trabaja enseña el spinner, «Trabajando…», el tiempo y los tokens del turno, encima de la caja', async () => {
+    stubFetch(turno(), () => json({ sent: true }));
+    await monta({ session: sesion({ state: 'working', updatedAt: Date.now() - 60_000 }) });
+    const ind = contenedor.querySelector('.chat__work')!;
+    expect(ind).not.toBeNull();
+    expect(ind.querySelector('.chat__spinner')).not.toBeNull();
+    expect(ind.querySelector('[role="status"]')?.textContent).toBe('Trabajando…');
+    // El tiempo cuenta desde el mensaje de la persona (unos 5 s), no desde que la sesión cambió de estado (60 s).
+    expect(ind.querySelector('.chat__worknum')?.textContent).toMatch(/^[4-9] s · ↓ 3,4k tokens$/);
+    // El reloj y los tokens quedan fuera de la región que lee el lector de pantalla: no se repiten cada segundo.
+    expect(ind.querySelector('.chat__worknum')?.getAttribute('aria-hidden')).toBe('true');
+    expect(ind.nextElementSibling).toBe(contenedor.querySelector('.chat__foot'));
+  });
+
+  it('sin mensaje de la persona ni tokens cuenta desde que empezó a trabajar y no enseña tokens', async () => {
+    stubFetch([{ type: 'message', text: 'Hola', at: null }], () => json({ sent: true }));
+    await monta({ session: sesion({ state: 'working', updatedAt: Date.now() - 125_000 }) });
+    expect(contenedor.querySelector('.chat__worknum')?.textContent).toMatch(/^2 m \d+ s$/);
+  });
+
+  it('no aparece si no trabaja ni cuando espera (ya hay un aviso)', async () => {
+    stubFetch(turno(), () => json({ sent: true }));
+    await monta({ session: sesion({ state: 'idle' }) });
+    expect(contenedor.querySelector('.chat__work')).toBeNull();
+    await monta({ session: sesion({ state: 'waiting', notice: 'Pide permiso' }) });
+    expect(contenedor.querySelector('.chat__work')).toBeNull();
+    expect(contenedor.querySelector('.chat__wait')).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------- Imágenes en la caja
+
+describe('ChatBody: pegar y soltar imágenes en la caja', () => {
+  const RUTA = '/home/u/.config/jdev-ai/uploads/captura.png';
+  const png = (name = 'captura.png', size = 10) => new File([new Uint8Array(size)], name, { type: 'image/png' });
+  let subida: Promise<Response>;
+  // Cada prueba usa su sesión: los borradores de la caja viven fuera del componente y pasarían de una a otra.
+  let n = 0;
+  const montaCaja = () => monta({ session: sesion({ name: `jdev-img-${n++}` }) });
+
+  /** Conversación vacía y subidas que responde `subida`. */
+  const preparaFetch = (alSubir?: () => Promise<Response>) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        peticiones.push(`${init?.method ?? 'GET'} ${url}`);
+        if (url.includes('/conversation')) return json({ sessionId: 's1', from: 0, size: 0, reset: false, more: false, events: [] });
+        if (url === '/api/uploads') return alSubir ? alSubir() : json({ path: RUTA, name: 'captura.png', size: 10 });
+        return json({ sent: true });
+      }),
+    );
+  };
+
+  const pega = async (area: HTMLTextAreaElement, files: File[], texto = '') => {
+    const ev = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'clipboardData', { value: { files, getData: () => texto, types: files.length > 0 ? ['Files'] : ['text/plain'] } });
+    await act(async () => {
+      area.dispatchEvent(ev);
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    return ev;
+  };
+
+  it('pegar una imagen sin texto la sube e inserta su ruta absoluta en el cursor, con un espacio detrás', async () => {
+    preparaFetch();
+    await montaCaja();
+    const area = contenedor.querySelector<HTMLTextAreaElement>('textarea')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, 'mira  fin');
+      area.dispatchEvent(new Event('input', { bubbles: true }));
+      area.setSelectionRange(5, 5);
+    });
+    const ev = await pega(area, [png()]);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(peticiones).toContain('POST /api/uploads');
+    expect(area.value).toBe(`mira ${RUTA} fin`);
+    expect(area.selectionStart).toBe(`mira ${RUTA} `.length);
+    expect(contenedor.querySelector('.chat__uploading')).toBeNull();
+    expect(contenedor.querySelector('.chat__senderr')).toBeNull();
+  });
+
+  it('enseña «Subiendo imagen…» mientras sube', async () => {
+    let termina!: (r: Response) => void;
+    subida = new Promise<Response>((ok) => (termina = ok));
+    preparaFetch(() => subida);
+    await montaCaja();
+    const area = contenedor.querySelector<HTMLTextAreaElement>('textarea')!;
+    await pega(area, [png()]);
+    expect(contenedor.querySelector('.chat__uploading')?.textContent).toBe('Subiendo imagen…');
+    await act(async () => {
+      termina(json({ path: RUTA, name: 'captura.png', size: 10 }));
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(contenedor.querySelector('.chat__uploading')).toBeNull();
+    expect(area.value).toBe(`${RUTA} `);
+  });
+
+  it('con texto en el portapapeles no hace nada especial: el pegado normal sigue', async () => {
+    preparaFetch();
+    await montaCaja();
+    const area = contenedor.querySelector<HTMLTextAreaElement>('textarea')!;
+    const ev = await pega(area, [png()], 'texto copiado');
+    expect(ev.defaultPrevented).toBe(false);
+    expect(peticiones).not.toContain('POST /api/uploads');
+  });
+
+  it('un archivo que no vale se explica en la zona de error de la caja y no escribe nada', async () => {
+    preparaFetch();
+    await montaCaja();
+    const area = contenedor.querySelector<HTMLTextAreaElement>('textarea')!;
+    await pega(area, [png('vacia.png', 0)]);
+    expect(contenedor.querySelector('.chat__senderr')?.textContent).toContain('«vacia.png» está vacío.');
+    expect(area.value).toBe('');
+  });
+
+  it('si la subida falla lo dice en la zona de error y conserva el texto', async () => {
+    preparaFetch(async () => json({ error: 'No hay espacio.' }, 507));
+    await montaCaja();
+    const area = contenedor.querySelector<HTMLTextAreaElement>('textarea')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area, 'hola');
+      area.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await pega(area, [png()]);
+    expect(contenedor.querySelector('.chat__senderr')?.textContent).toContain('No hay espacio.');
+    expect(area.value).toBe('hola');
+  });
+
+  it('soltar una imagen sobre la caja la sube y escribe su ruta; el texto arrastrado no se toca', async () => {
+    preparaFetch();
+    await montaCaja();
+    const caja = contenedor.querySelector('.chat__box')!;
+    const area = contenedor.querySelector<HTMLTextAreaElement>('textarea')!;
+    const suelta = (tipos: string[], files: File[]) => {
+      const ev = new Event('drop', { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, 'dataTransfer', { value: { types: tipos, files } });
+      return ev;
+    };
+    const texto = suelta(['text/plain'], []);
+    await act(async () => {
+      caja.dispatchEvent(texto);
+    });
+    expect(texto.defaultPrevented).toBe(false);
+    expect(peticiones).not.toContain('POST /api/uploads');
+    const imagen = suelta(['Files'], [png()]);
+    await act(async () => {
+      caja.dispatchEvent(imagen);
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(imagen.defaultPrevented).toBe(true);
+    expect(area.value).toBe(`${RUTA} `);
+  });
+
+  it('la pista menciona que se pueden pegar o soltar imágenes', async () => {
+    preparaFetch();
+    await montaCaja();
+    expect(contenedor.querySelector('.chat__hint')?.textContent).toContain('pega o suelta imágenes');
+  });
+});

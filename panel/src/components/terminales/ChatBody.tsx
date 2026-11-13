@@ -1,5 +1,5 @@
 import { Fragment, memo, startTransition, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { ClipboardEvent, KeyboardEvent, ReactNode } from 'react';
 import { ApiError, api } from '../../api.ts';
 import { checkChatMessage, parseBtw } from '../../../shared/chat.ts';
 import type { ChatSendResponse } from '../../../shared/chat.ts';
@@ -28,18 +28,23 @@ import {
   windowDown,
   windowRange,
   windowUp,
+  workingView,
 } from '../../lib/chat.ts';
 import type { ChatWindow } from '../../lib/chat.ts';
-import type { ChatItem, ChatStep } from '../../lib/chat.ts';
+import type { ChatItem, ChatStep, ChatTurn } from '../../lib/chat.ts';
 import { addBtw, btwOutcome, groupBtwByAnchor, removeBtw, updateBtw, useBtwBlocks } from '../../lib/btw.ts';
 import type { BtwBlock } from '../../lib/btw.ts';
 import { atBottom, followAfterScroll, resultNote } from '../../lib/follow.ts';
 import { visualState } from '../../lib/sessions.ts';
 import { formatClock } from '../../lib/statusline.ts';
+import { insertAtCursor, pastedImages } from '../../lib/attachments.ts';
 import { useConversation } from '../../lib/useConversation.ts';
+import { useNow } from '../../lib/useNow.ts';
+import { uploadImages } from '../../lib/uploadImages.ts';
 import type { SessionInfo } from '../../types.ts';
 import { IconArrowDown, IconChat, IconChevron, IconChevronDown, IconChevronUp, IconClose, IconSearch, IconSend } from '../Icons.tsx';
 import { Markdown } from '../Markdown.tsx';
+import { useFileDrop } from './useFileDrop.ts';
 
 /** A partir de tantos elementos pintados se deja que el navegador se salte el pintado de lo que queda fuera de pantalla. */
 const LISTA_LARGA = 1500;
@@ -260,6 +265,30 @@ function BtwView({ bloque, onTerminal }: { bloque: BtwBlock; onTerminal: () => v
   );
 }
 
+// ---------------------------------------------------------------------- Indicador de trabajo
+
+/**
+ * «Trabajando…» con el tiempo del turno y los tokens de salida, mientras Claude trabaja. Es un componente aparte para que
+ * el reloj de cada segundo repinte solo esto y no toda la conversación. El lector de pantalla oye solo «Trabajando…»
+ * (una vez, al aparecer): el tiempo y los tokens, que cambian sin parar, quedan fuera de la región.
+ */
+function WorkingIndicator({ turno, desde }: { turno: ChatTurn; desde: number }) {
+  const ahora = useNow(1000);
+  const v = workingView(turno, desde, ahora);
+  return (
+    <div className="chat__work">
+      <span role="status">
+        <span className="chat__spinner" aria-hidden="true" />
+        Trabajando…
+      </span>
+      <span className="chat__worknum" aria-hidden="true">
+        {v.elapsed}
+        {v.tokens !== null && ` · ${v.tokens}`}
+      </span>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------- Caja de entrada
 
 /** Lo escrito y no enviado de cada sesión: sobrevive a pasar a la terminal y volver. */
@@ -280,7 +309,20 @@ function Composer({ nombre, onSent, onTerminal, btwContext }: ComposerProps) {
   const [texto, setTexto] = useState(() => borradores.get(nombre) ?? '');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<SendError | null>(null);
+  // Subidas de imágenes en curso (pegadas o soltadas) que aún no han escrito su ruta en la caja.
+  const [subiendo, setSubiendo] = useState(0);
   const area = useRef<HTMLTextAreaElement>(null);
+  const textoActual = useRef(texto);
+  textoActual.current = texto;
+  // Dónde dejar el cursor tras insertar una ruta: se aplica cuando React ya ha pintado el texto nuevo.
+  const cursorTras = useRef<number | null>(null);
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
   const idArea = useId();
   const idNota = useId();
 
@@ -292,7 +334,15 @@ function Composer({ nombre, onSent, onTerminal, btwContext }: ComposerProps) {
     el.style.height = `${Math.min(el.scrollHeight, ALTO_MAX_CAJA)}px`;
   }, [texto]);
 
+  useLayoutEffect(() => {
+    const c = cursorTras.current;
+    if (c === null) return;
+    cursorTras.current = null;
+    area.current?.setSelectionRange(c, c);
+  }, [texto]);
+
   const cambia = (t: string) => {
+    textoActual.current = t;
     setTexto(t);
     if (t === '') borradores.delete(nombre);
     else borradores.set(nombre, t);
@@ -327,6 +377,44 @@ function Composer({ nombre, onSent, onTerminal, btwContext }: ComposerProps) {
     }
   };
 
+  // Sube las imágenes y escribe sus rutas en el cursor (con un espacio detrás): Claude Code las convierte en adjuntos al enviar.
+  const adjunta = async (archivos: File[]) => {
+    if (enviando) return;
+    setSubiendo((n) => n + 1);
+    try {
+      const { subidas, motivos } = await uploadImages(archivos);
+      if (subidas.length > 0) {
+        const rutas = subidas.map((s) => s.path).join(' ');
+        const el = area.current;
+        if (montado.current && el) {
+          // El texto pudo cambiar mientras subía: el cursor se ajusta al que hay ahora.
+          const actual = textoActual.current;
+          const r = insertAtCursor(actual, Math.min(el.selectionStart, actual.length), Math.min(el.selectionEnd, actual.length), rutas);
+          cursorTras.current = r.cursor;
+          cambia(r.texto);
+          el.focus();
+        } else {
+          // La vista se cerró mientras subía: la ruta no se pierde, queda en el borrador.
+          const previo = borradores.get(nombre) ?? '';
+          borradores.set(nombre, insertAtCursor(previo, previo.length, previo.length, rutas).texto);
+        }
+      }
+      if (motivos.length > 0 && montado.current) setError({ text: `No se adjuntó. ${motivos.join(' ')}`, terminal: false });
+    } finally {
+      setSubiendo((n) => n - 1);
+    }
+  };
+  const { dragging, dropProps } = useFileDrop((archivos) => void adjunta(archivos));
+
+  // Pegar una imagen (y ningún texto) la sube; con texto, el pegado normal.
+  const alPegar = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const datos = e.clipboardData;
+    const archivos = pastedImages(Array.from(datos.files), datos.getData('text/plain'));
+    if (archivos.length === 0) return;
+    e.preventDefault();
+    void adjunta(archivos);
+  };
+
   const alPulsar = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter envía; Mayús+Enter es un salto de línea. Con un compositor de texto (IME) abierto, Enter lo confirma.
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -341,7 +429,7 @@ function Composer({ nombre, onSent, onTerminal, btwContext }: ComposerProps) {
         <label htmlFor={idArea} className="sr-only">
           Mensaje para Claude
         </label>
-        <div className={`chat__box${error !== null ? ' chat__box--error' : ''}`}>
+        <div className={`chat__box${error !== null ? ' chat__box--error' : ''}${dragging ? ' chat__box--drop' : ''}`} {...dropProps}>
           <textarea
             id={idArea}
             ref={area}
@@ -356,11 +444,23 @@ function Composer({ nombre, onSent, onTerminal, btwContext }: ComposerProps) {
             aria-describedby={idNota}
             onChange={(e) => cambia(e.target.value)}
             onKeyDown={alPulsar}
+            onPaste={alPegar}
           />
+          {dragging && (
+            <span className="chat__droptip" aria-hidden="true">
+              Suelta para adjuntar la imagen
+            </span>
+          )}
           <button type="button" className="chat__send" aria-label="Enviar" disabled={enviando || texto.trim() === ''} onClick={() => void enviar()}>
             <IconSend size={16} />
           </button>
         </div>
+        {subiendo > 0 && (
+          <div className="chat__uploading" role="status">
+            <span className="chat__spinner" aria-hidden="true" />
+            {subiendo === 1 ? 'Subiendo imagen…' : 'Subiendo imágenes…'}
+          </div>
+        )}
         {error !== null && (
           <div className="chat__senderr" role="alert">
             <span>{error.text}</span>
@@ -372,7 +472,7 @@ function Composer({ nombre, onSent, onTerminal, btwContext }: ComposerProps) {
           </div>
         )}
         <span className="chat__hint" id={idNota}>
-          Enter envía · Shift+Enter, salto de línea · permisos y menús, en la terminal
+          Enter envía · Shift+Enter, salto de línea · pega o suelta imágenes · permisos y menús, en la terminal
         </span>
       </div>
     </div>
@@ -793,6 +893,8 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
           </button>
         </div>
       )}
+
+      {estado === 'working' && <WorkingIndicator turno={conv.chat.turn} desde={session.updatedAt} />}
 
       {esperando && (
         <div className="chat__wait" role="status">

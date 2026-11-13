@@ -71,6 +71,8 @@ export type Settings = {
     initialLayout: (typeof LAYOUTS)[number];
     scrollback: number;
     copyOnSelect: boolean;
+    /** Al copiar de la terminal, quitar las marcas y la sangría de Claude Code y unir las líneas que ajustó al ancho. */
+    cleanCopy: boolean;
     tmuxBar: boolean;
     /** Miniatura flotante al pasar el ratón por una ruta de imagen. */
     hoverPreview: boolean;
@@ -114,6 +116,7 @@ export const DEFAULT_SETTINGS: Settings = {
     initialLayout: 1,
     scrollback: 5000,
     copyOnSelect: false,
+    cleanCopy: true,
     tmuxBar: true,
     hoverPreview: true,
     autoOpenImages: false,

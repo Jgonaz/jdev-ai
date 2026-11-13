@@ -10,6 +10,7 @@ import { terminalMayTakeFocus } from '../../lib/focus.ts';
 import { HOVER_DELAY_MS, rowBounds } from '../../lib/imageHover.ts';
 import { expandHome, scanBufferImagePaths } from '../../lib/imageLinks.ts';
 import { translateTerminalKey } from '../../lib/terminalKeys.ts';
+import { cleanCopiedText } from '../../lib/cleanCopy.ts';
 import { decodeOsc52 } from '../../lib/osc52.ts';
 import { useImages } from '../../state/ImagesContext.tsx';
 import { useSessions } from '../../state/SessionsContext.tsx';
@@ -79,6 +80,13 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus 
     const contenedor = host.current;
     if (!contenedor) return;
     const s = ajustes.current;
+    // Los manejadores por defecto de xterm abren `window.open()` vacío y luego navegan: en el
+    // programa de escritorio esa ventana en blanco se toma por una del panel y la URL nunca
+    // llega al navegador. Con la URL desde el principio, el escritorio la manda al navegador
+    // por defecto y un navegador normal abre una pestaña.
+    const abrirEnlace = (_e: MouseEvent, uri: string) => {
+      window.open(uri, '_blank', 'noopener');
+    };
     const t = new Terminal({
       fontFamily: s.fonts.terminal,
       fontSize: s.sizes.terminal,
@@ -88,10 +96,12 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus 
       theme: readXtermTheme(),
       // El addon de Unicode 11 lo necesita para cambiar la versión activa.
       allowProposedApi: true,
+      // Enlaces OSC 8 (los que Claude Code marca como hipervínculo); solo http y https.
+      linkHandler: { activate: abrirEnlace },
     });
     const f = new FitAddon();
     t.loadAddon(f);
-    t.loadAddon(new WebLinksAddon());
+    t.loadAddon(new WebLinksAddon(abrirEnlace));
     // Anchos de Unicode 11: los emojis (como el 📸 que marca las imágenes) ocupan dos
     // columnas, igual que en tmux y en Claude Code; con la tabla por defecto se descuadran.
     t.loadAddon(new Unicode11Addon());
@@ -138,9 +148,14 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus 
     );
     // Lo que tmux copia (selección con el ratón) llega por OSC 52: va al portapapeles del sistema.
     // Sin contexto seguro (panel por http fuera de localhost) no hay API de portapapeles.
+    // Con «Copiar sin las marcas ni los saltos de Claude» se limpia antes (ver cleanCopy.ts).
+    const alPortapapeles = (texto: string) => {
+      const final = ajustes.current.terminal.cleanCopy ? cleanCopiedText(texto, t.cols) : texto;
+      navigator.clipboard?.writeText(final).catch(() => undefined);
+    };
     const dPortapapeles = t.parser.registerOscHandler(52, (datos) => {
       const texto = decodeOsc52(datos);
-      if (texto !== null) navigator.clipboard?.writeText(texto).catch(() => undefined);
+      if (texto !== null) alPortapapeles(texto);
       return true;
     });
     t.open(contenedor);
@@ -273,7 +288,7 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus 
     // Copiar al seleccionar: al soltar el ratón, para no copiar a medio arrastrar.
     const alSoltar = () => {
       if (ajustes.current.terminal.copyOnSelect && t.hasSelection()) {
-        navigator.clipboard?.writeText(t.getSelection()).catch(() => undefined);
+        alPortapapeles(t.getSelection());
       }
     };
     contenedor.addEventListener('mouseup', alSoltar);

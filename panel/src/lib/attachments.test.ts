@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_UPLOAD_BYTES, hasFiles, pastedImages, uploadMime, validateUpload } from './attachments.ts';
+import { MAX_UPLOAD_BYTES, hasFiles, insertAtCursor, pastedImages, uploadMime, validateUpload } from './attachments.ts';
 
 const archivo = (name: string, type: string, size = 1000) => ({ name, type, size });
 
@@ -56,5 +56,23 @@ describe('hasFiles', () => {
     expect(hasFiles(['text/plain', 'Files'])).toBe(true);
     expect(hasFiles(['text/plain'])).toBe(false);
     expect(hasFiles(null)).toBe(false);
+  });
+});
+
+describe('insertAtCursor', () => {
+  it('inserta en el cursor con un espacio detrás', () => {
+    expect(insertAtCursor('', 0, 0, '/img/a.png')).toEqual({ texto: '/img/a.png ', cursor: 11 });
+    expect(insertAtCursor('mira esto: ', 11, 11, '/img/a.png')).toEqual({ texto: 'mira esto: /img/a.png ', cursor: 22 });
+  });
+
+  it('separa la ruta de la palabra que la precede y aprovecha el espacio que ya hubiera detrás', () => {
+    expect(insertAtCursor('mira', 4, 4, '/i.png')).toEqual({ texto: 'mira /i.png ', cursor: 12 });
+    // En mitad del texto: el espacio de después ya existe y el cursor lo pasa.
+    expect(insertAtCursor('mira  y', 5, 5, '/i.png')).toEqual({ texto: 'mira /i.png y', cursor: 12 });
+    expect(insertAtCursor('ab cd', 3, 3, '/i.png')).toEqual({ texto: 'ab /i.png cd', cursor: 10 });
+  });
+
+  it('sustituye la selección y deja varias rutas separadas', () => {
+    expect(insertAtCursor('uno XXX dos', 4, 7, '/a.png /b.png')).toEqual({ texto: 'uno /a.png /b.png dos', cursor: 18 });
   });
 });

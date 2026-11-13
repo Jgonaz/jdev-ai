@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FOLLOW_CHUNK, FollowError, Follower, SHELL_TAIL_LINES, buscarSalida, describeTool, leerLineas, parseAgentLines } from './follow.ts';
 import type { AgentEvent, FollowContext } from './follow.ts';
-import { comandos, comandosDeSistema, conversacionMuestra, encargo, interno, lanzamientoShell, persona, personaConImagen, resultado, sinteticos, subagenteMuestra, texto, usar } from './follow-fixtures.ts';
+import { asistenteConUso, comandos, comandosDeSistema, conversacionMuestra, encargo, interno, lanzamientoShell, persona, personaConImagen, resultado, sinteticos, subagenteMuestra, texto, usar } from './follow-fixtures.ts';
 
 describe('parseAgentLines', () => {
   const eventos = () => parseAgentLines(subagenteMuestra(), { primero: true, cwd: null });
@@ -106,6 +106,9 @@ describe('parseAgentLines', () => {
     expect(describeTool('Read', null, cwd)).toEqual({ verb: 'Leo', target: '' });
   });
 });
+
+/** Línea del asistente sin `usage` (formato antiguo o mensaje sintético). */
+const asistentePrincipalSinUso = () => JSON.stringify({ type: 'assistant', isSidechain: false, message: { id: 'msg_s', role: 'assistant', content: [{ type: 'text', text: 'sin uso' }] } });
 
 describe('parseAgentLines en modo conversación', () => {
   const eventos = (t = conversacionMuestra()) => parseAgentLines(t, { primero: true, cwd: null, conversacion: true });
@@ -252,6 +255,34 @@ describe('parseAgentLines en modo conversación', () => {
   it('el modo subagente no cambia: sigue sin emitir mensajes de usuario', () => {
     const e = parseAgentLines([persona('hola'), personaConImagen('x')].join('\n'), { primero: false, cwd: null });
     expect(e).toEqual([]);
+  });
+
+  it('emite los tokens de salida de cada mensaje del asistente una sola vez aunque sus líneas repitan el usage', () => {
+    // Tres líneas del mismo mensaje (pensar, texto y herramienta) con el valor creciendo, y otro mensaje después.
+    const e = eventos(
+      [
+        persona('hola'),
+        asistenteConUso('msg_a', [{ type: 'thinking', thinking: '', signature: 'Zm9v' }], 12),
+        asistenteConUso('msg_a', [{ type: 'text', text: 'Miro.' }], 12),
+        asistenteConUso('msg_a', [{ type: 'tool_use', id: 'x1', name: 'Read', input: { file_path: '/home/u/proyecto/a.ts' } }], 340),
+        asistenteConUso('msg_b', [{ type: 'text', text: 'Listo.' }], 95),
+      ].join('\n'),
+    );
+    expect(e.filter((x) => x.type === 'usage')).toEqual([
+      { type: 'usage', id: 'msg_a', output: 340, at: expect.any(Number) },
+      { type: 'usage', id: 'msg_b', output: 95, at: expect.any(Number) },
+    ]);
+    // El resto de eventos no cambia.
+    expect(e.filter((x) => x.type !== 'usage').map((x) => x.type)).toEqual(['user', 'message', 'tool', 'message']);
+  });
+
+  it('no emite tokens sin id, sin usage válido, en los subagentes ni en lo que hacen los subagentes dentro de la sesión', () => {
+    const sinUso = asistentePrincipalSinUso();
+    const malo = asistenteConUso('msg_x', [{ type: 'text', text: 'x' }], -3);
+    const subagente = asistenteConUso('msg_y', [{ type: 'text', text: 'y' }], 50, { isSidechain: true });
+    expect(eventos([sinUso, malo, subagente].join('\n')).filter((x) => x.type === 'usage')).toEqual([]);
+    const delSubagente = parseAgentLines(asistenteConUso('msg_z', [{ type: 'text', text: 'z' }], 50), { primero: false, cwd: null });
+    expect(delSubagente.map((x) => x.type)).toEqual(['message']);
   });
 
   it('recorta el texto de un resultado y el de un mensaje de la persona', () => {

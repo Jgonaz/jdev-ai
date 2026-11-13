@@ -19,6 +19,11 @@ import {
   newRepliesAnnouncement,
   newMessagesLabel,
   normalizeText,
+  EMPTY_TURN,
+  addTurnUsage,
+  startTurn,
+  turnTokensLabel,
+  workingView,
   progressLabel,
   progressPercent,
   searchChat,
@@ -352,5 +357,73 @@ describe('avisos para lectores de pantalla', () => {
     expect(waitingNotice('Claude needs your permission to use mcp__x__y.')).toMatchObject({ detail: 'Pide permiso para usar mcp__x__y', translated: true });
     expect(waitingNotice('Claude is waiting for your input')).toMatchObject({ detail: null, translated: true });
     expect(waitingNotice('Algo raro')).toMatchObject({ detail: 'Algo raro', translated: false });
+  });
+});
+
+describe('tokens del turno', () => {
+  const uso = (id: string, output: number): AgentEvent => ({ type: 'usage', id, output, at: 5000 });
+
+  it('cuenta el último valor de cada mensaje, no la suma de sus líneas repetidas', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [user('hola', 1000), uso('a', 12), uso('a', 12), uso('a', 340), uso('b', 95)]);
+    expect(m.turn.output).toBe(435);
+    expect(m.turn.startedAt).toBe(1000);
+  });
+
+  it('también deduplica cuando las líneas de un mismo mensaje llegan en respuestas distintas', () => {
+    const a = applyChatEvents(EMPTY_CHAT, [user('hola'), uso('a', 12)]);
+    const b = applyChatEvents(a, [uso('a', 340), uso('b', 60)]);
+    expect(b.turn.output).toBe(400);
+    // El modelo anterior no cambia.
+    expect(a.turn.output).toBe(12);
+    expect(a.turn.byId.get('a')).toBe(12);
+  });
+
+  it('un mensaje de la persona abre un turno nuevo: los tokens y la hora de inicio se reinician', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [user('uno', 1000), uso('a', 500), msg('vale'), user('dos', 9000), uso('b', 40)]);
+    expect(m.turn).toMatchObject({ startedAt: 9000, output: 40 });
+    // Un mismo id repetido en otro turno cuenta de nuevo (no se arrastra el del turno anterior).
+    const n = applyChatEvents(m, [user('tres', 12000), uso('b', 70)]);
+    expect(n.turn.output).toBe(70);
+  });
+
+  it('con reset empieza de cero', () => {
+    const a = applyChatEvents(EMPTY_CHAT, [user('hola', 1000), uso('a', 50)]);
+    const b = applyChatEvents(a, [uso('z', 3)], true);
+    expect(b.turn).toMatchObject({ startedAt: null, output: 3 });
+  });
+
+  it('si solo llegan tokens conserva la lista de elementos (no repinta la conversación) y si no cambian devuelve el mismo modelo', () => {
+    const a = applyChatEvents(EMPTY_CHAT, [user('hola'), msg('vale'), uso('a', 10)]);
+    const b = applyChatEvents(a, [uso('a', 99)]);
+    expect(b.items).toBe(a.items);
+    expect(b.turn.output).toBe(99);
+    expect(applyChatEvents(b, [uso('a', 99)])).toBe(b);
+  });
+
+  it('las funciones puras no modifican el turno de partida', () => {
+    const t = startTurn(100);
+    const u = addTurnUsage(t, 'a', 7);
+    expect(t.output).toBe(0);
+    expect(u.output).toBe(7);
+    expect(addTurnUsage(u, 'a', 7)).toBe(u);
+    expect(EMPTY_TURN.output).toBe(0);
+  });
+
+  it('da formato a los tokens como el panel, con un decimal entre 1 000 y 10 000', () => {
+    expect(turnTokensLabel(0)).toBeNull();
+    expect(turnTokensLabel(950)).toBe('↓ 950 tokens');
+    expect(turnTokensLabel(3400)).toBe('↓ 3,4k tokens');
+    expect(turnTokensLabel(9990)).toBe('↓ 10,0k tokens');
+    expect(turnTokensLabel(12_400)).toBe('↓ 12k tokens');
+    expect(turnTokensLabel(1_500_000)).toBe('↓ 1,5M tokens');
+  });
+
+  it('el tiempo cuenta desde el último mensaje de la persona o, si no hay, desde que empezó a trabajar', () => {
+    const turno = startTurn(10_000);
+    expect(workingView(turno, 50_000, 82_000)).toEqual({ elapsed: '1 m 12 s', tokens: null });
+    expect(workingView(EMPTY_TURN, 50_000, 72_000).elapsed).toBe('22 s');
+    expect(workingView(addTurnUsage(turno, 'a', 3400), 0, 12_000)).toEqual({ elapsed: '2 s', tokens: '↓ 3,4k tokens' });
+    // Un reloj atrasado respecto a la transcripción no da tiempos negativos.
+    expect(workingView(turno, 0, 5000).elapsed).toBe('0 s');
   });
 });

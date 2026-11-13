@@ -241,6 +241,7 @@ function eventosDeComando(texto: string, at: number | null): AgentEvent[] | null
 export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd: string | null; conversacion?: boolean }): AgentEvent[] {
   const eventos: AgentEvent[] = [];
   const conversacion = opciones.conversacion === true;
+  const usos = new Map<string, Extract<AgentEvent, { type: 'usage' }>>();
   let hayEncargo = conversacion || !opciones.primero;
   let cwd = opciones.cwd;
   for (const linea of texto.split('\n')) {
@@ -322,6 +323,19 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
         }
       }
     } else if (o.type === 'assistant' && Array.isArray(contenido)) {
+      // Tokens de salida del mensaje: los mensajes con varios bloques repiten `id` y `usage` en cada línea, así que dentro
+      // de esta lectura solo se conserva el último evento de cada id (el cliente deduplica también entre lecturas).
+      const idMensaje = mensaje?.id;
+      const salida = objeto(mensaje?.usage)?.output_tokens;
+      if (conversacion && typeof idMensaje === 'string' && typeof salida === 'number' && Number.isFinite(salida) && salida >= 0) {
+        const previo = usos.get(idMensaje);
+        if (previo) previo.output = salida;
+        else {
+          const evento: Extract<AgentEvent, { type: 'usage' }> = { type: 'usage', id: idMensaje, output: salida, at };
+          usos.set(idMensaje, evento);
+          eventos.push(evento);
+        }
+      }
       for (const b of contenido) {
         const bloque = objeto(b);
         if (!bloque) continue;

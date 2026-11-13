@@ -98,6 +98,17 @@ describe('ajustes', () => {
     expect(mergeSettings(DEFAULT_SETTINGS, { fonts: { title: 'inherit' } }).fonts.title).toBe('inherit');
   });
 
+  it('la copia limpia está activada por defecto y solo acepta booleanos', () => {
+    expect(DEFAULT_SETTINGS.terminal.cleanCopy).toBe(true);
+    let s = updateSettings({ terminal: { cleanCopy: false } });
+    expect(s.terminal.cleanCopy).toBe(false);
+    s = updateSettings({ terminal: { cleanCopy: 'sí' } });
+    expect(s.terminal.cleanCopy).toBe(false);
+    // Un archivo antiguo sin la clave toma el valor por defecto.
+    writeFileSync(settingsPath(configDir()), JSON.stringify({ terminal: { cursor: 'barra' } }));
+    expect(readSettings().terminal.cleanCopy).toBe(true);
+  });
+
   it('vista previa de imágenes activada y apertura automática desactivada por defecto, con validación', () => {
     expect(DEFAULT_SETTINGS.terminal.hoverPreview).toBe(true);
     expect(DEFAULT_SETTINGS.terminal.autoOpenImages).toBe(false);

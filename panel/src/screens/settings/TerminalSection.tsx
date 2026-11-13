@@ -50,6 +50,12 @@ export function TerminalSection() {
           checked={t.copyOnSelect}
           onChange={(v) => update({ terminal: { copyOnSelect: v } })}
         />
+        <CheckRow
+          label="Copiar sin las marcas ni los saltos de Claude"
+          hint="Al copiar de la terminal, quita las marcas (⏺, ⎿) y la sangría de Claude Code y une las líneas que ajustó al ancho de la ventana. No toca el código ni las listas."
+          checked={t.cleanCopy}
+          onChange={(v) => update({ terminal: { cleanCopy: v } })}
+        />
         <CheckRow label="Mostrar la barra de estado estilo tmux" checked={t.tmuxBar} onChange={(v) => update({ terminal: { tmuxBar: v } })} />
         <CheckRow
           label="Vista previa al pasar el ratón"

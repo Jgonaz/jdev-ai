@@ -327,6 +327,7 @@ pantalla de Ajustes con estos apartados:
   vacíos, saludo según la hora y retícula de puntos de fondo.
 - **Tipografía**: fuente y tamaño de la interfaz, los títulos y la terminal.
 - **Terminal**: cursor, distribución inicial, historial, copiar al seleccionar,
+  copiar sin las marcas ni los saltos de línea de Claude (activo por defecto),
   barra de tmux, miniatura al pasar por una ruta de imagen y apertura
   automática del visor.
 - **Proyectos**: por proyecto, su monograma, su color, si es visible en el panel y el comando de
@@ -465,6 +466,11 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   límite es de 64 KiB. Enter envía y Shift+Enter hace un salto de línea. Los
   permisos y los menús se responden en la terminal: si Claude espera una
   respuesta así, el chat lo avisa con un botón «Ir a la terminal».
+
+  En la caja también se pueden pegar o soltar imágenes: se suben y su ruta se
+  escribe donde está el cursor, y Claude la recibe como adjunto. Mientras
+  Claude trabaja, encima de la caja se ve «Trabajando…» con el tiempo del turno
+  y los tokens generados, que se actualizan al ritmo de la transcripción.
 
   Los comandos se escriben en la misma caja. `/btw pregunta` abre en la terminal
   una ventana con la respuesta y Claude no la guarda en la transcripción: el

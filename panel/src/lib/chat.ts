@@ -5,6 +5,7 @@
 import type { Token, Tokens } from 'marked';
 import { decodeEntities, lex } from '../components/Markdown.tsx';
 import type { AgentEvent } from '../../shared/follow.ts';
+import { formatElapsed, formatTokens } from './statusline.ts';
 
 export type ChatResult = { error: boolean; summary: string; lines: number; output?: string };
 
@@ -26,13 +27,57 @@ export type ChatItem =
   /** Herramientas ejecutadas seguidas, entre dos mensajes. */
   | { kind: 'tools'; key: string; steps: ChatStep[]; errors: number; at: number | null };
 
+/** El turno en curso: lo que va desde el último mensaje de la persona. */
+export type ChatTurn = {
+  /** Hora de ese mensaje; null si aún no hay ninguno o la transcripción no traía hora. */
+  startedAt: number | null;
+  /** Tokens de salida generados en el turno: la suma del último valor de cada mensaje del asistente. */
+  output: number;
+  /** Último valor de cada mensaje (por `id`) del turno, para no contar dos veces el `usage` que repite cada línea. */
+  byId: ReadonlyMap<string, number>;
+};
+
 export type ChatModel = {
   items: ChatItem[];
   /** Contador para dar claves estables a los elementos nuevos. */
   next: number;
+  turn: ChatTurn;
 };
 
-export const EMPTY_CHAT: ChatModel = { items: [], next: 0 };
+export const EMPTY_TURN: ChatTurn = { startedAt: null, output: 0, byId: new Map() };
+
+export const EMPTY_CHAT: ChatModel = { items: [], next: 0, turn: EMPTY_TURN };
+
+/** Turno nuevo, abierto por un mensaje de la persona: se olvidan los tokens del anterior. */
+export const startTurn = (at: number | null): ChatTurn => ({ startedAt: at, output: 0, byId: new Map() });
+
+/**
+ * Suma al turno los tokens de salida de un mensaje del asistente. Un mismo `id` llega varias veces (Claude Code escribe una
+ * línea por bloque con el mismo `usage`, y el valor crece mientras se genera): cuenta el último, no la suma. Devuelve un
+ * turno nuevo, o el mismo si no cambia nada.
+ */
+export function addTurnUsage(turn: ChatTurn, id: string, output: number): ChatTurn {
+  const previo = turn.byId.get(id);
+  if (previo === output) return turn;
+  const byId = new Map(turn.byId);
+  byId.set(id, output);
+  return { ...turn, output: turn.output - (previo ?? 0) + output, byId };
+}
+
+/** «↓ 950 tokens», «↓ 3,4k tokens», «↓ 12k tokens»: los de salida del turno, con un decimal entre 1 000 y 10 000 (donde «3k» diría poco). */
+export function turnTokensLabel(output: number): string | null {
+  if (output <= 0) return null;
+  const n = output >= 1000 && output < 10_000 ? `${(output / 1000).toFixed(1).replace('.', ',')}k` : formatTokens(output);
+  return `↓ ${n} tokens`;
+}
+
+/**
+ * Lo que enseña el indicador de trabajo: el tiempo desde el último mensaje de la persona (o, si no hay, desde `desde`,
+ * el momento en que la sesión empezó a trabajar) y los tokens de salida del turno, si ya se conocen.
+ */
+export function workingView(turn: ChatTurn, desde: number, ahora: number): { elapsed: string; tokens: string | null } {
+  return { elapsed: formatElapsed(ahora - (turn.startedAt ?? desde)), tokens: turnTokensLabel(turn.output) };
+}
 
 /** El comando tal como se escribe: «/goal close». */
 export const commandLine = (c: { name: string; args: string }): string => `/${c.name}${c.args !== '' ? ` ${c.args}` : ''}`;
@@ -52,6 +97,7 @@ export function applyChatEvents(previo: ChatModel, eventos: readonly AgentEvent[
   const base = reset ? EMPTY_CHAT : previo;
   const items = base.items.slice();
   let next = base.next;
+  let turn = base.turn;
   // Posición de cada herramienta (elemento, paso), construida solo si llega algún resultado.
   const tabla: { m: Map<string, [number, number]> | null } = { m: null };
   const indexa = (): Map<string, [number, number]> => {
@@ -75,6 +121,9 @@ export function applyChatEvents(previo: ChatModel, eventos: readonly AgentEvent[
   for (const e of eventos) {
     if (e.type === 'user') {
       items.push({ kind: 'user', key: `u${next++}`, text: e.text, at: e.at, images: e.images ?? 0 });
+      turn = startTurn(e.at);
+    } else if (e.type === 'usage') {
+      turn = addTurnUsage(turn, e.id, e.output);
     } else if (e.type === 'message') {
       items.push({ kind: 'agent', key: `a${next++}`, text: e.text, at: e.at });
     } else if (e.type === 'command') {
@@ -107,7 +156,9 @@ export function applyChatEvents(previo: ChatModel, eventos: readonly AgentEvent[
     }
     // Los eventos «task» son de subagentes: la conversación no los tiene.
   }
-  return { items, next };
+  // Solo tokens: no hay elementos nuevos, y se conserva la lista para que no se repinte lo que depende de ella.
+  if (!reset && eventos.every((e) => e.type === 'usage')) return turn === base.turn ? previo : { ...previo, turn };
+  return { items, next, turn };
 }
 
 // ---------------------------------------------------------------------- Resumen de un grupo

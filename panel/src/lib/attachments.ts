@@ -52,3 +52,17 @@ export function pastedImages<T extends FileLike>(files: readonly T[], plainText:
   if (plainText.trim() !== '') return [];
   return files.filter((f) => uploadMime(f) !== null);
 }
+
+/**
+ * Inserta `insertado` (p. ej. rutas de imágenes) en un texto, sustituyendo la selección `[inicio, fin)`, y devuelve el
+ * texto nuevo y dónde queda el cursor. Va separado por espacios de lo que lo rodea: uno detrás (que se aprovecha si ya
+ * lo había) y otro delante si pegaría con una palabra, porque Claude Code solo convierte en adjunto una ruta suelta.
+ */
+export function insertAtCursor(texto: string, inicio: number, fin: number, insertado: string): { texto: string; cursor: number } {
+  const antes = texto.slice(0, inicio);
+  const despues = texto.slice(fin);
+  const delante = antes !== '' && !/\s$/.test(antes) ? ' ' : '';
+  const detras = /^\s/.test(despues) ? '' : ' ';
+  const cabeza = `${antes}${delante}${insertado}`;
+  return { texto: `${cabeza}${detras}${despues}`, cursor: cabeza.length + 1 };
+}

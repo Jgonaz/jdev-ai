@@ -70,6 +70,20 @@ describe('Aviso de espera', () => {
   });
 });
 
+describe('Indicador de trabajo', () => {
+  it('comparte la columna de 820 px con la caja y el aviso de espera', () => {
+    const r = regla(css, '.chat__work');
+    expect(r).toContain('min(820px');
+    expect(r).toMatch(/margin:\s*0 auto/);
+  });
+
+  it('el spinner gira con la animación global, que prefers-reduced-motion apaga, y solo usa tokens de tema', () => {
+    const r = regla(css, '.chat__spinner');
+    expect(r).toContain('animation: spin');
+    expect(r).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+  });
+});
+
 describe('respuesta de /btw', () => {
   it('se pinta preformateada: conserva saltos de línea y sangría, con la fuente de la interfaz', () => {
     const r = regla(css, '.chat__btwans');

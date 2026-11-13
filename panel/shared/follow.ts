@@ -28,7 +28,12 @@ export type AgentEvent =
   /** Comando de Claude Code (`/goal close`) escrito por la persona (solo en la conversación). `name` va sin la barra. */
   | { type: 'command'; name: string; args: string; at: number | null }
   /** Salida local del último comando (`<local-command-stdout>`), sin secuencias ANSI y recortada. Se empareja por orden. */
-  | { type: 'command-output'; text: string; error: boolean; at: number | null };
+  | { type: 'command-output'; text: string; error: boolean; at: number | null }
+  /**
+   * Tokens de salida de un mensaje del asistente (solo en la conversación de una sesión). Claude Code escribe una línea por
+   * bloque de contenido con el mismo `id` y el mismo `usage`: quien suma debe quedarse con el último valor de cada `id`.
+   */
+  | { type: 'usage'; id: string; output: number; at: number | null };
 
 type Common = {
   state: FollowState;

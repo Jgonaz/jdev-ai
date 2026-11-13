@@ -264,6 +264,10 @@ describe('buildBoard: ahora', () => {
 });
 
 describe('lightMapEvent', () => {
+  it('descarta los tokens: el mapa no los usa', () => {
+    expect(lightMapEvent({ type: 'usage', id: 'msg_a', output: 340, at: 5 })).toBeNull();
+  });
+
   it('quita textos, salidas, resúmenes y detalles, y deja lo que usa el mapa', () => {
     expect(lightMapEvent({ type: 'message', text: 'contenido largo', at: 5 })).toEqual({ type: 'message', text: '', at: 5 });
     expect(lightMapEvent({ type: 'user', text: 'secreto', at: 6, images: 2 })).toEqual({ type: 'user', text: '', at: 6 });

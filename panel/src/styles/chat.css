@@ -580,6 +580,39 @@
   filter: brightness(1.15);
 }
 
+/* ---------- Indicador: Claude está trabajando ---------- */
+/* El giro usa @keyframes spin de base.css; con prefers-reduced-motion la regla global lo quita y queda el arco quieto. */
+.chat__spinner {
+  flex: none;
+  display: inline-block;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--working-line);
+  border-top-color: var(--working);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  vertical-align: -2px;
+  margin-right: 8px;
+}
+.chat__work {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  /* Misma columna que el aviso de espera y la caja de entrada. */
+  width: min(820px, calc(100% - 28px));
+  margin: 0 auto 8px;
+  padding: 0 4px;
+  font-size: var(--text-sm);
+  color: var(--working-text);
+}
+.chat__worknum {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+
 /* ---------- Aviso: Claude espera en la terminal ---------- */
 .chat__wait {
   box-sizing: border-box;
@@ -747,6 +780,25 @@
 .chat__box:focus-within {
   border-color: var(--link);
 }
+.chat__box {
+  position: relative;
+}
+.chat__box--drop {
+  border-color: var(--link);
+  border-style: dashed;
+}
+/* Mientras se arrastra un archivo encima, la pista tapa la caja para que se vea dónde soltar. */
+.chat__droptip {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+  font-size: var(--text-md);
+  color: var(--fg);
+  pointer-events: none;
+}
 .chat__box--error {
   border-color: color-mix(in srgb, var(--danger) 45%, var(--line-strong));
 }
@@ -782,6 +834,12 @@
 }
 .chat__send:disabled {
   opacity: 0.45;
+}
+.chat__uploading {
+  display: flex;
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--working-text);
 }
 .chat__senderr {
   display: flex;
@@ -830,6 +888,9 @@
   }
   .chat__wait {
     flex-wrap: wrap;
+    width: calc(100% - 24px);
+  }
+  .chat__work {
     width: calc(100% - 24px);
   }
   /* La caja empieza en 1 fila y la nota «Enter envía…» deja de verse (el lector de pantalla la sigue leyendo por aria-describedby). */

@@ -48,6 +48,11 @@ describe('clave de la pestaña', () => {
 });
 
 describe('applyAgentEvents', () => {
+  it('ignora los tokens de salida (solo van en la conversación)', () => {
+    const t = applyAgentEvents(EMPTY_AGENT, [{ type: 'usage', id: 'msg_a', output: 10, at: 1 }]);
+    expect(t).toEqual(EMPTY_AGENT);
+  });
+
   it('guarda el encargo, las herramientas y los mensajes, y asocia el resultado por id', () => {
     let t = applyAgentEvents(EMPTY_AGENT, [{ type: 'task', text: 'Haz X' }, herramienta('t1'), herramienta('t2', 'Ejecuto', 'ls')]);
     expect(t.task).toBe('Haz X');

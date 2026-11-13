@@ -192,6 +192,21 @@ const resultadoPrincipal = (id: string, contenido: string, error = false) =>
     toolUseResult: { stdout: '' },
   });
 
+/**
+ * Línea del asistente en la sesión principal con el `usage` de su mensaje. Claude Code escribe una línea por bloque de
+ * contenido con el mismo `message.id` y el mismo `usage`, que crece mientras se genera la respuesta.
+ */
+export const asistenteConUso = (idMensaje: string, contenido: unknown[], outputTokens: number, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    ...principal,
+    parentUuid: 'p',
+    message: { model: 'claude-opus-5-5', id: idMensaje, type: 'message', role: 'assistant', content: contenido, usage: { input_tokens: 6, cache_read_input_tokens: 1200, output_tokens: outputTokens } },
+    type: 'assistant',
+    uuid: `au-${reloj}`,
+    timestamp: marca(),
+    ...extra,
+  });
+
 /** Dos turnos: mensajes de la persona, respuestas, herramientas (una con error), sintéticos y tipos internos entre medias. */
 export function conversacionMuestra(): string {
   reiniciarReloj();
