@@ -1,0 +1,195 @@
+---
+// Sección «Mapa de actividad»: una sesión de ejemplo de Claude en seis pasos sobre el mismo mapa del panel.
+// El servidor pinta el primer paso (se ve sin JS); el script avanza solo, pinta el resto y atiende a los capítulos.
+import type { Dictionary } from '../i18n/es';
+import { landingSteps } from '../data/activityMap';
+import { renderMap } from '../scripts/activityMap';
+
+interface Props {
+  t: Dictionary['map'];
+}
+
+const { t } = Astro.props;
+const total = t.steps.length;
+const mapLabel = (i: number) =>
+  t.mapLabel.replace('{n}', String(i + 1)).replace('{total}', String(total)).replace('{title}', t.steps[i].title);
+const first = landingSteps[0];
+
+// Todo lo que necesita el cliente para repintar: estados, textos y nombres de estación.
+const payload = {
+  states: landingSteps.map((s) => s.state),
+  now: landingSteps.map((s, i) => ({ ...s.now, ...t.steps[i].now })),
+  labels: t.steps.map((_, i) => mapLabel(i)),
+  names: t.stations,
+  play: t.play,
+  pause: t.pause,
+};
+---
+
+<section id="map" class="section section--wide mapsec" aria-labelledby="map-title" data-mapsec data-payload={JSON.stringify(payload)}>
+  <div class="panel-intro">
+    <div class="map-intro__head">
+      <span class="label">{t.rail}</span>
+      <h2 id="map-title">{t.title}</h2>
+    </div>
+    <p>{t.lead}</p>
+  </div>
+
+  <div class="map-body">
+    <figure class="map-fig">
+      <div class="map-fig__bar">
+        <span class="map-fig__who">
+          <span class="map-fig__title">{t.session}</span>
+          <span class="map-fig__agent">{t.agent}</span>
+        </span>
+        <button type="button" class="map-play" data-map-play aria-pressed="false" hidden>
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path data-map-icon="pause" d="M8 5v14 M16 5v14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"></path>
+            <path data-map-icon="play" d="M7 4.5v15l12-7.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" hidden></path>
+          </svg>
+          <span data-map-play-label>{t.pause}</span>
+        </button>
+      </div>
+
+      <div class="map-fig__svg" data-map-svg set:html={renderMap(first.state, { names: t.stations, label: mapLabel(0), animate: false })} />
+
+      <div class="map-now">
+        <span class="map-now__glyph" data-tone={first.now.tone} data-map-glyph aria-hidden="true">{first.now.glyph}</span>
+        <span class="map-now__text" data-map-text>{t.steps[0].now.text}</span>
+        <span class="map-now__time" data-map-time>{t.steps[0].now.time}</span>
+      </div>
+    </figure>
+
+    <ol class="map-steps" aria-label={t.stepsLabel}>
+      {
+        t.steps.map((step, i) => (
+          <li data-map-item={i} data-on={i === 0 ? '' : undefined}>
+            <button type="button" data-map-step={i} aria-current={i === 0 ? 'step' : undefined}>
+              <span class="map-steps__num">{String(i + 1).padStart(2, '0')}</span>
+              <span class="map-steps__title">{step.title}</span>
+              <span class="map-steps__text">{step.text}</span>
+            </button>
+            <span class="map-prog" aria-hidden="true"><span class="map-prog__bar"></span></span>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+
+  <p class="note map-note" set:html={t.note} />
+</section>
+
+<script>
+  import { renderMap } from '../scripts/activityMap';
+  import type { MapState, Station } from '../scripts/activityMap';
+
+  type Payload = {
+    states: MapState[];
+    now: { glyph: string; tone: string; text: string; time: string }[];
+    labels: string[];
+    names: Record<Station, string>;
+    play: string;
+    pause: string;
+  };
+
+  const STEP_MS = 4500;
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-mapsec]')) {
+    const data: Payload = JSON.parse(root.dataset.payload ?? '{}');
+    const q = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
+    const host = q('[data-map-svg]');
+    const playBtn = q<HTMLButtonElement>('[data-map-play]');
+    const playLabel = q('[data-map-play-label]');
+    const glyph = q('[data-map-glyph]');
+    const text = q('[data-map-text]');
+    const time = q('[data-map-time]');
+    const items = [...root.querySelectorAll<HTMLElement>('[data-map-item]')];
+    const count = items.length;
+
+    let step = 0;
+    // Arranca solo, también con movimiento reducido: la persona puede pausarlo con el botón.
+    let playing = true;
+    let interacted = false;
+    let inView = false;
+    root.style.setProperty('--map-step-ms', `${STEP_MS}ms`);
+    root.dataset.live = '';
+    playBtn.hidden = false;
+
+    // La animación de la barra de progreso es el reloj: al terminar, pasa al siguiente paso; pausarla conserva lo recorrido.
+    const running = () => playing && inView && document.visibilityState === 'visible';
+    const syncRun = () => {
+      root.toggleAttribute('data-paused', !running());
+      const svg = host.querySelector('svg');
+      if (!svg) return;
+      if (running()) svg.unpauseAnimations();
+      else svg.pauseAnimations();
+    };
+
+    const render = () => {
+      host.innerHTML = renderMap(data.states[step], { names: data.names, label: data.labels[step], animate: playing });
+      const n = data.now[step];
+      glyph.textContent = n.glyph;
+      glyph.dataset.tone = n.tone;
+      text.textContent = n.text;
+      time.textContent = n.time;
+      for (const [i, item] of items.entries()) {
+        item.removeAttribute('data-on');
+        const btn = item.querySelector('button')!;
+        if (i === step) btn.setAttribute('aria-current', 'step');
+        else btn.removeAttribute('aria-current');
+      }
+      // Reinicia la barra del paso activo: hace falta un reflujo entre quitar y poner el atributo.
+      void root.offsetWidth;
+      items[step].toggleAttribute('data-on', true);
+      playBtn.setAttribute('aria-pressed', String(!playing));
+      playLabel.textContent = playing ? data.pause : data.play;
+      for (const icon of root.querySelectorAll<SVGElement>('[data-map-icon]')) icon.toggleAttribute('hidden', icon.dataset.mapIcon !== (playing ? 'pause' : 'play'));
+      // Solo se anuncia el cambio de paso tras una interacción y con la reproducción parada: no cada 4,5 s.
+      if (interacted && !playing) text.setAttribute('aria-live', 'polite');
+      else text.removeAttribute('aria-live');
+      syncRun();
+    };
+
+    const goTo = (i: number) => {
+      step = (i + count) % count;
+      render();
+    };
+
+    root.addEventListener('animationend', (event) => {
+      if (event.animationName === 'map-prog' && playing) goTo(step + 1);
+    });
+
+    root.addEventListener('click', (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLElement>('button');
+      if (!btn) return;
+      if (btn.dataset.mapStep !== undefined) {
+        // Elegir un capítulo salta a él y pausa. La región de «ahora» pasa a ser viva solo ahora y, para que lo anuncie,
+        // el cambio de texto llega un instante después de volverla viva.
+        const i = Number(btn.dataset.mapStep);
+        playing = false;
+        if (interacted) goTo(i);
+        else {
+          interacted = true;
+          text.setAttribute('aria-live', 'polite');
+          window.setTimeout(() => goTo(i), 60);
+        }
+        return;
+      }
+      if (btn.dataset.mapPlay !== undefined) {
+        playing = !playing;
+        render();
+      }
+    });
+
+    document.addEventListener('visibilitychange', syncRun);
+    new IntersectionObserver(
+      (entries) => {
+        inView = entries.some((e) => e.isIntersecting);
+        syncRun();
+      },
+      { threshold: 0.15 },
+    ).observe(root);
+
+    render();
+  }
+</script>

@@ -1,0 +1,165 @@
+---
+// Panel derecho de la pantalla Terminales del panel simulado: el mapa de actividad de la sesión elegida, la línea de
+// «ahora» y dos desplegables abiertos de entrada, «Actividad reciente» y «Sesión». Sin mapa (Codex) va una nota con el
+// motivo y «Sesión» a la vista. Hay un bloque por sesión y el script del panel enseña el elegido (`data-ctx`).
+import type { Dictionary } from '../i18n/es';
+import { panelMaps, panelSims } from '../data/activityMap';
+import { formatDuration, renderMap } from '../scripts/activityMap';
+
+interface Props {
+  t: Dictionary['panel'];
+  mapNames: Dictionary['map']['stations'];
+  lang: 'es' | 'en';
+  first: string;
+}
+
+const { t, mapNames, lang, first } = Astro.props;
+const { ctx, sessions, projects } = t;
+
+// El modelo del núcleo, sin el esfuerzo («Opus 5.5 medium» → «Opus 5.5»).
+const modelOf = (model: string) => model.replace(/ (low|medium|high|xhigh|max)$/, '');
+// Los nombres de las sesiones de tmux numeran las de cada proyecto.
+const tmuxName = (id: string) => {
+  const s = sessions.find((x) => x.id === id)!;
+  return `jdev-${s.project}-${sessions.filter((x) => x.project === s.project).indexOf(s) + 1}`;
+};
+---
+
+<aside class="pn-context" aria-label={ctx.label}>
+  <div class="pn-context__scroll">
+    {
+      sessions.map((s) => {
+        const map = panelMaps[s.id];
+        const info = ctx.info[s.id as keyof typeof ctx.info];
+        const projectIndex = projects.findIndex((p) => p.name === s.project);
+        const command = `tmux -L jdev attach -t ${tmuxName(s.id)}`;
+        const place = `${s.project} · ${info.branch}`;
+        const now = ctx.now[s.id as keyof typeof ctx.now];
+        // Con simulación, el mapa se pinta en vivo (sin SMIL) y el script recibe el punto de partida en `data-sim`.
+        const sim = panelSims[s.id];
+        const state = map ? { ...map.state, ctx: s.ctx, model: modelOf(s.model) } : undefined;
+        const simData =
+          map && state && sim
+            ? JSON.stringify({
+                lang,
+                names: mapNames,
+                labels: { reply: ctx.reply, running: ctx.rowStatus.running, done: ctx.rowStatus.done },
+                state,
+                rows: map.rows,
+                sim,
+              })
+            : undefined;
+        const nowTime = map ? map.now.tone === 'accent' : false;
+        const details = (
+          <div class="pn-sesinfo">
+            <dl class="pn-sesinfo__dl">
+              <dt>{ctx.labels.project}</dt>
+              <dd>{s.project}</dd>
+              <dt>{ctx.labels.branch}</dt>
+              <dd class="mono">{info.branch}</dd>
+              <dt>{ctx.labels.worktree}</dt>
+              <dd class="mono">{info.worktree || ctx.mainCheckout}</dd>
+              <dt>{ctx.labels.agent}</dt>
+              <dd>{s.agent}</dd>
+              <dt>{ctx.labels.path}</dt>
+              <dd class="mono">~/proyectos/jdev-ai/projects/{s.project}</dd>
+            </dl>
+            <div class="pn-sesinfo__attach">
+              <span class="pn-sesinfo__label">{ctx.attach}</span>
+              <code class="pn-sesinfo__cmd">{command}</code>
+            </div>
+            <div class="pn-sesinfo__actions">
+              <button type="button" data-copy={command} data-copied={ctx.copied}>{ctx.copy}</button>
+              <button type="button" data-screen-btn="proyectos" data-goto={`proj:p${projectIndex} psub:backlog`} aria-label={`${ctx.backlog}, ${s.project}`}>
+                {ctx.backlog}
+              </button>
+              <button type="button" data-screen-btn="historial" aria-label={`${ctx.history}, ${s.project}`}>{ctx.history}</button>
+            </div>
+          </div>
+        );
+        return (
+          <div data-ctx={s.id} hidden={s.id !== first}>
+            <div class="pn-context__who">
+              <span class="pn-context__name">{s.title}</span>
+              <span class="pn-context__agent">{s.agent}</span>
+            </div>
+            {map ? (
+              <>
+                <div class="pn-ctxmap" data-sim={simData}>
+                  <div set:html={renderMap(state!, { names: mapNames, live: sim !== undefined })} />
+                  <div class="pn-ctxmap__now">
+                    <span class="pn-ctxmap__glyph" data-tone={map.now.tone} aria-hidden="true">{map.now.glyph}</span>
+                    <span class="pn-ctxmap__text">{now.text}</span>
+                    <span class="pn-ctxmap__time" data-tone={nowTime ? 'accent' : undefined}>{now.time}</span>
+                  </div>
+                </div>
+
+                <section class="pn-collapse">
+                  <h3 class="pn-collapse__h">
+                    <button
+                      type="button"
+                      class="pn-collapse__btn"
+                      data-collapse="activity"
+                      aria-expanded="true"
+                      aria-controls={`ctx-${s.id}-activity`}
+                      aria-label={`${ctx.activity} (${map.rows.length})`}
+                    >
+                      <svg class="pn-collapse__chevron" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                      <span class="pn-collapse__title">{ctx.activity}</span>
+                      <span class="pn-collapse__summary">{map.rows.length}</span>
+                    </button>
+                  </h3>
+                  <div id={`ctx-${s.id}-activity`} class="pn-collapse__body">
+                    <ul class="pn-ctxrows">
+                      {map.rows.map((r) => (
+                        <li class="pn-ctxrow" data-status={r.status}>
+                          <span class="pn-ctxrow__glyph" aria-hidden="true">{r.status === 'running' ? '●' : '·'}</span>
+                          <span class="pn-sr">{ctx.rowStatus[r.status]}: </span>
+                          <span class="pn-ctxrow__st">{mapNames[r.station]}</span>
+                          <span class="pn-ctxrow__what">
+                            <span class="pn-ctxrow__tool">{r.tool}</span> {r.target}
+                            {r.more ? <span class="pn-ctxrow__fold"> +{r.more}</span> : null}
+                          </span>
+                          <span class="pn-ctxrow__time">{formatDuration(r.ms, lang)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+
+                <div class="pn-ctxses">
+                  <section class="pn-collapse">
+                    <h3 class="pn-collapse__h">
+                      <button
+                        type="button"
+                        class="pn-collapse__btn"
+                        data-collapse="session"
+                        aria-expanded="true"
+                        aria-controls={`ctx-${s.id}-session`}
+                        aria-label={`${ctx.session}, ${s.project}, ${info.branch}`}
+                      >
+                        <svg class="pn-collapse__chevron" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <span class="pn-collapse__title">{ctx.session}</span>
+                        <span class="pn-collapse__summary">{place}</span>
+                      </button>
+                    </h3>
+                    <div id={`ctx-${s.id}-session`} class="pn-collapse__body">{details}</div>
+                  </section>
+                </div>
+              </>
+            ) : (
+              <>
+                <p class="pn-ctxnomap">{ctx.noMap}</p>
+                <div class="pn-ctxses pn-ctxses--plain">{details}</div>
+              </>
+            )}
+          </div>
+        );
+      })
+    }
+  </div>
+</aside>

@@ -122,6 +122,35 @@ export const es = {
       ],
       allHistory: 'Ver todo el historial',
     },
+    // Panel derecho de Terminales: mapa de la sesión, «Actividad reciente» y «Sesión». Textos del panel real.
+    ctx: {
+      label: 'Sesión y actividad',
+      activity: 'Actividad reciente',
+      session: 'Sesión',
+      noMap: 'Sin mapa: solo está disponible para las sesiones de Claude lanzadas desde el panel.',
+      rowStatus: { running: 'En marcha', done: 'Hecha' },
+      // Fila y línea de «ahora» de una respuesta del modelo en la simulación.
+      reply: 'Respuesta',
+      labels: { project: 'Proyecto', branch: 'Rama', worktree: 'Worktree', agent: 'Agente', path: 'Ruta' },
+      mainCheckout: 'checkout principal',
+      attach: 'Adjuntar desde otra terminal',
+      copy: 'Copiar comando',
+      copied: 'Copiado',
+      backlog: 'Ver backlog',
+      history: 'Historial del proyecto',
+      // Rama y worktree de cada sesión (`worktree` vacío: checkout principal) y su línea de «ahora».
+      info: {
+        s1: { branch: 'main', worktree: '' },
+        s2: { branch: 'feat/estilos', worktree: 'estilos' },
+        s3: { branch: 'main', worktree: '' },
+        s4: { branch: 'main', worktree: '' },
+      },
+      now: {
+        s1: { text: 'Esperando tu respuesta', time: '4 min' },
+        s2: { text: 'Agentes · Agent implementer', time: '3 min 12 s' },
+        s4: { text: 'Respuesta lista', time: '4 min 12 s' },
+      },
+    },
     // Datos inventados: ningún proyecto, sesión ni cifra es real.
     projects: [
       { name: 'tienda-web', mono: 'TW', color: '#b79cf2' },
@@ -169,7 +198,6 @@ export const es = {
           { t: '● Delego en Explore: localizar los colores fijos del carrito', tone: 'fg' as Tone },
           { t: '    14 archivos, 61 valores', tone: 'muted' as Tone },
           { t: '● Delego en implementer: sustituir los valores por variables', tone: 'fg' as Tone },
-          { t: '    en marcha · 3 min', tone: 'teal' as Tone },
         ],
         chat: [
           { me: true, t: 'Migra los colores del carrito a variables CSS' },
@@ -233,6 +261,62 @@ export const es = {
         ],
       },
     ],
+  },
+  map: {
+    rail: 'Mapa de actividad',
+    title: 'Ve qué hace el agente sin leer la terminal',
+    lead: 'En el panel, cada sesión de Claude tiene un mapa en directo: cada herramienta viaja a su estación, lo que sigue en marcha cuenta el tiempo y los fallos se ven en rojo. Debajo, una sesión de ejemplo de principio a fin.',
+    session: 'Corregir tests del parser',
+    agent: 'claude',
+    pause: 'Pausar',
+    play: 'Reproducir',
+    stepsLabel: 'Pasos de la sesión de ejemplo',
+    // {n}, {total} y {title} se sustituyen por el paso, el total y su título.
+    mapLabel: 'Mapa de actividad de ejemplo, paso {n} de {total}: {title}',
+    stations: {
+      tu: 'Tú',
+      modelo: 'Modelo',
+      memoria: 'Memoria',
+      archivos: 'Archivos',
+      shell: 'Shell',
+      red: 'Red',
+      navegador: 'Navegador',
+      agentes: 'Agentes',
+      skills: 'Skills',
+    },
+    steps: [
+      {
+        title: 'Tú pides',
+        text: 'Tu mensaje enciende la estación Tú. Alrededor del núcleo esperan Modelo, Memoria, Archivos, Shell, Red, Navegador, Agentes y Skills.',
+        now: { text: 'Tú · mensaje nuevo', time: 'ahora' },
+      },
+      {
+        title: 'Cada herramienta, un pulso',
+        text: 'Cada llamada viaja a su estación y vuelve al terminar. Los radios engordan con el uso y una ruta une las últimas estaciones visitadas.',
+        now: { text: 'Archivos · Edit follow.ts', time: '0,3 s' },
+      },
+      {
+        title: 'Lo que sigue en marcha',
+        text: 'Una llamada larga lleva un halo con manecillas: una da la vuelta en un minuto y la otra en diez. Si hay varias a la vez, aparece ×N.',
+        now: { text: 'Shell · pnpm test', time: '42 s' },
+      },
+      {
+        title: 'Los fallos, en rojo',
+        text: 'Un error o un rechazo vuelve en rojo y deja un contador en su estación hasta tu siguiente mensaje.',
+        now: { text: 'Shell · pnpm test', time: '48 s' },
+      },
+      {
+        title: 'Subagentes en órbita',
+        text: 'Cada subagente activo gira como un punto alrededor de Agentes, mientras la sesión principal espera su resultado.',
+        now: { text: 'Agentes · 2 subagentes en marcha', time: '1 min 35 s' },
+      },
+      {
+        title: 'Respuesta lista',
+        text: 'El anillo del núcleo es el contexto usado, con los colores de la cabecera. Al terminar, la ruta se apaga y el mapa queda en reposo.',
+        now: { text: 'Respuesta lista', time: '6 min 12 s' },
+      },
+    ],
+    note: 'Reproducción con datos de ejemplo. En el panel real, el mapa sigue a la pestaña activa y las etiquetas solo nombran el archivo, el comando o el host, nunca su contenido. Inspirado en <a href="https://github.com/alexeyw/lot-map">lot-map</a> (MIT).',
   },
   how: {
     rail: '1 · Cómo trabaja',

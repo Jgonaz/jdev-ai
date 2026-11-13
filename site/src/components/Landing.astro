@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import Panel from './Panel.astro';
+import ActivityMapSection from './ActivityMapSection.astro';
 import { es } from '../i18n/es';
 import { en } from '../i18n/en';
 
@@ -74,9 +75,11 @@ const canonical = new URL(home[lang], Astro.site);
             <h2>{t.panel.title}</h2>
             <p set:html={t.panel.lead} />
           </div>
-          <Panel t={t.panel} lang={lang} />
+          <Panel t={t.panel} mapNames={t.map.stations} lang={lang} />
           <p class="note">{t.panel.note}</p>
         </section>
+
+        <ActivityMapSection t={t.map} />
 
         <section id="how" class="section">
           <p class="rail">{t.how.rail}</p>

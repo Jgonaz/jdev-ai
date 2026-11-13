@@ -770,7 +770,12 @@ en castellano (`/`) e inglés (`/en/`), con el aspecto del panel y su tema por d
 una simulación del panel con datos inventados (`site/src/components/Panel*.astro`,
 con sus datos en `site/src/data/`): reproduce Inicio, Terminales, Proyectos
 (Backlog, Cambios y Guías), Historial y Ajustes, y en Ajustes el tema, el
-acento y varios interruptores actúan sobre la propia simulación. Si cambia
+acento y varios interruptores actúan sobre la propia simulación. También
+muestra el mapa de actividad de las sesiones de Claude, en su propia sección y
+en el panel derecho de Terminales (`site/src/scripts/activityMap.ts` dibuja el
+SVG; sus datos de ejemplo están en `site/src/data/activityMap.ts`); la sesión
+que trabaja arranca elegida y se simula en el cliente con
+`site/src/scripts/panelSim.ts`. Si cambia
 una pantalla del panel real, conviene actualizar aquí la suya. Es
 independiente del resto del harness, que no la necesita para funcionar, y
 tiene sus propias dependencias:

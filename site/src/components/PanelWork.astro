@@ -1,0 +1,18 @@
+---
+// Indicador de trabajo de Claude Code («✻ Clauding… (3m 12s · ↓ 4.1k tokens · esc to interrupt)»), decorativo: el estado ya
+// lo dicen la etiqueta y el piloto de la sesión. El texto es el de la interfaz real de Claude Code, así que va en inglés
+// también en la página en castellano. Sin JavaScript queda como una línea fija; `scripts/panelSim.ts` mueve las partes
+// marcadas con `data-w`.
+import type { PanelSim } from '../data/activityMap';
+import { formatClaudeTime, formatTokens } from '../scripts/panelSim';
+
+interface Props {
+  sim: PanelSim;
+  /** `term`: la línea del terminal, completa. `chat`: la de la vista de chat, sin el aviso de interrupción. */
+  variant: 'term' | 'chat';
+}
+
+const { sim, variant } = Astro.props;
+---
+
+<div class={`pn-work pn-work--${variant}`} data-work aria-hidden="true"><span class="pn-work__glyph" data-w="glyph">✻</span> <span class="pn-work__verb" data-w="verb">{sim.work.verbs[0]!.text}…</span> <span class="pn-work__meta">(<span data-w="time">{formatClaudeTime(sim.agentSec)}</span> · ↓ <span data-w="tokens">{formatTokens(sim.work.tokens)}</span> tokens<span class="pn-work__esc"> · esc to interrupt</span>)</span></div>

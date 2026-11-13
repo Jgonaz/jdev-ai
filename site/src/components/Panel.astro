@@ -4,17 +4,21 @@
 // Ajustes. El estado vive en atributos del panel que leen el CSS y el script.
 import type { Dictionary } from '../i18n/es';
 import PanelAgentIcon from './PanelAgentIcon.astro';
+import PanelContext from './PanelContext.astro';
 import PanelHistory from './PanelHistory.astro';
 import PanelProjects from './PanelProjects.astro';
 import PanelSettings from './PanelSettings.astro';
+import PanelWork from './PanelWork.astro';
+import { panelInitialSession, panelSims } from '../data/activityMap';
 import { settingsScreen } from '../data/settings';
 
 interface Props {
   t: Dictionary['panel'];
+  mapNames: Dictionary['map']['stations'];
   lang: 'es' | 'en';
 }
 
-const { t, lang } = Astro.props;
+const { t, lang, mapNames } = Astro.props;
 const { ui, home, projects, sessions } = t;
 const periods = ['week', 'month', 'all'] as const;
 const colorOf = (name: string) => projects.find((p) => p.name === name)?.color;
@@ -27,7 +31,9 @@ const heat = Array.from({ length: 7 }, (_, day) =>
     return day > 4 ? Math.max(0, level - 2) : level;
   }),
 );
-const first = sessions[0].id;
+// La sesión elegida al cargar es la que trabaja, no la primera de la lista: así el mapa y el terminal se ven en movimiento.
+// El orden de las sesiones no cambia y la barra de tmux de cada una marca con `*` la suya.
+const first = sessions.find((s) => s.id === panelInitialSession)?.id ?? sessions[0].id;
 const projOf = (name: string) => projects.findIndex((p) => p.name === name);
 const projOfSession = (id: string) => projOf(sessions.find((s) => s.id === id)?.project ?? '');
 // Posición de cada sesión viva en la barra de tmux, como en el panel real.
@@ -195,6 +201,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
               {s.lines.map((line) => (
                 <div class={`pn-line pn-line--${line.tone}`}>{line.t}</div>
               ))}
+              {panelSims[s.id] && <PanelWork sim={panelSims[s.id]!} variant="term" />}
               <div class="pn-prompt">&gt;</div>
             </div>
 
@@ -205,6 +212,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
                   <span class="pn-msg__text">{msg.t}</span>
                 </div>
               ))}
+              {panelSims[s.id] && <PanelWork sim={panelSims[s.id]!} variant="chat" />}
               <div class="pn-input">{ui.input}</div>
             </div>
             </div>
@@ -218,6 +226,8 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
         ))
       }
     </div>
+
+    <PanelContext t={t} mapNames={mapNames} lang={lang} first={first} />
   </div>
 
   <div class="pn-screen pn-home" data-screen="inicio" hidden>
@@ -343,6 +353,8 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
 </div>
 
 <script>
+  import { setupPanelSims } from '../scripts/panelSim';
+
   // Sin dependencias: el estado vive en atributos y el HTML ya trae todas las sesiones.
   for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
     const all = <T extends HTMLElement>(sel: string) => [...panel.querySelectorAll<T>(sel)];
@@ -350,26 +362,50 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
     const visible = (el: HTMLElement) => el.offsetParent !== null;
     const hiddenProject = (index: string | undefined) => index !== undefined && !panel.hasAttribute(`data-on-vis${index}`);
 
+    // El mapa del panel derecho solo se anima con la pantalla Terminales a la vista, su sesión elegida, la pestaña visible
+    // y el panel en pantalla. Fuera de eso se pausan las animaciones SMIL de todos los mapas y se detiene el bucle de la
+    // simulación (mapa y línea de trabajo del terminal de la sesión que trabaja), que al volver sigue donde se quedó.
+    const sims = setupPanelSims(panel);
+    let inView = false;
+    const syncMaps = () => {
+      const on = inView && document.visibilityState === 'visible';
+      // Un bloque dentro de algo oculto (otra pantalla, otra sesión, proyecto oculto) no tiene cajas.
+      for (const sim of sims) sim.run(on && sim.el.getClientRects().length > 0);
+      for (const svg of panel.querySelectorAll<SVGSVGElement>('.pn-context svg.mp')) {
+        // Un SVG dentro de algo oculto no tiene cajas.
+        if (on && svg.getClientRects().length > 0) svg.unpauseAnimations();
+        else svg.pauseAnimations();
+      }
+    };
+
     const showScreen = (id: string) => {
       for (const screen of all('[data-screen]')) screen.hidden = screen.dataset.screen !== id;
       for (const btn of all('.pn-nav [data-screen-btn]')) {
         btn.setAttribute('aria-pressed', String(btn.dataset.screenBtn === id));
       }
+      syncMaps();
     };
 
     const pick = (id: string) => {
       showScreen('terminales');
       for (const pane of all('[data-pane]')) pane.hidden = pane.dataset.pane !== id;
+      for (const block of all('[data-ctx]')) block.hidden = block.dataset.ctx !== id;
+      panel.querySelector('.pn-context__scroll')?.scrollTo(0, 0);
       for (const btn of all('[data-pick]')) {
         const selected = btn.dataset.pick === id;
         btn.setAttribute('aria-pressed', String(selected));
         // Una sesión hecha no tiene pestaña salvo mientras está abierta.
         if (btn.dataset.tabDone !== undefined) btn.hidden = !selected;
-        // En pantallas estrechas la pestaña elegida puede quedar fuera de la tira.
-        if (selected && btn.classList.contains('pn-tab') && btn.parentElement) {
-          btn.parentElement.scrollLeft = btn.offsetLeft;
+        // En pantallas estrechas la pestaña elegida puede quedar fuera de la tira: se desplaza solo lo justo.
+        const strip = btn.parentElement;
+        if (selected && btn.classList.contains('pn-tab') && strip) {
+          if (btn.offsetLeft < strip.scrollLeft) strip.scrollLeft = btn.offsetLeft;
+          else if (btn.offsetLeft + btn.offsetWidth > strip.scrollLeft + strip.clientWidth) {
+            strip.scrollLeft = btn.offsetLeft + btn.offsetWidth - strip.clientWidth;
+          }
         }
       }
+      syncMaps();
     };
 
     const setView = (view: string) => {
@@ -473,8 +509,29 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       if (d.viewBtn) setView(d.viewBtn);
       if (d.periodBtn) setPeriod(d.periodBtn);
       if (d.set) applySet(d.set);
-      // data-goto abre una opción de otro grupo sin formar parte de él.
-      if (d.goto) applySet(d.goto);
+      // data-goto abre una opción de otro grupo sin formar parte de él; admite varias separadas por espacios.
+      if (d.goto) for (const pair of d.goto.split(' ')) applySet(pair);
+      // Desplegables del panel derecho: «Actividad reciente» y «Sesión» se abren y cierran a la vez en todas las sesiones.
+      if (d.collapse) {
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        for (const toggle of all(`[data-collapse="${d.collapse}"]`)) {
+          toggle.setAttribute('aria-expanded', String(open));
+          const body = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+          if (body) body.hidden = !open;
+        }
+      }
+      if (d.copy) {
+        const label = btn.textContent;
+        navigator.clipboard?.writeText(d.copy).then(
+          () => {
+            btn.textContent = d.copied ?? label;
+            window.setTimeout(() => (btn.textContent = label), 1600);
+          },
+          () => {
+            // Sin permiso para el portapapeles: el comando sigue visible para copiarlo a mano.
+          },
+        );
+      }
       // Interruptor: su estado queda también como atributo del panel para el CSS.
       if (d.toggle) {
         const on = btn.getAttribute('aria-pressed') !== 'true';
@@ -498,6 +555,14 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
         next?.focus();
       }
       animateHeight(height);
+      syncMaps();
     });
+
+    document.addEventListener('visibilitychange', syncMaps);
+    window.addEventListener('resize', syncMaps);
+    new IntersectionObserver((entries) => {
+      inView = entries.some((entry) => entry.isIntersecting);
+      syncMaps();
+    }).observe(panel);
   }
 </script>

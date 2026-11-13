@@ -581,6 +581,14 @@ td.no {
   font-size: 14px;
   line-height: 1.45;
   box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55);
+  /* Mapa de actividad (tokens del tema equivalente del panel real). */
+  --map-disc: #45454c;
+  --map-disc-idle: #2c2c31;
+  --fg-dim: #4b4b52;
+  --danger: #ff7b6b;
+  --danger-text: #ff7b6b;
+  --danger-ink: #1a0a07;
+  --waiting-text: #f2bc66;
 }
 
 .pn [hidden] {
@@ -1161,6 +1169,34 @@ td.no {
   gap: 8px;
   border-top: 1px solid var(--line-soft);
   color: var(--fg-muted);
+}
+
+/* Indicador de trabajo de Claude Code: glifo y verbo en el acento de Claude y el paréntesis, apagado. Su texto va en
+   inglés porque así es la interfaz real. El glifo ocupa un ancho fijo: los seis glifos del spinner no miden lo mismo. */
+.pn-work {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  color: var(--fg-muted);
+}
+
+.pn-work__glyph {
+  display: inline-block;
+  width: 1.2ch;
+  text-align: center;
+}
+
+.pn-work__glyph,
+.pn-work__verb {
+  color: var(--agent-claude);
+}
+
+.pn-work--chat {
+  align-self: flex-start;
+  font: 12.5px/1.5 var(--font-mono);
+}
+
+.pn-work--chat .pn-work__esc {
+  display: none;
 }
 
 @keyframes pn-blink {
@@ -2703,6 +2739,14 @@ td.no {
   --diff-add-bg: #212f30;
   --diff-del-bg: #322525;
   --pn-term-text: #d6d3cc;
+  /* Mapa de actividad (tokens del tema equivalente del panel real). */
+  --map-disc: #4d555e;
+  --map-disc-idle: #3a4048;
+  --fg-dim: #4b525a;
+  --danger: #ff7b6b;
+  --danger-text: #ff7b6b;
+  --danger-ink: #1a0a07;
+  --waiting-text: #f5c27a;
 }
 
 .pn[data-g-theme='pizarra'] {
@@ -2744,6 +2788,14 @@ td.no {
   --diff-add-bg: #1e302e;
   --diff-del-bg: #322527;
   --pn-term-text: #d5dae2;
+  /* Mapa de actividad (tokens del tema equivalente del panel real). */
+  --map-disc: #566375;
+  --map-disc-idle: #3d4756;
+  --fg-dim: #5a6576;
+  --danger: #ff8676;
+  --danger-text: #ff8676;
+  --danger-ink: #1a0a07;
+  --waiting-text: #f5c27a;
 }
 
 .pn[data-g-theme='fosforo'] {
@@ -2785,6 +2837,14 @@ td.no {
   --diff-add-bg: #283028;
   --diff-del-bg: #37271f;
   --pn-term-text: #e3dccb;
+  /* Mapa de actividad (tokens del tema equivalente del panel real). */
+  --map-disc: #625b4d;
+  --map-disc-idle: #4a453c;
+  --fg-dim: #5a5548;
+  --danger: #ff8466;
+  --danger-text: #ff8466;
+  --danger-ink: #1a0a07;
+  --waiting-text: #f5c27a;
 }
 
 .pn[data-g-theme='papel'] {
@@ -2827,6 +2887,14 @@ td.no {
   --diff-del-bg: #eddbd0;
   --pn-term-text: #1f2328;
   --mono-edge: #857a62;
+  /* Mapa de actividad (tokens del tema equivalente del panel real). */
+  --map-disc: #b3a98f;
+  --map-disc-idle: #d3cab4;
+  --fg-dim: #8c8f94;
+  --danger: #b3361f;
+  --danger-text: #9a2c18;
+  --danger-ink: #ffffff;
+  --waiting-text: #7a4e00;
 }
 
 .pn[data-g-theme='contraste'] {
@@ -2868,6 +2936,14 @@ td.no {
   --diff-add-bg: #1b3531;
   --diff-del-bg: #3b2420;
   --pn-term-text: #ffffff;
+  /* Mapa de actividad (tokens del tema equivalente del panel real). */
+  --map-disc: #ffffff;
+  --map-disc-idle: #ffffff;
+  --fg-dim: #8a8a8a;
+  --danger: #ff8a7a;
+  --danger-text: #ff8a7a;
+  --danger-ink: #000000;
+  --waiting-text: #ffd27a;
 }
 
 .pn[data-g-accent='menta'] {
@@ -3222,4 +3298,663 @@ td.no {
 /* En el logo del panel el cursor es fijo; solo parpadea el de la cabecera de la página. */
 .pn .caret {
   animation: none;
+}
+
+/* Mapa de actividad: dibujo compartido por la sección de la landing y el panel derecho de la simulación.
+   Los colores del SVG son variables del tema del contenedor; aquí solo van los textos y la animación. */
+
+.mp {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.mp text {
+  font-family: var(--font-mono);
+}
+
+/* Etiquetas fuera de los discos: el borde del color del fondo las separa de la ruta que pase por detrás. */
+.mp-lbl {
+  paint-order: stroke;
+  stroke: var(--map-halo, var(--bg-card));
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.mp-name {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.mp-uses {
+  font-size: 10px;
+}
+
+.mp-cnt {
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.mp-pct {
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.mp-brand {
+  font-family: var(--font-title);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+
+.mp-model {
+  font-size: 9.5px;
+}
+
+.mp-err {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* El mapa es la demostración del panel: se anima también con «reducir movimiento». Su movimiento es pequeño y la
+   sección tiene botón de pausa. Los puntos quietos de subagentes (`.mp-still`) no se usan mientras sea así. */
+.mp-still {
+  display: none;
+}
+
+/* Sección «Mapa de actividad» de la landing. Tokens de Grafito que la página no define. */
+
+.mapsec {
+  --fg-faint: #7d848c;
+  --fg-dim: #4b525a;
+  --map-disc: #4d555e;
+  --map-disc-idle: #3a4048;
+  --map-halo: var(--bg-panel);
+  --danger: #ff7b6b;
+  --danger-text: #ff7b6b;
+  --danger-ink: #1a0a07;
+  --agent-claude: #e58a62;
+  --waiting: #f0b25a;
+  --waiting-text: #f5c27a;
+  gap: 40px;
+}
+
+.map-intro__head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.map-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 40px 56px;
+}
+
+.map-fig {
+  flex: 1 1 400px;
+  max-width: 460px;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-panel);
+}
+
+.map-fig__bar {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 6px 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.map-fig__who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.map-fig__title {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-fig__agent {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.map-play {
+  height: 44px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-soft);
+  font: 500 13px var(--font-ui);
+  cursor: pointer;
+}
+
+.map-play:hover {
+  color: var(--fg);
+}
+
+.map-fig__svg {
+  display: flex;
+  justify-content: center;
+  padding: 20px 16px 8px;
+}
+
+.map-fig__svg .mp {
+  max-width: 380px;
+}
+
+.map-now {
+  margin: 0 16px 16px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  border: 1px solid var(--line-soft);
+  background: var(--bg-term);
+}
+
+.map-now__glyph {
+  font: 500 13px var(--font-mono);
+  color: var(--fg-faint);
+}
+
+.map-now__glyph[data-tone='accent'] {
+  color: var(--agent-claude);
+}
+
+.map-now__glyph[data-tone='danger'] {
+  color: var(--danger-text);
+}
+
+.map-now__text {
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--fg-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-now__time {
+  font: 400 12px var(--font-mono);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.map-steps {
+  flex: 1 1 340px;
+  min-width: 0;
+  border-top: 1px solid var(--line);
+}
+
+.map-steps li {
+  border-bottom: 1px solid var(--line);
+}
+
+.map-steps button {
+  width: 100%;
+  padding: 16px 0 15px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-steps__num {
+  font: 500 13px/1.9 var(--font-mono);
+  color: var(--fg-faint);
+}
+
+.map-steps__title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fg-soft);
+}
+
+.map-steps__text {
+  grid-column: 2;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--fg-faint);
+}
+
+.map-steps button[aria-current='step'] .map-steps__num {
+  color: var(--agent-claude);
+}
+
+.map-steps button[aria-current='step'] .map-steps__title {
+  color: var(--fg);
+}
+
+.map-steps button[aria-current='step'] .map-steps__text {
+  color: var(--fg-soft);
+}
+
+.map-steps button:hover .map-steps__title {
+  color: var(--fg);
+}
+
+/* Barra de progreso del capítulo activo: sin JS no hay reloj, así que no se mueve. */
+.map-prog {
+  height: 2px;
+  margin-top: -1px;
+  display: none;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.mapsec li[data-on] .map-prog {
+  display: block;
+}
+
+.map-prog__bar {
+  height: 2px;
+  display: block;
+  background: var(--agent-claude);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.mapsec[data-live] li[data-on] .map-prog__bar {
+  animation: map-prog var(--map-step-ms, 4.5s) linear forwards;
+}
+
+.mapsec:not([data-live]) li[data-on] .map-prog__bar {
+  transform: none;
+}
+
+.mapsec[data-paused] .map-prog__bar {
+  animation-play-state: paused;
+}
+
+@keyframes map-prog {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.map-note a {
+  color: var(--link);
+  text-underline-offset: 4px;
+}
+
+.map-note a:hover {
+  color: var(--link-hover);
+}
+
+/* Panel simulado: panel derecho de Terminales con el mapa, «Actividad reciente» y «Sesión». */
+
+.pn-context {
+  --map-halo: var(--bg-card);
+  flex: none;
+  width: 320px;
+  position: relative;
+  margin: 44px 8px 8px 0;
+  border: 1px solid var(--line-card);
+  border-radius: 12px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+/* El contenido no estira la pantalla: el panel tiene el alto de la terminal y lo que sobra se desplaza. */
+.pn-context__scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.pn-context__who {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 14px 0;
+}
+
+.pn-context__name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pn-context__agent {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
+.pn-ctxmap {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pn-ctxmap__now {
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  border: 1px solid var(--line-card);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.pn-ctxmap__glyph {
+  font: 12px var(--font-mono);
+  color: var(--fg-faint);
+}
+
+.pn-ctxmap__glyph[data-tone='accent'] {
+  color: var(--agent-claude);
+}
+
+.pn-ctxmap__text {
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--fg-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pn-ctxmap__time {
+  font: 12px var(--font-mono);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.pn-ctxmap__time[data-tone='accent'] {
+  color: var(--agent-claude);
+}
+
+.pn-collapse {
+  margin-inline: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.pn-collapse__h {
+  margin: 0;
+  font: inherit;
+}
+
+.pn-collapse__btn {
+  width: 100%;
+  height: 40px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+}
+
+.pn-collapse__btn:focus-visible {
+  outline-offset: -2px;
+}
+
+.pn-collapse__chevron {
+  flex: none;
+  color: var(--fg-muted);
+  transition: transform 0.12s;
+}
+
+.pn-collapse__btn[aria-expanded='true'] .pn-collapse__chevron {
+  transform: rotate(90deg);
+}
+
+.pn-collapse__title {
+  font: 500 10.5px var(--font-title);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.pn-collapse__summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: 11px var(--font-mono);
+  color: var(--fg-faint);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pn-collapse__body {
+  padding-bottom: 6px;
+}
+
+.pn-ctxrow {
+  padding: 5px 4px;
+  display: grid;
+  grid-template-columns: 12px 62px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.pn-ctxrow:first-child {
+  border-top: 0;
+}
+
+.pn-ctxrow__glyph {
+  font-family: var(--font-mono);
+  color: var(--fg-faint);
+}
+
+.pn-ctxrow[data-status='running'] .pn-ctxrow__glyph {
+  color: var(--agent-claude);
+}
+
+.pn-ctxrow__st {
+  overflow: hidden;
+  color: var(--fg-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pn-ctxrow__what {
+  overflow: hidden;
+  font: 11.5px var(--font-mono);
+  color: var(--fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pn-ctxrow__tool {
+  color: var(--fg-soft);
+}
+
+.pn-ctxrow[data-status='running'] .pn-ctxrow__tool {
+  color: var(--fg);
+}
+
+.pn-ctxrow__fold {
+  color: var(--fg-faint);
+}
+
+.pn-ctxrow__time {
+  font: 11px var(--font-mono);
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+
+.pn-ctxrow[data-status='running'] .pn-ctxrow__time {
+  color: var(--agent-claude);
+}
+
+.pn-ctxses {
+  margin: 0 0 12px;
+}
+
+.pn-ctxses .pn-collapse {
+  border-bottom: 1px solid var(--line);
+}
+
+.pn-ctxses .pn-collapse__body {
+  padding: 2px 4px 14px;
+}
+
+.pn-ctxnomap {
+  margin: 12px 12px 0;
+  padding: 9px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+
+/* Sin mapa encima, «Sesión» va a la vista y sin desplegable. */
+.pn-ctxses--plain {
+  margin: 12px;
+  padding: 2px 4px;
+  border-bottom: 0;
+}
+
+.pn-sesinfo {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pn-sesinfo__dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 7px 10px;
+  font-size: 13px;
+}
+
+.pn-sesinfo__dl dt {
+  color: var(--fg-faint);
+}
+
+.pn-sesinfo__dl dd {
+  min-width: 0;
+  color: var(--fg-soft);
+  overflow-wrap: anywhere;
+}
+
+.pn-sesinfo__dl dd.mono {
+  font: 11.5px var(--font-mono);
+}
+
+.pn-sesinfo__attach {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pn-sesinfo__label {
+  font-size: 12px;
+  color: var(--fg-faint);
+}
+
+.pn-sesinfo__cmd {
+  padding: 8px 10px;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--fg-soft);
+  font: 11.5px var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.pn-sesinfo__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pn-sesinfo__actions button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--fg-soft);
+}
+
+.pn-sesinfo__actions button:hover {
+  color: var(--fg);
+  border-color: var(--line-card-active);
+}
+
+@media (pointer: coarse) {
+  .pn-context {
+    margin-top: 54px;
+  }
+
+  .pn-sesinfo__actions button {
+    height: 44px;
+  }
+}
+
+/* Por debajo de este ancho no cabe junto a la barra lateral y la terminal; en móvil el mapa ya está en su sección. */
+@media (max-width: 1100px) {
+  .pn-context {
+    display: none;
+  }
+}
+
+.pn-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pn[data-no-projects] .pn-context {
+  display: none;
+}
+
+/* Con el panel derecho, la pantalla Terminales es algo más alta para que se vea el comienzo de «Actividad reciente». */
+@media (min-width: 1101px) {
+  .pn-screen[data-screen='terminales'] {
+    min-height: 740px;
+  }
+}
+
+.map-play[hidden],
+.map-play [hidden] {
+  display: none;
 }
