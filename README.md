@@ -569,7 +569,9 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   de la shell) y la abre en una pestaña. Para distinguirla de las sesiones de
   agente, en la barra lateral lleva un ▶ verde en lugar de la luz de estado y su
   meta dice «en marcha»; en su proyecto y en «En segundo plano» va siempre por
-  encima de las sesiones de agente. Al cerrar la pestaña el servidor sigue en
+  encima de las sesiones de agente y, en su proyecto, una línea gris la separa
+  de ellas. Las sesiones cerradas (hechas o terminadas) quedan siempre por
+  debajo de las que siguen corriendo. Al cerrar la pestaña el servidor sigue en
   «En segundo plano». El botón pasa a un ■ rojo: envía `Ctrl+C`, espera hasta 5 s a que
   el proceso termine y termina la sesión en cualquier caso. Hay como mucho una
   terminal de arranque por proyecto; volver a arrancar abre la que ya está viva.

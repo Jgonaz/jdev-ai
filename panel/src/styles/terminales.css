@@ -62,6 +62,14 @@
   gap: 8px;
   padding: 4px 10px;
 }
+/* Línea entre las terminales de arranque en marcha y las de agente: gris claro, alineada con el texto de las filas. */
+.group__sep {
+  height: 0;
+  margin: 3px 10px 3px 26px;
+  border: 0;
+  border-top: 1px solid var(--fg-dim);
+  opacity: 0.6;
+}
 .group__name {
   font-weight: 600;
   min-width: 0;

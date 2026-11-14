@@ -146,6 +146,20 @@ describe('groupSessions', () => {
     expect(grupos[0]!.sessions.map((s) => s.name)).toEqual(['dev', 'a', 'b', 'c', 'fin']);
   });
 
+  it('deja las cerradas por debajo de las que siguen corriendo', () => {
+    const grupos = groupSessions(
+      [
+        sesion({ name: 'hecha', done: { at: null, by: 'agent', note: null } }),
+        sesion({ name: 'muerta', state: 'ended', alive: false }),
+        sesion({ name: 'a' }),
+        sesion({ name: 'dev', agent: 'shell', tracked: false, state: 'alive', run: 'pnpm dev' }),
+        sesion({ name: 'b', state: 'working' }),
+      ],
+      proyectos,
+    );
+    expect(grupos[0]!.sessions.map((s) => s.name)).toEqual(['dev', 'a', 'b', 'hecha', 'muerta']);
+  });
+
   it('puede ocultar las hechas', () => {
     const grupos = groupSessions([sesion({ name: 'a', done: { at: null, by: 'agent', note: null } }), sesion({ name: 'b' })], proyectos, { hideDone: true });
     expect(grupos[0]!.sessions.map((s) => s.name)).toEqual(['b']);

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { archivedEntries, notArchived } from '../../lib/archive.ts';
 import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, visibleRecent } from '../../lib/recent.ts';
 import type { RecentGroup } from '../../lib/recent.ts';
-import { SHELL_AGENT, groupSessions, sessionMeta, visualState } from '../../lib/sessions.ts';
+import { SHELL_AGENT, groupSessions, isRunning, sessionMeta, visualState } from '../../lib/sessions.ts';
 import type { ProjectGroup } from '../../lib/sessions.ts';
 import { recentTip, sessionTip } from '../../lib/sidebarTip.ts';
 import { formatRelative } from '../../lib/time.ts';
@@ -181,8 +181,12 @@ function Group({ g, ahora, menu, conversationMenu }: { g: SidebarGroup; ahora: n
           </span>
         )}
       </div>
-      {g.sessions.map((s) => (
-        <SessionRow key={s.name} s={s} project={g.project} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} menu={menu} />
+      {g.sessions.map((s, i) => (
+        <Fragment key={s.name}>
+          {/* Separa las terminales de arranque en marcha (van primero) de las demás. */}
+          {i > 0 && isRunning(g.sessions[i - 1]!) && !isRunning(s) && <hr className="group__sep" />}
+          <SessionRow s={s} project={g.project} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} menu={menu} />
+        </Fragment>
       ))}
       {g.previous.length > 0 && <Previous project={g.project} items={g.previous} ahora={ahora} menu={conversationMenu} />}
     </section>

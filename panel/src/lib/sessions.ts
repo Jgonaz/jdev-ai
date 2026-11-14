@@ -115,9 +115,25 @@ export function isRunning(s: Pick<SessionInfo, 'run' | 'alive' | 'state'>): bool
   return typeof s.run === 'string' && s.alive && s.state !== 'ended';
 }
 
-/** Primero las terminales de arranque en marcha; el resto conserva su orden (sort es estable). */
-export function runningFirst<T>(items: readonly T[], sesion: (i: T) => Pick<SessionInfo, 'run' | 'alive' | 'state'>): T[] {
-  return [...items].sort((a, b) => Number(isRunning(sesion(b))) - Number(isRunning(sesion(a))));
+/** Sesión cerrada: hecha o terminada. En la barra lateral va por debajo de las que siguen corriendo. */
+export function isClosed(s: Pick<SessionInfo, 'state' | 'done' | 'alive' | 'tracked' | 'agent'>): boolean {
+  const estado = visualState(s);
+  return estado === 'done' || estado === 'ended';
+}
+
+/** Bloque de la sesión en su proyecto: 0 arranque en marcha, 1 abierta, 2 cerrada. */
+function sidebarRank(s: SessionInfo): number {
+  if (isRunning(s)) return 0;
+  return isClosed(s) ? 2 : 1;
+}
+
+/**
+ * Orden dentro de un proyecto: las terminales de arranque en marcha, luego las
+ * sesiones abiertas y al final las cerradas; dentro de cada bloque se conserva
+ * el orden recibido (sort es estable).
+ */
+export function sidebarOrder(items: readonly SessionInfo[]): SessionInfo[] {
+  return [...items].sort((a, b) => sidebarRank(a) - sidebarRank(b));
 }
 
 export function groupSessions(
@@ -131,14 +147,14 @@ export function groupSessions(
   for (const project of projects) {
     if (!project.visible) continue;
     const propias = visibles.filter((s) => s.project === project.id);
-    if (propias.length > 0) grupos.push({ project, sessions: runningFirst(propias, (x) => x) });
+    if (propias.length > 0) grupos.push({ project, sessions: sidebarOrder(propias) });
   }
   const huerfanas = new Map<string, SessionInfo[]>();
   for (const s of visibles) {
     if (conocidos.has(s.project)) continue;
     huerfanas.set(s.project, [...(huerfanas.get(s.project) ?? []), s]);
   }
-  for (const [id, lista] of huerfanas) grupos.push({ project: fallbackProject(id), sessions: runningFirst(lista, (x) => x) });
+  for (const [id, lista] of huerfanas) grupos.push({ project: fallbackProject(id), sessions: sidebarOrder(lista) });
   return grupos;
 }
 
