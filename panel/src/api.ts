@@ -29,6 +29,7 @@ import { parseImageHeaders } from './lib/imageZoom.ts';
 import type { ImageMeta } from './lib/imageZoom.ts';
 import type { PlaceRef } from './lib/route.ts';
 import type { ScrollState } from './lib/scrollbar.ts';
+import { noteServerTime } from './lib/serverClock.ts';
 
 /** Orden de scroll por el historial de tmux (ver POST /api/sessions/:name/scroll). `line` es la posición, en líneas sobre el final. */
 export type ScrollRequest = { action: 'top' | 'bottom' | 'page-up' | 'page-down' } | { action: 'line'; line: number };
@@ -63,6 +64,7 @@ async function errorInfo(res: Response): Promise<{ message: string; code: string
 
 async function request<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
+  const antes = Date.now();
   try {
     res = await fetch(ruta, {
       ...init,
@@ -71,6 +73,7 @@ async function request<T>(ruta: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError(0, 'No se pudo contactar con el panel.');
   }
+  noteServerTime(res.headers.get('X-Server-Time'), antes, Date.now());
   if (!res.ok) {
     const { message, code } = await errorInfo(res);
     throw new ApiError(res.status, message, code);

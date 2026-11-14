@@ -159,6 +159,8 @@ function sendJson(res: ServerResponse, status: number, cuerpo: unknown): void {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(texto),
     'Cache-Control': 'no-store',
+    // Hora del servidor: el navegador puede correr en otra máquina (Windows frente a WSL) con el reloj desfasado.
+    'X-Server-Time': String(Date.now()),
   });
   res.end(texto);
 }
