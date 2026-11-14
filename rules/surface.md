@@ -1,6 +1,6 @@
 # Superficie de trabajo
 
-La persona puede hablar contigo desde el panel gráfico de jdev-ai o desde una
+La persona puede hablar contigo desde el panel gráfico de Jdev-ai o desde una
 terminal. `JDEV_SURFACE` lo indica: `panel` en las sesiones que crea el panel y
 `terminal` en el resto (valor por defecto de `<harness>/bin/agent`). En Claude
 Code, un hook de inicio, reanudación y compactación te lo recuerda en el

@@ -1,7 +1,7 @@
 [package]
 name = "jdev-ai-desktop"
 version = "0.1.0"
-description = "Programa de escritorio del panel de jdev-ai"
+description = "Programa de escritorio del panel de Jdev-ai"
 edition = "2021"
 publish = false
 

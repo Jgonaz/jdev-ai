@@ -3,14 +3,14 @@ import type { Dictionary } from './es';
 // Textos de la landing en inglés. Misma forma que el diccionario en castellano.
 export const en: Dictionary = {
   meta: {
-    title: 'jdev-ai · A harness for working with AI coding agents',
+    title: 'Jdev-ai · A harness for working with AI coding agents',
     description:
       'Rules and workflows in Markdown for working with Claude Code, Codex, Copilot and OpenCode across several independent projects, with a local panel for their terminals.',
   },
   header: { language: 'Language' },
   open: {
     title: 'One harness, all your agents.',
-    subtitle: 'Extensible, customizable.',
+    subtitle: 'Extensible, customizable, nothing escapes your control.',
     hub: 'Diagram: a single AGENTS.md shared by Claude Code, Codex, Copilot and OpenCode.',
     lead: 'Shared rules, subagents, worktrees and a local panel for Claude Code, Codex, Copilot and OpenCode. It is Markdown files and shell scripts: it adds nothing to your projects.',
     badge: 'Open source · MIT License',
@@ -21,7 +21,7 @@ export const en: Dictionary = {
     lead: 'With five terminals open, the hard part is knowing which one has stopped to ask you something. <code>bin/panel</code> gathers them in one window and flags it. Try it here: switch sessions or go from the terminal to the chat.',
     note: 'The real panel runs on your machine: it only listens on 127.0.0.1 and asks for a token. The terminals live in tmux, so they are still there if you close it. It opens in the browser or, on Windows, as a standalone program built with Tauri (bin/panel-desktop). It needs Node 24, pnpm and tmux.',
     ui: {
-      label: 'Simulation of the jdev-ai panel',
+      label: 'Simulation of the Jdev-ai panel',
       bar: 'Simulation with sample data',
       navLabel: 'Panel screens',
       nav: [

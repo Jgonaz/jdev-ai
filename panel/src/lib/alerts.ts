@@ -26,7 +26,7 @@ export function detectAlerts(previo: ReadonlyMap<string, VisualState> | null, ac
   return eventos;
 }
 
-/** Título de la pestaña del navegador: «(N) jdev-ai» con las sesiones que esperan. */
+/** Título de la pestaña del navegador: «(N) Jdev-ai» con las sesiones que esperan. */
 export function documentTitle(esperan: number, contador: boolean): string {
-  return contador && esperan > 0 ? `(${esperan}) jdev-ai` : 'jdev-ai';
+  return contador && esperan > 0 ? `(${esperan}) Jdev-ai` : 'Jdev-ai';
 }

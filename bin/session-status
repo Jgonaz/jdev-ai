@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Resumen de inicio de sesión de jdev-ai para el repositorio del directorio
+# Resumen de inicio de sesión de Jdev-ai para el repositorio del directorio
 # actual: qué se hizo la última vez, qué ha pasado desde entonces y por dónde
 # seguir. Sin argumentos imprime el resumen; con --hook lo devuelve como JSON
 # «systemMessage» para que el hook SessionStart del agente lo muestre dentro de
@@ -194,7 +194,7 @@ panel() {
     history_dir="$main_checkout/.agent/history"
     project_name=${main_checkout##*/}
 
-    header="jdev-ai · $project_name"
+    header="Jdev-ai · $project_name"
     [ -z "${JDEV_SESSION_AGENT:-}" ] || header="$header · $JDEV_SESSION_AGENT"
     printf '┌ %s\n' "$header"
     if [ -n "${JDEV_SESSION_ORCHESTRATOR:-}" ]; then
@@ -391,7 +391,7 @@ context() {
     root=$(CDPATH= cd -- "$(dirname -- "$0")/.." 2>/dev/null && pwd -P) || return 0
     case "${JDEV_SURFACE:-terminal}" in
         panel)
-            text="Superficie: panel gráfico de jdev-ai (JDEV_SURFACE=panel). La persona ve imágenes y lee de pasada: para enseñar una, ponla justo debajo del párrafo al que se refiere, en su propia línea y con este formato: — 📸 <ruta absoluta>  <qué mirar en ella>. Detalles en $root/rules/surface.md."
+            text="Superficie: panel gráfico de Jdev-ai (JDEV_SURFACE=panel). La persona ve imágenes y lee de pasada: para enseñar una, ponla justo debajo del párrafo al que se refiere, en su propia línea y con este formato: — 📸 <ruta absoluta>  <qué mirar en ella>. Detalles en $root/rules/surface.md."
             ;;
         terminal)
             text="Superficie: terminal (JDEV_SURFACE=terminal). La persona no ve imágenes. Sigue $root/rules/surface.md."

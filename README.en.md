@@ -1,4 +1,4 @@
-# jdev-ai
+# Jdev-ai
 
 A lightweight, stack-agnostic harness of shared rules and workflows for working with AI coding agents across several independent projects.
 
@@ -10,7 +10,7 @@ Built by Jorge González Azpillaga, a senior front-end developer focused on agen
 
 When you work on several projects with several coding agents, the same questions keep coming back. When should the agent delegate? How do you resume a project after a week away? When does a change deserve a spec? How do parallel sessions avoid overwriting each other? The answers should not be copied into every repository, and they should not depend on one vendor's CLI.
 
-`jdev-ai` holds those answers once:
+`Jdev-ai` holds those answers once:
 
 - **The harness defines how agents work.** Each repository in `projects/<name>/` defines its own domain, code, dependencies, documentation and validation.
 - **It is not a monorepo or a workspace.** Every project keeps its own `.git` and keeps working if the harness disappears. `projects/` is ignored by the harness Git.

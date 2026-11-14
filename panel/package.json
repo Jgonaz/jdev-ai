@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Panel gráfico local de jdev-ai",
+  "description": "Panel gráfico local de Jdev-ai",
   "engines": {
     "node": ">=24"
   },

@@ -95,7 +95,7 @@ export const settingsScreen: Record<'es' | 'en', SettingsScreen> = {
     notifications: {
       toggles: [
         { id: 'system', label: 'Notificación del sistema', hint: 'Además del aviso dentro del panel.', on: false },
-        { id: 'counter', label: 'Contador en el título de la pestaña', hint: 'Por ejemplo «(1) jdev-ai».', on: true },
+        { id: 'counter', label: 'Contador en el título de la pestaña', hint: 'Por ejemplo «(1) Jdev-ai».', on: true },
         { id: 'sound', label: 'Sonido', hint: 'Sintetizado en el navegador.', on: true },
         { id: 'finish', label: 'Avisar también cuando una sesión termina', hint: 'Con su propio sonido.', on: false },
       ],
@@ -208,7 +208,7 @@ export const settingsScreen: Record<'es' | 'en', SettingsScreen> = {
     notifications: {
       toggles: [
         { id: 'system', label: 'System notification', hint: 'In addition to the notice inside the panel.', on: false },
-        { id: 'counter', label: 'Counter in the tab title', hint: 'For example “(1) jdev-ai”.', on: true },
+        { id: 'counter', label: 'Counter in the tab title', hint: 'For example “(1) Jdev-ai”.', on: true },
         { id: 'sound', label: 'Sound', hint: 'Synthesized in the browser.', on: true },
         { id: 'finish', label: 'Also notify when a session finishes', hint: 'With its own sound.', on: false },
       ],

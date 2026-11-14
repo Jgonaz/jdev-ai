@@ -1,6 +1,6 @@
 schema: spec-driven
 
 context: |
-  Harness jdev-ai: reglas en Markdown y scripts POSIX sh, sin dependencias.
+  Harness Jdev-ai: reglas en Markdown y scripts POSIX sh, sin dependencias.
   Artefactos en castellano de España; commits con Conventional Commits.
   Validación: bin/check.

@@ -105,12 +105,12 @@ check "error sin proyecto" '! run --claude && grep -q "indica un proyecto" "$wor
 check "error con dos proyectos" '! run demo otro && grep -q "demasiados argumentos" "$work/out"'
 check "error con opción desconocida" '! run demo --foo && grep -q "opción desconocida" "$work/out"'
 check "error con proyecto inexistente" '! run nada && grep -q "no existe" "$work/out"'
-check "proyecto sin distinguir mayúsculas" 'run DeMo --copilot && grep -q "^┌ jdev-ai · demo · copilot$" "$work/out"'
+check "proyecto sin distinguir mayúsculas" 'run DeMo --copilot && grep -q "^┌ Jdev-ai · demo · copilot$" "$work/out"'
 check "nombre ambiguo por mayúsculas falla" 'git init -q "$work/h/projects/Doble" && git init -q "$work/h/projects/doble" && ! run DOBLE && grep -q "es ambiguo" "$work/out"'
 check "coincidencia exacta tiene prioridad" 'run doble && [ -f "$work/claude.args" ]'
 check "error con rutas" '! run ../x && grep -q "nombre de proyecto directo" "$work/out"'
 
-check "«agent .» desde el harness" '(cd "$work/h" && run . --copilot) && grep -q "^┌ jdev-ai · h · copilot$" "$work/out"'
+check "«agent .» desde el harness" '(cd "$work/h" && run . --copilot) && grep -q "^┌ Jdev-ai · h · copilot$" "$work/out"'
 check "«agent .» fuera del harness falla" '! (cd "$work" && git init -q fuera && cd fuera && run .)'
 
 summary() { (cd "$work/h/projects/demo" && "$status" "$@") > "$work/out"; }
@@ -121,8 +121,8 @@ check "resumen: pendiente de ti antes de seguir" 'grep -q "^│ PENDIENTE DE TI$
 check "resumen: todas las continuaciones" 'grep -q "^│   → Primera acción en dos líneas.$" "$work/out" && grep -q "^│   → Segunda.$" "$work/out"'
 check "resumen: recuerda la puesta al día" 'grep -q "^└ .*«ponme al día»" "$work/out"'
 check "resumen: todas las líneas con borde izquierdo" '[ "$(grep -vc "^[┌│└]" "$work/out")" -eq 0 ]'
-check "resumen como systemMessage en una línea" 'echo "{}" | summary --hook && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"systemMessage\":\"┌ jdev-ai · demo\\\\n.*\\\\n│ «Prueba»\\\\n.*/clear.*\"}$" "$work/out"'
-check "resumen con el agente y los modelos del launcher" 'JDEV_SESSION_AGENT=codex JDEV_SESSION_ORCHESTRATOR="a [b]" JDEV_SESSION_IMPLEMENTER="c [d]" JDEV_SESSION_WARNING="aviso" summary && grep -q "^┌ jdev-ai · demo · codex$" "$work/out" && grep -q "^│ Orquestador a \[b\] · implementador c \[d\]$" "$work/out" && grep -q "^│ ⚠ aviso$" "$work/out"'
+check "resumen como systemMessage en una línea" 'echo "{}" | summary --hook && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"systemMessage\":\"┌ Jdev-ai · demo\\\\n.*\\\\n│ «Prueba»\\\\n.*/clear.*\"}$" "$work/out"'
+check "resumen con el agente y los modelos del launcher" 'JDEV_SESSION_AGENT=codex JDEV_SESSION_ORCHESTRATOR="a [b]" JDEV_SESSION_IMPLEMENTER="c [d]" JDEV_SESSION_WARNING="aviso" summary && grep -q "^┌ Jdev-ai · demo · codex$" "$work/out" && grep -q "^│ Orquestador a \[b\] · implementador c \[d\]$" "$work/out" && grep -q "^│ ⚠ aviso$" "$work/out"'
 
 # Pendientes resueltos («- [x] … (hecho YYYY-MM-DD)»): no se muestran y, si no
 # queda ninguno, desaparece el apartado.
@@ -149,7 +149,7 @@ psummary_marked() { (cd "$marked" && "$status") > "$work/out"; }
 check "resumen: omite los pendientes marcados como hechos" 'psummary_marked && grep -q "^│ PENDIENTE DE TI$" "$work/out" && grep -q "^│   ! Decidir el color\.$" "$work/out" && ! grep -q "Probar en el móvil" "$work/out" && ! grep -q "hecho 2026" "$work/out"'
 check "resumen: sin apartado si todos los pendientes están marcados" 'sed -i "s/^- Decidir el color\./- [x] Decidir el color. (hecho 2026-01-03)/" "$marked/.agent/history/2026-01-02-1000-marcados.md" && psummary_marked && ! grep -q "PENDIENTE DE TI" "$work/out" && ! grep -q "Decidir el color" "$work/out" && grep -q "^│   → Seguir\.$" "$work/out"'
 
-check "claude recibe el hook y no imprime el resumen" 'run demo && args claude | grep -q "^{\"hooks\":{\"SessionStart\":.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
+check "claude recibe el hook y no imprime el resumen" 'run demo && args claude | grep -q "^{\"hooks\":{\"SessionStart\":.*startup|clear.*session-status. --hook" && ! grep -q "Jdev-ai ·" "$work/out"'
 check "claude recibe los subagentes del adaptador" 'run demo && args claude | grep -qx -- "--agents" && args claude | grep -q "\"implementer\": {" && args claude | grep -q "\"Explore\": {"'
 check "claude recibe el qa con Playwright fijado y sin edición" 'run demo && args claude | grep -q "\"qa\": {" && args claude | grep -q "\"@playwright/mcp@[0-9][0-9.]*\"" && ! args claude | grep -q "@playwright/mcp@latest" && args claude | grep -q "\"disallowedTools\": \[\"Edit\", \"Write\", \"NotebookEdit\"\]"'
 check "playwright solo en el adaptador, no en la sesión" 'run demo && ! args claude | grep -qx -- "--mcp-config"'
@@ -255,7 +255,7 @@ check "JDEV_SURFACE por defecto es terminal para todos los agentes" 'for a in cl
 check "JDEV_SURFACE=panel se respeta" '(export JDEV_SURFACE=panel; run demo && [ "$(cat "$work/claude.surface")" = "panel" ] && run demo --codex && [ "$(cat "$work/codex.surface")" = "panel" ])'
 check "JDEV_SURFACE vacía equivale a terminal" '(export JDEV_SURFACE=; run demo && [ "$(cat "$work/claude.surface")" = "terminal" ])'
 check "JDEV_SURFACE no válida falla sin lanzar el agente" 'for v in Panel web "panel " "pa nel"; do ! (export JDEV_SURFACE="$v"; run demo) || return 1; [ ! -f "$work/claude.args" ] && grep -q "JDEV_SURFACE debe ser panel o terminal" "$work/out" || return 1; done; ! (export JDEV_SURFACE=x; run demo --codex) && [ ! -f "$work/codex.args" ]'
-check "session-status --context: panel en una sola línea JSON" 'echo "{}" | JDEV_SURFACE=panel "$status" --context > "$work/out" && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Superficie: panel gráfico de jdev-ai (JDEV_SURFACE=panel)\. La persona ve imágenes y lee de pasada: para enseñar una, ponla justo debajo del párrafo al que se refiere, en su propia línea y con este formato: — 📸 <ruta absoluta>  <qué mirar en ella>\. Detalles en $work/h/rules/surface\.md\.\"}}$" "$work/out"'
+check "session-status --context: panel en una sola línea JSON" 'echo "{}" | JDEV_SURFACE=panel "$status" --context > "$work/out" && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "^{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Superficie: panel gráfico de Jdev-ai (JDEV_SURFACE=panel)\. La persona ve imágenes y lee de pasada: para enseñar una, ponla justo debajo del párrafo al que se refiere, en su propia línea y con este formato: — 📸 <ruta absoluta>  <qué mirar en ella>\. Detalles en $work/h/rules/surface\.md\.\"}}$" "$work/out"'
 check "session-status --context: terminal por defecto" 'echo "{}" | "$status" --context > "$work/out" && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "\"additionalContext\":\"Superficie: terminal (JDEV_SURFACE=terminal)\. La persona no ve imágenes\. Sigue $work/h/rules/surface\.md\.\"}}$" "$work/out" && JDEV_SURFACE=terminal "$status" --context < /dev/null | cmp -s - "$work/out"'
 check "session-status --context: valor no válido sale 0 sin salida" 'JDEV_SURFACE=otra "$status" --context < /dev/null > "$work/out" 2>"$work/err"; r=$?; [ $r -eq 0 ] && [ ! -s "$work/out" ] && [ ! -s "$work/err" ]'
 check "session-status --context: no depende del directorio ni del repositorio" '(cd "$work" && JDEV_SURFACE=panel "$status" --context < /dev/null) | grep -q "Detalles en $work/h/rules/surface\.md\."'
@@ -436,8 +436,8 @@ check "hook de hecha: también lo lee en varias líneas" 'printf "{\"type\":\"ai
 check "hook de hecha: un archivo corrupto cuenta como ausente y no se pisa si no hay marca" 'sd --open && printf "{\"type\":\"ai-title\",\"aiTitle\":\"Limpio\",\"sessionId\":\"%s\"}\n" "$sd_id" > "$sd_transcript" && for malo in "basura" "{\"state\":\"hecha\",\"at\":\"2026-11-05T15:20:00Z\",\"by\":\"user\"}" "{\"state\":\"done\",\"by\":\"user\"}" "{\"state\":\"done\",\"at\":\"2026-11-05T15:20:00Z\",\"by\":\"otro\"}" ""; do printf "%s\n" "$malo" > "$sd_file"; [ -z "$(sd_hook)" ] && [ "$(cat "$sd_file")" = "$malo" ] || return 1; done'
 check "hook de hecha: con el archivo corrupto manda la marca antigua" 'printf "{\"type\":\"custom-title\",\"customTitle\":\"[Closed] Vieja\",\"sessionId\":\"%s\"}\n" "$sd_id" >> "$sd_transcript" && printf "basura\n" > "$sd_file" && [ "$(sd_hook)" = "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"sessionTitle\":\"Vieja\"}}" ] && grep -q "\"state\":\"open\".*\"by\":\"user\"" "$sd_file"'
 check "hook de hecha: un XDG_STATE_HOME relativo se ignora" 'rm -rf "$work/home"; mkdir -p "$work/home/.local/state/jdev-ai/conversations"; printf "{\"state\":\"done\",\"at\":\"2026-11-05T15:20:00Z\",\"by\":\"agent\"}\n" > "$work/home/.local/state/jdev-ai/conversations/$sd_id.json"; printf "{\"session_id\":\"%s\",\"transcript_path\":\"%s\"}" "$sd_id" "$work/no-existe.jsonl" | (cd "$work" && HOME="$work/home" XDG_STATE_HOME=relativa "$work/h/bin/session-title" --hook) >/dev/null && grep -q "\"state\":\"open\"" "$work/home/.local/state/jdev-ai/conversations/$sd_id.json" && [ ! -e "$work/relativa" ]'
-check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "jdev-ai ·" "$work/out"'
-check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "^┌ jdev-ai · demo · copilot$" "$work/out"'
+check "codex recibe el hook" 'run demo --codex && args codex | grep -q "^hooks.SessionStart=.*startup|clear.*session-status. --hook" && ! grep -q "Jdev-ai ·" "$work/out"'
+check "copilot muestra el panel antes de abrirse" 'run demo --copilot && grep -q "^┌ Jdev-ai · demo · copilot$" "$work/out"'
 
 check "codex recibe las reglas del harness" 'run demo --codex && args codex | grep -q "^developer_instructions=" && args codex | grep -q "<harness> es $work/h"'
 check "codex no duplica las reglas en el harness" '(cd "$work/h" && run . --codex) && ! args codex | grep -q "^developer_instructions="'
@@ -645,7 +645,7 @@ check "--wt se admite en cualquier orden" 'run --wt orden --codex wtp && [ "$(ca
 
 # Panel: historial del principal y datos del worktree.
 psummary() { (cd "$1" && "$status" ${2:+"$2"}) > "$work/out"; }
-check "panel en un worktree: historial del principal, feature y rama" 'psummary "$wtp_trees/lanz" && grep -q "^┌ jdev-ai · wtp$" "$work/out" && grep -q "^│ «Historial del principal»$" "$work/out" && grep -q "^│ Worktree lanz · rama feat/lanz$" "$work/out" && [ "$(grep -vc "^[┌│└]" "$work/out")" -eq 0 ]'
+check "panel en un worktree: historial del principal, feature y rama" 'psummary "$wtp_trees/lanz" && grep -q "^┌ Jdev-ai · wtp$" "$work/out" && grep -q "^│ «Historial del principal»$" "$work/out" && grep -q "^│ Worktree lanz · rama feat/lanz$" "$work/out" && [ "$(grep -vc "^[┌│└]" "$work/out")" -eq 0 ]'
 check "panel en el principal: lista los worktrees abiertos" 'psummary "$wtp" && grep -q "^│ Worktrees abiertos: .*lanz" "$work/out" && grep -q "agent wtp --wt <nombre>" "$work/out" && ! grep -q "^│ Worktree " "$work/out" && [ "$(grep -vc "^[┌│└]" "$work/out")" -eq 0 ]'
 check "panel sin worktrees no añade líneas de worktree" 'psummary "$work/h/projects/demo" && ! grep -q "Worktree" "$work/out"'
 check "panel en modo hook desde un worktree" 'echo "{}" | psummary "$wtp_trees/lanz" --hook && [ "$(wc -l < "$work/out")" -eq 1 ] && grep -q "Worktree lanz · rama feat/lanz" "$work/out"'

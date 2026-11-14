@@ -1,7 +1,7 @@
 {
-  "name": "jdev-ai · panel",
-  "short_name": "jdev-ai",
-  "description": "Panel gráfico local de jdev-ai: terminales de agente, backlog e historial de tus proyectos.",
+  "name": "Jdev-ai · panel",
+  "short_name": "Jdev-ai",
+  "description": "Panel gráfico local de Jdev-ai: terminales de agente, backlog e historial de tus proyectos.",
   "lang": "es",
   "start_url": "/",
   "scope": "/",

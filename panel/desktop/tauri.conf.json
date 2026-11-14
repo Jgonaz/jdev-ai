@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "jdev-ai",
+  "productName": "Jdev-ai",
   "version": "0.1.0",
   "identifier": "dev.jdev-ai.panel",
   "build": {

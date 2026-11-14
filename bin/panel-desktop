@@ -16,7 +16,7 @@ pudiendo usar con «bin/panel».
             la ruta de este harness quedan grabadas en el ejecutable: si
             cambian, hay que volver a compilar e instalar.
   install   Copia el ejecutable a %LOCALAPPDATA%\Programs\jdev-ai\, crea el
-            acceso directo «jdev-ai» en el menú Inicio y registra el nombre y
+            acceso directo «Jdev-ai» en el menú Inicio y registra el nombre y
             el icono de sus notificaciones. El programa tiene que estar cerrado.
 
 Requisitos de «build» (si falta alguno, lo indica y termina sin instalar nada):
@@ -108,31 +108,31 @@ install() {
 
     mkdir -p "$dir"
     cp "$exe" "$dir/jdev-ai.exe" 2>/dev/null ||
-        fail "no se pudo copiar el ejecutable a $win_dir: cierra el programa jdev-ai y repite"
+        fail "no se pudo copiar el ejecutable a $win_dir: cierra el programa Jdev-ai y repite"
     cp "$harness_root/panel/public/icons/icon-192.png" "$dir/icon.png"
 
     # En PowerShell, la comilla simple dentro de una cadena se escribe doble.
     ps_dir=$(printf '%s' "$win_dir" | sed "s/'/''/g")
     win powershell.exe -NoProfile -NonInteractive -Command "
-        \$acceso = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Programs') + '\\jdev-ai.lnk')
+        \$acceso = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Programs') + '\\Jdev-ai.lnk')
         \$acceso.TargetPath = '$ps_dir\\jdev-ai.exe'
         # Si ya había un acceso directo con ese nombre, CreateShortcut lo carga
         # con sus argumentos y su icono: se pisan para que no queden los de antes.
         \$acceso.Arguments = ''
         \$acceso.IconLocation = '$ps_dir\\jdev-ai.exe,0'
         \$acceso.WorkingDirectory = '$ps_dir'
-        \$acceso.Description = 'Panel de jdev-ai'
+        \$acceso.Description = 'Panel de Jdev-ai'
         \$acceso.Save()
     " >/dev/null || fail "no se pudo crear el acceso directo del menú Inicio"
 
     # Sin este registro, Windows no muestra las notificaciones de un programa
     # que no viene de un instalador.
     clave="HKCU\\Software\\Classes\\AppUserModelId\\$app_id"
-    win reg.exe add "$clave" /v DisplayName /t REG_SZ /d jdev-ai /f >/dev/null &&
+    win reg.exe add "$clave" /v DisplayName /t REG_SZ /d Jdev-ai /f >/dev/null &&
         win reg.exe add "$clave" /v IconUri /t REG_SZ /d "$win_dir\\icon.png" /f >/dev/null ||
         fail "no se pudo registrar el programa para las notificaciones"
 
-    printf 'Instalado en %s\nÁbrelo desde el menú Inicio: «jdev-ai».\n' "$win_dir"
+    printf 'Instalado en %s\nÁbrelo desde el menú Inicio: «Jdev-ai».\n' "$win_dir"
 }
 
 case "${1:-}" in

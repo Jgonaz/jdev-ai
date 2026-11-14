@@ -53,7 +53,7 @@ describe('detectAlerts', () => {
     const previo = stateMap([term('alive')]);
     expect(detectAlerts(previo, [term('waiting')])).toEqual([]);
     expect(detectAlerts(previo, [term('ended', false)])).toEqual([]);
-    expect(documentTitle(0, true)).toBe('jdev-ai');
+    expect(documentTitle(0, true)).toBe('Jdev-ai');
   });
 
   it('las sesiones sin seguimiento de turnos nunca avisan', () => {
@@ -64,8 +64,8 @@ describe('detectAlerts', () => {
 
 describe('documentTitle', () => {
   it('cuenta las sesiones que esperan si el contador está activado', () => {
-    expect(documentTitle(2, true)).toBe('(2) jdev-ai');
-    expect(documentTitle(0, true)).toBe('jdev-ai');
-    expect(documentTitle(3, false)).toBe('jdev-ai');
+    expect(documentTitle(2, true)).toBe('(2) Jdev-ai');
+    expect(documentTitle(0, true)).toBe('Jdev-ai');
+    expect(documentTitle(3, false)).toBe('Jdev-ai');
   });
 });

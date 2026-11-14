@@ -5,14 +5,14 @@ export type Tone = 'muted' | 'fg' | 'amber' | 'teal';
 
 export const es = {
   meta: {
-    title: 'jdev-ai · Harness para trabajar con agentes de código',
+    title: 'Jdev-ai · Harness para trabajar con agentes de código',
     description:
       'Reglas y flujos en Markdown para trabajar con Claude Code, Codex, Copilot y OpenCode en varios proyectos independientes, con un panel local para sus terminales.',
   },
   header: { language: 'Idioma' },
   open: {
     title: 'Un harness, todos tus agentes.',
-    subtitle: 'Extensible, personalizable.',
+    subtitle: 'Extensible, personalizable, nada escapa a tu control.',
     hub: 'Esquema: un único AGENTS.md compartido por Claude Code, Codex, Copilot y OpenCode.',
     lead: 'Reglas compartidas, subagentes, worktrees y un panel local para Claude Code, Codex, Copilot y OpenCode. Son archivos Markdown y scripts de shell: no añade nada a tus proyectos.',
     badge: 'Código abierto · Licencia MIT',
@@ -23,7 +23,7 @@ export const es = {
     lead: 'Con cinco terminales abiertas, lo difícil es saber cuál se ha parado a preguntarte algo. <code>bin/panel</code> las reúne en una ventana y lo marca. Pruébalo aquí: cambia de sesión o pasa de la terminal al chat.',
     note: 'El panel real corre en tu máquina: solo escucha en 127.0.0.1 y pide un token. Las terminales viven en tmux, así que siguen ahí si lo cierras. Se abre en el navegador o, en Windows, como programa propio hecho con Tauri (bin/panel-desktop). Necesita Node 24, pnpm y tmux.',
     ui: {
-      label: 'Simulación del panel de jdev-ai',
+      label: 'Simulación del panel de Jdev-ai',
       bar: 'Simulación con datos de ejemplo',
       navLabel: 'Pantallas del panel',
       nav: [

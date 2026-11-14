@@ -1,4 +1,4 @@
-// Programa de escritorio del panel de jdev-ai para Windows.
+// Programa de escritorio del panel de Jdev-ai para Windows.
 //
 // No tiene interfaz propia: arranca el servidor del panel dentro de WSL con
 // bin/panel y muestra en una ventana la interfaz que ese servidor sirve en
@@ -220,7 +220,7 @@ fn is_panel(mut s: TcpStream, port: u16) -> bool {
         }
     }
     let texto = String::from_utf8_lossy(&respuesta);
-    texto.starts_with("HTTP/1.1 200") && texto.contains("\"short_name\": \"jdev-ai\"")
+    texto.starts_with("HTTP/1.1 200") && texto.contains("\"short_name\": \"Jdev-ai\"")
 }
 
 fn stop_server(app: &AppHandle) {
@@ -370,7 +370,7 @@ fn open_aux_window(app: &AppHandle, url: Url) {
     let n = app.state::<Panel>().aux.fetch_add(1, Ordering::Relaxed);
     let navegacion = app.clone();
     let _ = WebviewWindowBuilder::new(app, format!("aux-{n}"), WebviewUrl::External(url))
-        .title("jdev-ai")
+        .title("Jdev-ai")
         .inner_size(1100.0, 800.0)
         .on_navigation(move |u| guard_navigation(&navegacion, u))
         .on_document_title_changed(|w, titulo| {
@@ -395,7 +395,7 @@ fn main() {
             let navegacion = app.handle().clone();
             let ventanas = app.handle().clone();
             WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App("index.html".into()))
-                .title("jdev-ai")
+                .title("Jdev-ai")
                 .inner_size(1400.0, 900.0)
                 .min_inner_size(720.0, 480.0)
                 // El mismo fondo que la pantalla de arranque: la ventana no parpadea
@@ -437,7 +437,7 @@ fn main() {
             }
         })
         .build(tauri::generate_context!())
-        .expect("no se pudo arrancar jdev-ai");
+        .expect("no se pudo arrancar Jdev-ai");
 
     app.run(|app, event| {
         if let RunEvent::Exit = event {

@@ -1,4 +1,4 @@
-# jdev-ai
+# Jdev-ai
 
 [English](README.en.md)
 
@@ -49,7 +49,7 @@ Node esté en el `PATH` de tu `~/.bashrc` (como deja nvm).
 
 El harness define **cómo trabajan los agentes**. Cada repositorio situado en `projects/<nombre>/` define su dominio, código, dependencias, documentación y configuración. No es un monorepo ni un workspace: cada proyecto conserva su propio `.git` y puede funcionar aunque este harness desaparezca.
 
-`projects/` está ignorado por completo por el Git de `jdev-ai`, de modo que los repositorios anidados no se rastrean ni se mezclan con él.
+`projects/` está ignorado por completo por el Git de `Jdev-ai`, de modo que los repositorios anidados no se rastrean ni se mezclan con él.
 
 ## Añadir un proyecto
 
@@ -333,7 +333,7 @@ pantalla de Ajustes con estos apartados:
 - **Proyectos**: por proyecto, su monograma, su color, si es visible en el panel y el comando de
   su servidor de desarrollo.
 - **Avisos**: notificación del sistema, contador en el título de la pestaña
-  («(1) jdev-ai»), sonido y si también avisa cuando una sesión termina. Se
+  («(1) Jdev-ai»), sonido y si también avisa cuando una sesión termina. Se
   elige un sonido para cuando una sesión te espera y otro para cuando termina,
   entre varios sintetizados en el navegador (teletipo, campanilla, dos tonos,
   gota, pulso, acorde, marimba y radar) o, en WSL, entre los de Windows
@@ -362,7 +362,7 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
 - **Como aplicación (PWA).** `bin/panel --app` abre el panel en una ventana
   de aplicación de Chrome (`JDEV_PANEL_BROWSER=msedge` para Edge). Con el
   panel abierto en Chrome o Edge, usa
-  «Instalar jdev-ai» en el menú del navegador: tendrás una ventana propia sin
+  «Instalar Jdev-ai» en el menú del navegador: tendrás una ventana propia sin
   pestañas, con su icono en la barra de tareas y en el menú Inicio. La
   aplicación abre el panel en `http://localhost:4317`, así que `bin/panel`
   tiene que estar en marcha; la cookie del token dura un año y se invalida al

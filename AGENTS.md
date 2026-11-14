@@ -1,4 +1,4 @@
-# Instrucciones globales de jdev-ai
+# Instrucciones globales de Jdev-ai
 
 ## Rutas y ámbito
 

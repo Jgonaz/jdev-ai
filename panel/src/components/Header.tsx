@@ -18,7 +18,7 @@ export function Header({ route }: { route: Route | null }) {
 
   return (
     <header className="header">
-      <a className="header__logo" href={routeHref('inicio')} aria-label="jdev-ai, ir a Inicio">
+      <a className="header__logo" href={routeHref('inicio')} aria-label="Jdev-ai, ir a Inicio">
         <Logo />
       </a>
       <nav className="nav" aria-label="Secciones">

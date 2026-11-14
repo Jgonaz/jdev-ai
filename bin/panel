@@ -6,7 +6,7 @@ usage() {
     cat <<'EOF_USAGE'
 Uso: panel [--port N] [--open | --app] [--regenerate-token] [--print-url]
 
-Arranca el panel gráfico de jdev-ai: una aplicación web local (solo en
+Arranca el panel gráfico de Jdev-ai: una aplicación web local (solo en
 127.0.0.1, con token) para ver y usar las terminales de agente. Imprime la URL
 de acceso, con el token: http://localhost:<puerto>/?token=...
 
@@ -24,7 +24,7 @@ Opciones:
   --app               Abre el panel en una ventana de aplicación de Chrome (sin
                       pestañas ni barra de direcciones). JDEV_PANEL_BROWSER=msedge
                       usa Edge. Para tenerlo como aplicación instalada, ábrelo
-                      una vez y usa «Instalar jdev-ai» en el menú del navegador.
+                      una vez y usa «Instalar Jdev-ai» en el menú del navegador.
   --regenerate-token  Genera un token nuevo (invalida el anterior) antes de
                       arrancar.
   --print-url         Imprime la URL de acceso, con el token, y termina sin

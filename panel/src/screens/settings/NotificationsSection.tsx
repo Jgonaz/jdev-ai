@@ -69,7 +69,7 @@ export function NotificationsSection() {
             )}
           </p>
         )}
-        <CheckRow label="Contador en el título de la pestaña: «(1) jdev-ai»" checked={n.counter} onChange={(v) => update({ notifications: { counter: v } })} />
+        <CheckRow label="Contador en el título de la pestaña: «(1) Jdev-ai»" checked={n.counter} onChange={(v) => update({ notifications: { counter: v } })} />
         <CheckRow label="Avisar también cuando una sesión termina" checked={n.onFinish} onChange={(v) => update({ notifications: { onFinish: v } })} />
         <CheckRow
           label="Sonido"

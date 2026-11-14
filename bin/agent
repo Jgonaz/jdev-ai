@@ -247,7 +247,7 @@ if [ "$agent_command" = "codex" ]; then
             *"'''"*) fail "$harness_instructions no puede contener ''' para inyectarse en Codex" ;;
         esac
         codex_instructions_arg="developer_instructions='''
-Instrucciones globales del harness jdev-ai. En ellas, <harness> es $harness_root.
+Instrucciones globales del harness Jdev-ai. En ellas, <harness> es $harness_root.
 
 $harness_rules'''"
     fi
