@@ -232,8 +232,8 @@ ok = (
     and status["command"].startswith("'") and status["command"].endswith("/bin/session-statusline'")
     and any("session-activity' --hook" in c for c in commands("SubagentStart"))
     and any("session-activity' --hook" in c for c in commands("SubagentStop"))
-    # En Stop, session-state sigue primero y la actividad va detrás.
-    and [("state" if "session-state" in c else "activity") for c in commands("Stop")] == ["state", "activity"]
+    # En Stop, session-state sigue primero, la actividad va detrás y session-done --hook cierra.
+    and [("state" if "session-state" in c else "done" if "session-done' --hook" in c else "activity") for c in commands("Stop")] == ["state", "activity", "done"]
     # PostToolUse conserva session-state sin matcher y la actividad solo es para Artifact.
     and any("session-state" in c for c in unmatched("PostToolUse"))
     and not any("session-activity" in c for c in unmatched("PostToolUse"))
@@ -430,6 +430,19 @@ check "hook de hecha: un identificador sin formato de conversación no escribe e
 check "hecha: cuenta la nota en caracteres con LC_ALL=C" 'rm -rf "$sd_state"; n=$(awk "BEGIN { for (i = 0; i < 500; i++) printf \"ñ\" }"); LC_ALL=C sd --note "$n" && grep -qF "$n" "$sd_file" && rm -rf "$sd_state"; LC_ALL=C sd --note "${n}ñ"; r=$?; [ $r -eq 2 ] && [ ! -e "$sd_state" ]'
 check "hecha: sustituye por espacio U+2028, U+2029, U+0085 y los controles" 'rm -rf "$sd_state"; sd --note "$(printf "a\342\200\250b\342\200\251c\302\205d\001e")" && grep -qF "\"note\":\"a b c d e\"" "$sd_file" && sd_json "a b c d e"'
 check "hecha: conserva los acentos y emojis de la nota" 'rm -rf "$sd_state"; sd --note "Integrada ñ é 😀" && sd_json "Integrada ñ é 😀"'
+# Hook Stop: session-done --hook marca la conversación como hecha si la última
+# respuesta termina con la línea de cierre, leída de la entrada o del transcript.
+sd_stop_transcript="$work/sd-stop.jsonl"
+sd_assistant() { printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"%s"}]}}\n' "$1"; }
+sd_stop() { XDG_STATE_HOME="$sd_state" "$work/h/bin/session-done" --hook > "$work/out" 2>&1; }
+sd_stop_msg() { printf '{"session_id":"%s","transcript_path":"%s","last_assistant_message":"%s"}' "$sd_id" "$sd_stop_transcript" "$1" | sd_stop; }
+sd_stop_file() { printf '{"session_id":"%s","transcript_path":"%s"}' "$sd_id" "$sd_stop_transcript" | sd_stop; }
+check "hecha (hook): la línea de cierre al final de la respuesta la marca con nota" 'rm -rf "$sd_state"; sd_stop_msg "Listo.\\n\\n✅ Nada pendiente: puedes cerrar esta terminal.\\n" && grep -q "\"state\":\"done\".*\"by\":\"agent\"" "$sd_file" && sd_json "El agente terminó sin nada pendiente." && [ ! -s "$work/out" ]'
+check "hecha (hook): la línea citada en mitad del texto no la marca" 'rm -rf "$sd_state"; sd_stop_msg "Cuando digas «✅ Nada pendiente: puedes cerrar esta terminal.» la marco.\\n\\nSiguiente paso recomendado: probarlo." && [ ! -e "$sd_file" ] && [ ! -s "$work/out" ]'
+check "hecha (hook): sin la respuesta en la entrada, mira la última del transcript" 'rm -rf "$sd_state"; { sd_assistant "Siguiente paso recomendado: x."; sd_assistant "✅ Nada pendiente: puedes cerrar esta terminal."; } > "$sd_stop_transcript" && sd_stop_file && grep -q "\"state\":\"done\"" "$sd_file"'
+check "hecha (hook): una respuesta anterior con la línea no cuenta" 'rm -rf "$sd_state"; { sd_assistant "✅ Nada pendiente: puedes cerrar esta terminal."; sd_assistant "Siguiente paso recomendado: x."; } > "$sd_stop_transcript" && sd_stop_file && [ ! -e "$sd_file" ]'
+check "hecha (hook): si ya estaba hecha no la toca" 'rm -rf "$sd_state"; sd --note "Integrada" && before=$(cat "$sd_file") && sd_stop_msg "✅ Nada pendiente: puedes cerrar esta terminal." && [ "$(cat "$sd_file")" = "$before" ]'
+check "hecha (hook): una entrada vacía o sin sesión no falla ni escribe" 'rm -rf "$sd_state"; printf "" | sd_stop && printf "{\"last_assistant_message\":\"✅ Nada pendiente: puedes cerrar esta terminal.\"}" | (unset CLAUDE_CODE_SESSION_ID; sd_stop) && [ ! -e "$sd_state" ] && [ ! -s "$work/out" ]'
 check "hecha: un XDG_STATE_HOME relativo se ignora y usa ~/.local/state" 'rm -rf "$work/home"; mkdir -p "$work/home"; (cd "$work" && HOME="$work/home" XDG_STATE_HOME=relativa CLAUDE_CODE_SESSION_ID=$sd_id "$work/h/bin/session-done" >/dev/null 2>&1) && [ -f "$work/home/.local/state/jdev-ai/conversations/$sd_id.json" ] && [ ! -e "$work/relativa" ]'
 check "hook de hecha: tolera espacios en el JSON del estado" 'printf "{\"type\":\"ai-title\",\"aiTitle\":\"Limpio\",\"sessionId\":\"%s\"}\n" "$sd_id" > "$sd_transcript"; mkdir -p "$sd_state/jdev-ai/conversations"; printf "{ \"state\" : \"done\", \"at\" : \"2026-11-05T15:20:00Z\", \"by\" : \"agent\" }\n" > "$sd_file" && [ -z "$(sd_hook)" ] && grep -q "\"state\":\"open\".*\"by\":\"user\"" "$sd_file"'
 check "hook de hecha: también lo lee en varias líneas" 'printf "{\"type\":\"ai-title\",\"aiTitle\":\"Limpio\",\"sessionId\":\"%s\"}\n" "$sd_id" > "$sd_transcript"; printf "{\n  \"state\": \"done\",\n  \"at\": \"2026-11-05T15:20:00Z\",\n  \"by\": \"user\"\n}\n" > "$sd_file" && [ -z "$(sd_hook)" ] && grep -q "\"state\":\"open\"" "$sd_file"'

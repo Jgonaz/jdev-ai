@@ -239,7 +239,9 @@ principal marca la conversación como hecha con `bin/session-done`, sin tocar
 el título (guarda cuándo, quién y una nota opcional en
 `~/.local/state/jdev-ai/conversations/`), y un hook `UserPromptSubmit`
 (`bin/session-title --hook`) la reabre en cuanto vuelves a escribir en la
-terminal. También puedes marcarla tú desde el panel. Las conversaciones que ya
+terminal. Cuando termina una respuesta con `✅ Nada pendiente: puedes cerrar esta
+terminal.`, un hook `Stop` (`bin/session-done --hook`) también la marca como
+hecha, sin cerrar nada. También puedes marcarla tú desde el panel. Las conversaciones que ya
 llevaban `[Closed] ` en el título cuentan como hechas, sin migrar nada; fuera del
 panel, la marca ya no se ve en la lista de `claude --resume`. Las políticas están
 en [`rules/session-title.md`](rules/session-title.md) y
@@ -773,7 +775,9 @@ que verás en todas las sesiones:
   `Siguiente paso recomendado: ...`. Cuando ya no le queda trabajo, y no hay
   cambios sin commit, commits sin subir, worktrees sin integrar ni procesos en
   marcha, dice lo que te queda a ti y termina con
-  `✅ Nada pendiente: puedes cerrar esta terminal.`
+  `✅ Nada pendiente: puedes cerrar esta terminal.` En Claude Code, con `agent`,
+  esa línea marca la conversación como hecha en el panel; si vuelves a
+  escribir, se reabre.
 
 ## Landing
 

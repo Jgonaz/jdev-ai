@@ -46,7 +46,9 @@
   ningún proceso ni subagente lanzado por ti sigue en marcha y el historial
   está registrado si tocaba. Si algo de eso queda y necesita el visto bueno de
   la persona (por ejemplo, commit y push), es el siguiente paso recomendado.
-  Los cambios locales ajenos a la conversación no cuentan.
+  Los cambios locales ajenos a la conversación no cuentan. Escríbela tal cual y
+  como última línea: en Claude Code, abierto con `agent`, un hook marca entonces
+  la conversación como hecha (`<harness>/rules/session-done.md`).
 
 ## Procesos
 

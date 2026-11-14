@@ -17,6 +17,12 @@ Claude Code. Solo lo ejecuta el orquestador; los subagentes no.
 - Al cumplir el objetivo de un cierre autónomo, como último paso, según
   [`closed-goal.md`](closed-goal.md).
 - Cuando la persona lo pida.
+- Al terminar una respuesta con `✅ Nada pendiente: puedes cerrar esta
+  terminal.` En las sesiones abiertas con `agent`, un hook `Stop`
+  (`bin/session-done --hook`) lo hace solo, con la nota «El agente terminó sin
+  nada pendiente.», así que no ejecutes el script por esto. Solo cuenta si es
+  la última línea de la respuesta, y no toca una conversación que ya esté
+  hecha. No cierra la terminal ni la pestaña.
 
 Ejecuta `<harness>/bin/session-done`. Con `--note "<texto>"` añade una nota
 breve (hasta 500 caracteres) que el panel enseña en el tooltip, por ejemplo qué

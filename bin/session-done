@@ -13,6 +13,8 @@
 #   session-done --note "<texto>"   la marca con una nota (hasta 500 caracteres).
 #   session-done --open             la reabre (y quita «[Closed] » del título
 #                                   guardado si lo llevaba, como hacía antes).
+#   session-done --hook             hook Stop: la marca como hecha si la última
+#                                   respuesta termina con «✅ Nada pendiente…».
 #
 # Quien ejecuta este script es el agente: siempre escribe «by: agent». Marcar
 # como hecha no termina ni archiva la sesión.
@@ -22,9 +24,49 @@
 set -u
 
 usage() {
-    printf 'Uso: session-done [--open] [--note "<texto>"]\n' >&2
+    printf 'Uso: session-done [--open] [--note "<texto>"] | --hook\n' >&2
     exit 2
 }
+
+# Hook Stop (lo inyecta bin/agent): si la última respuesta del agente termina con
+# la línea de cierre de AGENTS.md («✅ Nada pendiente: puedes cerrar esta
+# terminal.»), marca la conversación como hecha, como «Marcar como hecha» del
+# panel. No cierra nada, y si ya estaba hecha no la toca (conserva su fecha y su
+# nota). Es un hook: nunca falla ni escribe nada.
+if [ "${1:-}" = "--hook" ]; then
+    [ $# -eq 1 ] || usage
+    input=$(cat) || exit 0
+    field() {
+        printf '%s' "$input" | tr '\n' ' ' | sed -n "s/.*\"$1\"[ ]*:[ ]*\"\([^\"]*\)\".*/\1/p"
+    }
+    # La línea va al final del texto: detrás solo puede haber espacios o saltos
+    # de línea escapados y la comilla que cierra la cadena JSON.
+    done_line='Nada pendiente: puedes cerrar esta terminal\.(\\n|[[:space:]])*"'
+    ends_done=1
+    # Las versiones recientes de Claude Code pasan la respuesta en la entrada del
+    # hook; si no, se mira la última entrada del agente en el transcript, que ya
+    # está escrita cuando corre Stop.
+    if printf '%s' "$input" | grep -q '"last_assistant_message"'; then
+        printf '%s' "$input" | grep -Eq "$done_line" || ends_done=0
+    else
+        transcript=$(field transcript_path)
+        [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
+        grep -F '"role":"assistant"' "$transcript" 2>/dev/null | tail -n 1 | grep -Eq "$done_line" || ends_done=0
+    fi
+    [ "$ends_done" -eq 1 ] || exit 0
+    session_id=$(field session_id)
+    session_id=${session_id:-${CLAUDE_CODE_SESSION_ID:-}}
+    [ -n "$session_id" ] || exit 0
+    case "${XDG_STATE_HOME:-}" in
+        /*) hook_root=$XDG_STATE_HOME ;;
+        *) hook_root=${HOME:-}/.local/state ;;
+    esac
+    if grep -Eq '"state"[[:space:]]*:[[:space:]]*"done"' "$hook_root/jdev-ai/conversations/$session_id.json" 2>/dev/null; then
+        exit 0
+    fi
+    CLAUDE_CODE_SESSION_ID=$session_id "$0" --note 'El agente terminó sin nada pendiente.' >/dev/null 2>&1
+    exit 0
+fi
 
 state=done
 note=
