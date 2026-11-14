@@ -2,7 +2,9 @@
 
 [English](README.en.md)
 
-`jdev-ai` es un harness global y ligero para trabajar con agentes de IA sobre varios proyectos independientes. Centraliza reglas y flujos de trabajo sin imponer stack, dependencias ni arquitectura a los proyectos.
+`Jdev-ai` es un harness global y ligero para trabajar con agentes de IA sobre varios proyectos independientes. Centraliza reglas y flujos de trabajo sin imponer stack, dependencias ni arquitectura a los proyectos.
+
+![Panel gráfico de Jdev-ai: sesiones agrupadas por proyecto, terminal del agente y mapa de actividad](docs/images/panel.png)
 
 ## Primeros pasos
 

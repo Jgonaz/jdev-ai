@@ -4,6 +4,8 @@ A lightweight, stack-agnostic harness of shared rules and workflows for working 
 
 [Español](README.md)
 
+![Jdev-ai graphical panel: sessions grouped by project, the agent terminal and the activity map](docs/images/panel.png)
+
 Built by Jorge González Azpillaga, a senior front-end developer focused on agent-driven development.
 
 ## Why it exists
