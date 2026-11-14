@@ -353,10 +353,12 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
 </div>
 
 <script>
+  import { register } from '../scripts/islands';
   import { setupPanelSims } from '../scripts/panelSim';
 
-  // Sin dependencias: el estado vive en atributos y el HTML ya trae todas las sesiones.
-  for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
+  // Sin dependencias: el estado vive en atributos y el HTML ya trae todas las sesiones. Se monta con una señal para
+  // poder desmontarlo al cambiar de idioma sin recargar (`src/scripts/islands.ts`).
+  register('[data-panel]', (panel, signal) => {
     const all = <T extends HTMLElement>(sel: string) => [...panel.querySelectorAll<T>(sel)];
 
     const visible = (el: HTMLElement) => el.offsetParent !== null;
@@ -558,11 +560,16 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       syncMaps();
     });
 
-    document.addEventListener('visibilitychange', syncMaps);
-    window.addEventListener('resize', syncMaps);
-    new IntersectionObserver((entries) => {
+    document.addEventListener('visibilitychange', syncMaps, { signal });
+    window.addEventListener('resize', syncMaps, { signal });
+    const observer = new IntersectionObserver((entries) => {
       inView = entries.some((entry) => entry.isIntersecting);
       syncMaps();
-    }).observe(panel);
-  }
+    });
+    observer.observe(panel);
+    signal.addEventListener('abort', () => {
+      observer.disconnect();
+      for (const sim of sims) sim.run(false);
+    });
+  });
 </script>

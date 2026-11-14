@@ -35,7 +35,8 @@ const payload = {
     <p>{t.lead}</p>
   </div>
 
-  <div class="map-body">
+  <!-- Lo pinta el script: al cambiar de idioma se sustituye entero (src/scripts/langSwitch.ts). -->
+  <div class="map-body" data-i18n-swap>
     <figure class="map-fig">
       <div class="map-fig__bar">
         <span class="map-fig__who">
@@ -80,6 +81,7 @@ const payload = {
 </section>
 
 <script>
+  import { register } from '../scripts/islands';
   import { renderMap } from '../scripts/activityMap';
   import type { MapState, Station } from '../scripts/activityMap';
 
@@ -94,7 +96,8 @@ const payload = {
 
   const STEP_MS = 4500;
 
-  for (const root of document.querySelectorAll<HTMLElement>('[data-mapsec]')) {
+  // Se monta con una señal para poder desmontarlo al cambiar de idioma sin recargar (`src/scripts/islands.ts`).
+  register('[data-mapsec]', (root, signal) => {
     const data: Payload = JSON.parse(root.dataset.payload ?? '{}');
     const q = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
     const host = q('[data-map-svg]');
@@ -155,11 +158,11 @@ const payload = {
       render();
     };
 
-    root.addEventListener('animationend', (event) => {
+    const onAnimationEnd = (event: AnimationEvent) => {
       if (event.animationName === 'map-prog' && playing) goTo(step + 1);
-    });
+    };
 
-    root.addEventListener('click', (event) => {
+    const onClick = (event: MouseEvent) => {
       const btn = (event.target as HTMLElement).closest<HTMLElement>('button');
       if (!btn) return;
       if (btn.dataset.mapStep !== undefined) {
@@ -179,17 +182,22 @@ const payload = {
         playing = !playing;
         render();
       }
-    });
+    };
 
-    document.addEventListener('visibilitychange', syncRun);
-    new IntersectionObserver(
+    // Los listeners del propio bloque también se quitan: el bloque sigue en la página y se vuelve a montar encima.
+    root.addEventListener('animationend', onAnimationEnd, { signal });
+    root.addEventListener('click', onClick, { signal });
+    document.addEventListener('visibilitychange', syncRun, { signal });
+    const observer = new IntersectionObserver(
       (entries) => {
         inView = entries.some((e) => e.isIntersecting);
         syncRun();
       },
       { threshold: 0.15 },
-    ).observe(root);
+    );
+    observer.observe(root);
+    signal.addEventListener('abort', () => observer.disconnect());
 
     render();
-  }
+  });
 </script>

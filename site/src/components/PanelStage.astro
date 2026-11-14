@@ -13,7 +13,7 @@ interface Props {
 const { expand, expandLabel, close } = Astro.props;
 ---
 
-<div class="pn-stage" data-pn-stage>
+<div class="pn-stage" data-pn-stage data-i18n-swap>
   <div class="pn-stage__box" aria-label={expandLabel} data-pn-box>
     <div class="pn-stage__frame" data-pn-frame>
       <div class="pn-stage__size" data-pn-size>
@@ -32,6 +32,8 @@ const { expand, expandLabel, close } = Astro.props;
 </div>
 
 <script>
+  import { register } from '../scripts/islands';
+
   // Ancho del panel en escritorio: la columna de 1200 px menos el margen de 28 px por lado.
   const DESKTOP = 1144;
   // Abierto, se reservan 8 px a la izquierda y una franja de 52 px a la derecha para el botón de cerrar.
@@ -39,7 +41,8 @@ const { expand, expandLabel, close } = Astro.props;
   const mobile = window.matchMedia('(max-width: 760px)');
   const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  for (const stage of document.querySelectorAll<HTMLElement>('[data-pn-stage]')) {
+  // Se monta con una señal para poder desmontarlo al cambiar de idioma sin recargar (`src/scripts/islands.ts`).
+  register('[data-pn-stage]', (stage, signal) => {
     const q = <T extends HTMLElement>(sel: string) => stage.querySelector<T>(sel)!;
     const box = q('[data-pn-box]');
     const frame = q('[data-pn-frame]');
@@ -81,9 +84,14 @@ const { expand, expandLabel, close } = Astro.props;
       size.style.height = `${fit.offsetHeight * k}px`;
     };
 
-    new ResizeObserver(layout).observe(fit);
-    window.addEventListener('resize', layout);
-    mobile.addEventListener('change', layout);
+    const resize = new ResizeObserver(layout);
+    resize.observe(fit);
+    window.addEventListener('resize', layout, { signal });
+    mobile.addEventListener('change', layout, { signal });
+    signal.addEventListener('abort', () => {
+      resize.disconnect();
+      document.documentElement.classList.remove('pn-locked');
+    });
     layout();
 
     // Transformación final del marco abierto: centrado y, en vertical, girado.
@@ -150,5 +158,5 @@ const { expand, expandLabel, close } = Astro.props;
     box.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') hide();
     });
-  }
+  });
 </script>

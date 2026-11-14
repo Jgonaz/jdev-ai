@@ -801,6 +801,12 @@ pnpm --dir site build     # compila en site/dist; es su validación
 
 Los textos viven en `site/src/i18n/` (`es.ts` y `en.ts`, con la misma forma) y
 resumen este README: si cambia lo que cuentan, actualízalos en ambos idiomas.
+El selector ES / EN cambia de idioma sin recargar (`site/src/scripts/langSwitch.ts`):
+descarga la otra versión y anima cada texto que cambia, así que las dos deben
+salir del mismo marcado. Los bloques que pinta un script se registran con
+`site/src/scripts/islands.ts`, para poder desmontarlos y volver a montarlos, y
+llevan `data-i18n-swap`, para sustituirse enteros. Las entradas al hacer scroll
+son CSS (`animation-timeline: view()`) y desaparecen con movimiento reducido.
 Se publica en el proyecto `jdev-ai` de Vercel, que usa `site` como directorio
 raíz. No está conectado al repositorio de GitHub, así que un push no la
 publica: despliega desde la raíz del harness con `vercel deploy --prod`. El
