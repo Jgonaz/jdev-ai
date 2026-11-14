@@ -63,6 +63,11 @@ type WorkspaceValue = {
   focusTick: number;
   /** Consume una petición de foco pendiente. */
   takeFocusRequest: () => boolean;
+  /** Sesión recién creada desde el panel que aún arranca: su terminal muestra la carga y toma el foco al quedar lista. */
+  launching: string | null;
+  startLaunch: (name: string) => void;
+  /** Da por terminado el arranque de esa sesión (si sigue siendo la que arranca). */
+  endLaunch: (name: string) => void;
 };
 
 /** Valores iniciales de Nueva sesión. */
@@ -72,13 +77,15 @@ export type NewSessionInit = {
   location?: LocationId;
   /** Nombre del worktree existente (con location «existing-worktree»). */
   worktree?: string;
-  /** Agente preseleccionado (p. ej. «Nueva terminal» de la barra lateral abre con la terminal sin agente). */
+  /** Agente preseleccionado; sin él, el agente por defecto de los ajustes. */
   agent?: AgentId;
 };
 
 /** Debajo de este ancho el panel de contexto no cabe junto a las terminales. */
 export const CONTEXT_NARROW_QUERY = '(max-width: 1100px)';
 const FOCUS_REQUEST_MS = 3000;
+/** Tope de la carga de una sesión nueva: si el agente no llega a avisar (hooks rotos), la terminal se muestra igual. */
+const LAUNCH_MAX_MS = 30_000;
 
 const Ctx = createContext<WorkspaceValue | null>(null);
 
@@ -95,6 +102,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [focusTick, setFocusTick] = useState(0);
   const focusUntil = useRef(0);
   const [prefs, setPrefsState] = useState<UiPrefs>(() => loadUiPrefs());
+  const [launching, setLaunching] = useState<string | null>(null);
 
   // «Distribución al abrir»: una vez cargados los ajustes, salvo «la última usada».
   const layoutAplicado = useRef(false);
@@ -179,6 +187,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     focusUntil.current = 0;
     return vigente;
   }, []);
+  const startLaunch = useCallback((name: string) => setLaunching(name), []);
+  const endLaunch = useCallback((name: string) => setLaunching((l) => (l === name ? null : l)), []);
+  useEffect(() => {
+    if (launching === null) return;
+    const t = window.setTimeout(() => endLaunch(launching), LAUNCH_MAX_MS);
+    return () => window.clearTimeout(t);
+  }, [launching, endLaunch]);
   const contextVisible = narrow ? overlayOpen : prefs.contextOpen;
 
   const visible = useMemo(() => visibleTabs(workspace), [workspace]);
@@ -212,6 +227,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       requestTerminalFocus,
       focusTick,
       takeFocusRequest,
+      launching,
+      startLaunch,
+      endLaunch,
     }),
     [
       workspace,
@@ -242,6 +260,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       requestTerminalFocus,
       focusTick,
       takeFocusRequest,
+      launching,
+      startLaunch,
+      endLaunch,
     ],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;

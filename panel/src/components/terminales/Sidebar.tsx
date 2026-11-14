@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { archivedEntries, notArchived } from '../../lib/archive.ts';
 import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, visibleRecent } from '../../lib/recent.ts';
 import type { RecentGroup } from '../../lib/recent.ts';
-import { SHELL_AGENT, groupSessions, isRunning, sessionMeta, visualState } from '../../lib/sessions.ts';
+import { groupSessions, isRunning, sessionMeta, visualState } from '../../lib/sessions.ts';
 import type { ProjectGroup } from '../../lib/sessions.ts';
 import { recentTip, sessionTip } from '../../lib/sidebarTip.ts';
 import { formatRelative } from '../../lib/time.ts';
@@ -155,12 +155,12 @@ function mergeGroups(vivas: ProjectGroup[], anteriores: RecentGroup[]): SidebarG
   return [...porId.values()];
 }
 
-/** «+» de cada proyecto: abre «Nueva sesión» con ese proyecto y la terminal sin agente elegidos. */
+/** «+» de cada proyecto: abre «Nueva sesión» con ese proyecto y el agente por defecto (Claude salvo que se cambie). */
 function NewTerminalButton({ project }: { project: ProjectInfo }) {
   const { openDialog } = useWorkspace();
   const etiqueta = `Nueva terminal en ${project.name}`;
   return (
-    <button type="button" className="group__add" aria-label={etiqueta} title={etiqueta} onClick={() => openDialog({ project: project.id, agent: SHELL_AGENT })}>
+    <button type="button" className="group__add" aria-label={etiqueta} title={etiqueta} onClick={() => openDialog({ project: project.id })}>
       <IconPlus size={13} />
     </button>
   );

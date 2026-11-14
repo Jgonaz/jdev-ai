@@ -28,7 +28,7 @@ function proyectoInicial(projects: readonly ProjectInfo[], activo: string | unde
 export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
   const { settings } = useSettings();
   const { projects, sessions, upsert } = useSessions();
-  const { workspace, closeDialog, openSession, newSessionInit: init } = useWorkspace();
+  const { workspace, closeDialog, openSession, startLaunch, newSessionInit: init } = useWorkspace();
   const idProyecto = useId();
   const idPrompt = useId();
   const idAgente = useId();
@@ -125,6 +125,7 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
       upsert(r.session);
       const junta = junto && workspace.active !== null;
       openSession(r.session.name, junta ? { nextToActive: true, minLayout: 2 } : undefined);
+      startLaunch(r.session.name);
       closeDialog();
       onCreated();
     } catch (e) {

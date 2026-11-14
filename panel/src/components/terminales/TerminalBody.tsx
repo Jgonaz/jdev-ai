@@ -43,10 +43,13 @@ type Props = {
   /** La pestaña se ve como chat: la terminal sigue conectada pero oculta (no se reajusta mientras mide 0). */
   hidden?: boolean;
   onFocus: () => void;
+  /** Sesión recién creada que aún arranca: se muestra la carga y, al quedar lista, toma el foco. */
+  launch?: { ready: boolean; label: string } | null;
+  onLaunched?: () => void;
 };
 
 /** Una terminal xterm.js conectada por WebSocket a una sesión de tmux del servidor. */
-export function TerminalBody({ name, active, suspended, hidden = false, onFocus }: Props) {
+export function TerminalBody({ name, active, suspended, hidden = false, onFocus, launch = null, onLaunched }: Props) {
   const { settings, appearanceKey } = useSettings();
   const { focusTick, takeFocusRequest } = useWorkspace();
   const { home } = useSessions();
@@ -386,6 +389,22 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus 
     if (takeFocusRequest() || terminalMayTakeFocus(document.activeElement)) term.current?.focus();
   }, [active, suspended, conexion, focusTick, takeFocusRequest]);
 
+  // Fin del arranque de una sesión nueva: con la terminal conectada y el agente listo, se le da
+  // el foco para empezar a escribir. Se fuerza (el cierre del diálogo lo devuelve a su botón)
+  // salvo que la persona ya esté escribiendo en otro campo mientras esperaba.
+  const lanzando = launch !== null;
+  const lanzamientoListo = launch?.ready ?? false;
+  const alLanzar = useRef(onLaunched);
+  alLanzar.current = onLaunched;
+  useEffect(() => {
+    if (!lanzando || !lanzamientoListo || suspended || conexion !== 'abierta') return;
+    if (!escribiendoEnOtroCampo(document.activeElement)) term.current?.focus();
+    alLanzar.current?.();
+  }, [lanzando, lanzamientoListo, suspended, conexion]);
+
+  // Mientras conecta o arranca el agente se muestra la carga en lugar del aviso de conexión.
+  const cargando = lanzando && (conexion === 'conectando' || (conexion === 'abierta' && !lanzamientoListo));
+
   return (
     <div ref={root} className="termbody" hidden={hidden} {...dropProps}>
       <div ref={host} id={`term-${name}`} className="termbody__host" />
@@ -393,7 +412,13 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus 
       {hover && <ImageHoverCard key={hover.path} info={hover} session={name} preview={settings.terminal.hoverPreview} container={root.current} />}
       {dragging && <DropZone />}
       <AttachNotices notices={notices} onDismiss={dismiss} onView={(ruta) => openInViewer(name, ruta)} />
-      {conexion !== 'abierta' && (
+      {cargando && (
+        <div className="termbody__overlay termbody__overlay--loading" role="status" aria-busy="true">
+          <span className="termbody__spinner" aria-hidden="true" />
+          <span>{launch?.label}</span>
+        </div>
+      )}
+      {!cargando && conexion !== 'abierta' && (
         <div className="termbody__overlay" role="status">
           {conexion === 'conectando' && <span>Conectando con la sesión…</span>}
           {conexion === 'reconectando' && <span>Conexión perdida. Reintentando…</span>}
@@ -410,4 +435,10 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus 
       )}
     </div>
   );
+}
+
+/** ¿Tiene el foco un campo de texto ajeno a las terminales? (xterm escribe en un textarea propio). */
+function escribiendoEnOtroCampo(activo: Element | null): boolean {
+  if (!activo || activo.closest('.termbody')) return false;
+  return activo.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
 }

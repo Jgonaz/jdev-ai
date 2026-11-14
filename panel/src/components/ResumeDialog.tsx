@@ -20,7 +20,7 @@ type Preview =
  */
 export function ResumeDialog({ recent, onCreated }: { recent: RecentSession; onCreated: () => void }) {
   const { upsert, reloadRecent, projects } = useSessions();
-  const { closeResume, openSession } = useWorkspace();
+  const { closeResume, openSession, startLaunch } = useWorkspace();
   const ahora = useNow(15_000);
   const [preview, setPreview] = useState<Preview>({ estado: 'pendiente' });
   const [enviando, setEnviando] = useState(false);
@@ -51,6 +51,7 @@ export function ResumeDialog({ recent, onCreated }: { recent: RecentSession; onC
       const r = await api.createSession(peticion);
       upsert(r.session);
       openSession(r.session.name);
+      startLaunch(r.session.name);
       closeResume();
       onCreated();
       reloadRecent();

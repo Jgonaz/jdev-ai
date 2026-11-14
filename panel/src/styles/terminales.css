@@ -739,6 +739,20 @@
   color: var(--fg-muted);
   font-size: var(--text-md);
 }
+/* Arranque de una sesión nueva: tapa del todo el arranque del agente hasta que está listo. */
+.termbody__overlay--loading {
+  background: var(--bg-term);
+}
+/* El giro usa @keyframes spin de base.css; con prefers-reduced-motion queda el arco quieto. */
+.termbody__spinner {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 2px solid color-mix(in srgb, var(--fg-muted) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
 
 .slot {
   display: flex;

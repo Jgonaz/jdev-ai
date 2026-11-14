@@ -394,6 +394,10 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   puedes entrar desde cualquier terminal con `tmux -L jdev attach -t <sesión>`
   (el menú de cada terminal copia el comando). Las sesiones se terminan desde
   el panel, con confirmación.
+- **Arranque de una sesión nueva.** Al crear o retomar una sesión desde el panel,
+  su terminal muestra una carga hasta que está operativa (con Claude, hasta que
+  su hook `SessionStart` avisa de que ha arrancado; como mucho 30 s) y entonces
+  toma el foco para que empieces a escribir.
 - **Estados.** `bin/agent` registra en Claude Code unos hooks que ejecutan
   `bin/session-state` y guardan el estado de cada sesión en
   `~/.local/state/jdev-ai/sessions/`, aunque el panel no esté abierto. Cuando
@@ -584,7 +588,7 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   tienen su propio máximo y solo se ven dentro de los últimos 30 días) y retomar
   una la desarchiva. La lista se guarda en `~/.config/jdev-ai/archived.json` (respeta `XDG_CONFIG_HOME`; las
   sesiones que dejan de existir salen solas, máximo 500 conversaciones).
-- **Terminal (sin agente).** En «Nueva sesión» (o con el «+» de cada proyecto de la barra lateral, que abre el diálogo con ese proyecto y la terminal elegidos, y en el agente por defecto de la
+- **Terminal (sin agente).** En «Nueva sesión» (también desde el «+» de cada proyecto de la barra lateral, que abre el diálogo con ese proyecto y el agente por defecto, Claude salvo que lo cambies, y en el agente por defecto de la
   cabecera y de Ajustes) puedes elegir «Terminal (sin agente)»: una sesión de tmux
   con tu shell de login (`$SHELL -l`, o `bash -l`) en la carpeta del proyecto o de
   un worktree existente, para lanzar comandos o servidores. No usa `bin/agent`, no
