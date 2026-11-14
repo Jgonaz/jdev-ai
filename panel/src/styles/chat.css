@@ -760,6 +760,14 @@
   background: linear-gradient(to bottom, transparent, var(--bg-card));
   pointer-events: none;
 }
+/* Lo que va entre la conversación y la caja («Trabajando…», el aviso de espera, «Sin actualizar») queda justo debajo
+   de ese degradado: va por encima para que no se desvanezca con la conversación. */
+.chat__stale,
+.chat__work,
+.chat__wait {
+  position: relative;
+  z-index: 1;
+}
 .chat__composer {
   max-width: 820px;
   margin: 0 auto;

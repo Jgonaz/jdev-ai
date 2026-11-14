@@ -77,6 +77,12 @@ describe('Indicador de trabajo', () => {
     expect(r).toMatch(/margin:\s*0 auto/);
   });
 
+  it('queda por encima del degradado de la caja de entrada, igual que el aviso de espera y «Sin actualizar»', () => {
+    const r = regla(css, '.chat__stale,\n.chat__work,\n.chat__wait');
+    expect(r).toContain('position: relative');
+    expect(r).toContain('z-index: 1');
+  });
+
   it('el spinner gira con la animación global, que prefers-reduced-motion apaga, y solo usa tokens de tema', () => {
     const r = regla(css, '.chat__spinner');
     expect(r).toContain('animation: spin');
