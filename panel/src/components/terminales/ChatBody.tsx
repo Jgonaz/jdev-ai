@@ -19,7 +19,6 @@ import {
   progressPercent,
   resultText,
   searchChat,
-  splitHighlight,
   stepKey,
   toolsSummary,
   waitingNotice,
@@ -38,12 +37,17 @@ import { atBottom, followAfterScroll, resultNote } from '../../lib/follow.ts';
 import { visualState } from '../../lib/sessions.ts';
 import { formatClock } from '../../lib/statusline.ts';
 import { insertAtCursor, pastedImages } from '../../lib/attachments.ts';
+import { toolStep, waitingView } from '../../lib/prompts.ts';
 import { useConversation } from '../../lib/useConversation.ts';
+import { usePrompt } from '../../lib/usePrompt.ts';
 import { useNow } from '../../lib/useNow.ts';
 import { uploadImages } from '../../lib/uploadImages.ts';
 import type { SessionInfo } from '../../types.ts';
 import { IconArrowDown, IconChat, IconChevron, IconChevronDown, IconChevronUp, IconClose, IconSearch, IconSend } from '../Icons.tsx';
 import { Markdown } from '../Markdown.tsx';
+import { resalta } from './chatHighlight.tsx';
+import { PermissionCard, PromptContext, QuestionCard } from './ChatPrompts.tsx';
+import type { PromptContextValue } from './ChatPrompts.tsx';
 import { useFileDrop } from './useFileDrop.ts';
 
 /** A partir de tantos elementos pintados se deja que el navegador se salte el pintado de lo que queda fuera de pantalla. */
@@ -55,14 +59,6 @@ export const RETARDO_BUSQUEDA = 200;
 const RETARDO_ANUNCIO = 1500;
 
 const SIN_COINCIDENCIAS: ReadonlySet<string> = new Set();
-
-/** Un texto con las coincidencias de la búsqueda dentro de `<mark>`; el mismo texto si no hay búsqueda. */
-function resalta(texto: string, consulta: string): ReactNode {
-  if (consulta.trim() === '') return texto;
-  const partes = splitHighlight(texto, consulta);
-  if (partes.length === 1 && !partes[0]!.hit) return texto;
-  return partes.map((p, i) => (p.hit ? <mark key={i}>{p.text}</mark> : p.text));
-}
 
 const claseHit = (hit: boolean, actual: boolean): string => (hit ? ` chat__hit${actual ? ' chat__hit--cur' : ''}` : '');
 
@@ -193,6 +189,13 @@ function ItemViewBase({ item, consulta: consultaItem, hits, curKey }: { item: Ch
   const hit = hits.has(item.key);
   const actual = curKey === item.key;
   const hora = item.at !== null ? ` · ${formatClock(item.at)}` : '';
+  if (item.kind === 'question') {
+    return (
+      <div ref={raiz} className={`chat__item${claseHit(hit, actual)}`} data-hit={hit ? item.key : undefined}>
+        <QuestionCard item={item} consulta={consulta} />
+      </div>
+    );
+  }
   if (item.kind === 'user') {
     return (
       <div ref={raiz} className={`chat__item chat__user${claseHit(hit, actual)}`} data-hit={hit ? item.key : undefined}>
@@ -472,7 +475,7 @@ function Composer({ nombre, onSent, onTerminal, btwContext }: ComposerProps) {
           </div>
         )}
         <span className="chat__hint" id={idNota}>
-          Enter envía · Shift+Enter, salto de línea · pega o suelta imágenes · permisos y menús, en la terminal
+          Enter envía · Shift+Enter, salto de línea · pega o suelta imágenes · los menús de comandos, en la terminal
         </span>
       </div>
     </div>
@@ -503,6 +506,10 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
   const items = conv.chat.items;
   const esperando = estado === 'waiting';
   const aviso = waitingNotice(session.notice);
+  // Qué hay abierto en la terminal: solo se pregunta mientras la sesión espera y la vista está a la vista.
+  const prompt = usePrompt(session.name, active && esperando);
+  const cuando = waitingView(esperando, prompt, items);
+  const pasoPermiso = cuando.permission?.toolUseId !== undefined ? toolStep(items, cuando.permission.toolUseId) : null;
   // Respuestas de /btw: no están en la transcripción, van aparte, en el punto donde se preguntó.
   const btwTodos = useBtwBlocks(session.name);
   const btwPorPunto = useMemo(() => groupBtwByAnchor(btwTodos, conv.sessionId, items.length), [btwTodos, conv.sessionId, items.length]);
@@ -734,6 +741,21 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
     };
   }, [items, conv.synced]);
 
+  // Una pregunta que solo conoce la terminal (aún no está en la conversación) también se anuncia, una vez por pregunta.
+  const idPreguntaAlFinal = cuando.question?.id ?? null;
+  useEffect(() => {
+    if (idPreguntaAlFinal === null) return;
+    setAnuncio('');
+    const id = window.setTimeout(() => setAnuncio('Claude te pregunta'), 50);
+    return () => window.clearTimeout(id);
+  }, [idPreguntaAlFinal]);
+
+  const refrescarConversacion = conv.refrescar;
+  const contexto = useMemo<PromptContextValue>(
+    () => ({ nombre: session.name, esperando, prompt: prompt.prompt, onTerminal, refrescarPrompt: prompt.refrescar, refrescarConversacion }),
+    [session.name, esperando, prompt.prompt, onTerminal, prompt.refrescar, refrescarConversacion],
+  );
+
   const alEnviar = (r: ChatSendResponse) => {
     setComandoEspera(r.awaitingTerminal === true);
     alFinal();
@@ -747,182 +769,197 @@ export function ChatBody({ session, active, searching, onSearching, searchTick, 
   const vacia = conv.synced && items.length === 0 && btwPorPunto.size === 0;
 
   return (
-    <div className="chat">
-      {searching && (
-        <div className="chat__search" role="search" onKeyDown={alPulsarBusqueda}>
-          <label htmlFor={idBusca} className="sr-only">
-            Buscar en la conversación
-          </label>
-          <div className={`chat__searchbox${consulta.trim() !== '' && !pendiente && coincidencias.length === 0 ? ' chat__searchbox--none' : ''}`}>
-            <IconSearch size={14} />
-            <input
-              id={idBusca}
-              ref={campo}
-              className="chat__searchinput"
-              type="text"
-              value={consulta}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => {
-                setConsulta(e.target.value);
-                setClaveActual(null);
-              }}
-            />
-            <span
-              className={`chat__count-hits${consulta.trim() !== '' && !pendiente && coincidencias.length === 0 ? ' chat__count-hits--none' : ''}`}
-              role="status"
-              title={coincidencias.length > MAX_RESALTADAS ? `Se cuentan todas, pero solo se resaltan las ${MAX_RESALTADAS} más cercanas a la actual.` : undefined}
-            >
-              {consulta.trim() === '' ? '' : pendiente ? 'Buscando…' : hitCountLabel(indice, coincidencias.length)}
-            </span>
-          </div>
-          <button type="button" className="chat__sbtn" aria-label="Coincidencia anterior" disabled={coincidencias.length === 0} onClick={() => ir(-1)}>
-            <IconChevronUp size={14} />
-          </button>
-          <button type="button" className="chat__sbtn" aria-label="Coincidencia siguiente" disabled={coincidencias.length === 0} onClick={() => ir(1)}>
-            <IconChevronDown size={14} />
-          </button>
-          <button type="button" className="chat__sbtn chat__sbtn--plain" aria-label="Cerrar búsqueda (Esc)" onClick={cerrar}>
-            <IconClose size={14} />
-          </button>
-        </div>
-      )}
-      {searching && consulta.trim() !== '' && !pendiente && coincidencias.length === 0 && (
-        <p className="chat__searchtip">Busca en los mensajes, los nombres de las acciones y sus resultados, sin distinguir mayúsculas ni tildes.</p>
-      )}
-
-      <div className="chat__main">
-        <div
-          ref={cuerpo}
-          className="chat__scroll"
-          role="log"
-          aria-live="off"
-          aria-label="Conversación"
-          tabIndex={0}
-          // Cualquier scroll que no termine abajo suelta el seguimiento (rueda, barra, táctil, teclado, scrollIntoView).
-          // Solo se vuelve a seguir al llegar abajo si la ventana de render llega al último elemento.
-          onScroll={(ev) => {
-            const abajo = atBottom(ev.currentTarget);
-            const propio = performance.now() < programatico.current;
-            // Al soltar el final, la ventana se fija para que los elementos nuevos no desplacen lo que se está leyendo.
-            if (!abajo && !propio) setVentana((v) => v ?? { from: rango.current[0], to: null });
-            setSeguir((a) => followAfterScroll(a, abajo && enCola, propio));
-          }}
-        >
-          {cargando ? (
-            <div className="chat__state" role="status">
-              <div className="chat__progress" aria-hidden="true">
-                <div className="chat__progressfill" style={{ width: `${progressPercent(conv.from, conv.size)}%` }} />
-              </div>
-              <p>Cargando la conversación…</p>
-              {conv.size > 0 && <p className="chat__statenote">{progressLabel(conv.from, conv.size)} · la búsqueda cubre todo en cuanto termina</p>}
+    <PromptContext.Provider value={contexto}>
+      <div className="chat">
+        {searching && (
+          <div className="chat__search" role="search" onKeyDown={alPulsarBusqueda}>
+            <label htmlFor={idBusca} className="sr-only">
+              Buscar en la conversación
+            </label>
+            <div className={`chat__searchbox${consulta.trim() !== '' && !pendiente && coincidencias.length === 0 ? ' chat__searchbox--none' : ''}`}>
+              <IconSearch size={14} />
+              <input
+                id={idBusca}
+                ref={campo}
+                className="chat__searchinput"
+                type="text"
+                value={consulta}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => {
+                  setConsulta(e.target.value);
+                  setClaveActual(null);
+                }}
+              />
+              <span
+                className={`chat__count-hits${consulta.trim() !== '' && !pendiente && coincidencias.length === 0 ? ' chat__count-hits--none' : ''}`}
+                role="status"
+                title={coincidencias.length > MAX_RESALTADAS ? `Se cuentan todas, pero solo se resaltan las ${MAX_RESALTADAS} más cercanas a la actual.` : undefined}
+              >
+                {consulta.trim() === '' ? '' : pendiente ? 'Buscando…' : hitCountLabel(indice, coincidencias.length)}
+              </span>
             </div>
-          ) : fallo ? (
-            <div className="chat__state">
-              <div className="chat__alert" role="alert">
-                <span>
-                  No se pudo leer la conversación. La terminal sigue funcionando.
-                  <span className="chat__alertwhy"> {conv.error}</span>
-                </span>
-                <button type="button" className="chat__retry" onClick={conv.refrescar}>
-                  Reintentar
-                </button>
-              </div>
-            </div>
-          ) : vacia ? (
-            <div className="chat__state">
-              <IconChat size={28} />
-              <p>Todavía no hay mensajes en esta sesión.</p>
-              <p className="chat__statenote">Escribe abajo para empezar.</p>
-            </div>
-          ) : (
-            <div ref={lista} className={`chat__list${hasta - desde > LISTA_LARGA ? ' chat__list--long' : ''}`}>
-              {desde > 0 && (
-                <div ref={marcaArriba} className="chat__more">
-                  <button type="button" className="chat__morebtn" onClick={() => cambiaVentana((v) => windowUp(v, items.length), true)}>
-                    <IconChevronUp size={13} />
-                    Mostrar anteriores ({desde.toLocaleString('es-ES')} más)
-                  </button>
-                </div>
-              )}
-              {items.slice(desde, hasta).map((it, k) => {
-                const i = desde + k;
-                const conCoincidencias = i >= resaltaDesde && i <= resaltaHasta;
-                return (
-                  <Fragment key={it.key}>
-                    {btwPorPunto.get(i)?.map((b) => <BtwView key={b.id} bloque={b} onTerminal={onTerminal} />)}
-                    <ItemView item={it} consulta={conCoincidencias ? activa : ''} hits={(conCoincidencias && porElemento.get(i)) || SIN_COINCIDENCIAS} curKey={i === itemActual ? actual : null} />
-                  </Fragment>
-                );
-              })}
-              {enCola && btwPorPunto.get(items.length)?.map((b) => <BtwView key={b.id} bloque={b} onTerminal={onTerminal} />)}
-              {!enCola && (
-                <div ref={marcaAbajo} className="chat__more">
-                  <button type="button" className="chat__morebtn" onClick={() => cambiaVentana((v) => windowDown(v, items.length), false)}>
-                    <IconChevronDown size={13} />
-                    Mostrar siguientes ({(items.length - hasta).toLocaleString('es-ES')} más)
-                  </button>
-                  <button type="button" className="chat__morebtn" onClick={alFinal}>
-                    <IconArrowDown size={13} />
-                    Ir al final
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        {/* La región existe siempre: así el lector de pantalla anuncia la pastilla cuando aparece o cambia su cuenta. */}
-        <div className="chat__pillslot" role="status">
-          {nuevos > 0 && (
-            <button type="button" className="chat__newpill" onClick={alFinal}>
-              <IconArrowDown size={13} />
-              {newMessagesLabel(nuevos)}
+            <button type="button" className="chat__sbtn" aria-label="Coincidencia anterior" disabled={coincidencias.length === 0} onClick={() => ir(-1)}>
+              <IconChevronUp size={14} />
             </button>
-          )}
+            <button type="button" className="chat__sbtn" aria-label="Coincidencia siguiente" disabled={coincidencias.length === 0} onClick={() => ir(1)}>
+              <IconChevronDown size={14} />
+            </button>
+            <button type="button" className="chat__sbtn chat__sbtn--plain" aria-label="Cerrar búsqueda (Esc)" onClick={cerrar}>
+              <IconClose size={14} />
+            </button>
+          </div>
+        )}
+        {searching && consulta.trim() !== '' && !pendiente && coincidencias.length === 0 && (
+          <p className="chat__searchtip">Busca en los mensajes, los nombres de las acciones y sus resultados, sin distinguir mayúsculas ni tildes.</p>
+        )}
+
+        <div className="chat__main">
+          <div
+            ref={cuerpo}
+            className="chat__scroll"
+            role="log"
+            aria-live="off"
+            aria-label="Conversación"
+            tabIndex={0}
+            // Cualquier scroll que no termine abajo suelta el seguimiento (rueda, barra, táctil, teclado, scrollIntoView).
+            // Solo se vuelve a seguir al llegar abajo si la ventana de render llega al último elemento.
+            onScroll={(ev) => {
+              const abajo = atBottom(ev.currentTarget);
+              const propio = performance.now() < programatico.current;
+              // Al soltar el final, la ventana se fija para que los elementos nuevos no desplacen lo que se está leyendo.
+              if (!abajo && !propio) setVentana((v) => v ?? { from: rango.current[0], to: null });
+              setSeguir((a) => followAfterScroll(a, abajo && enCola, propio));
+            }}
+          >
+            {cargando ? (
+              <div className="chat__state" role="status">
+                <div className="chat__progress" aria-hidden="true">
+                  <div className="chat__progressfill" style={{ width: `${progressPercent(conv.from, conv.size)}%` }} />
+                </div>
+                <p>Cargando la conversación…</p>
+                {conv.size > 0 && <p className="chat__statenote">{progressLabel(conv.from, conv.size)} · la búsqueda cubre todo en cuanto termina</p>}
+              </div>
+            ) : fallo ? (
+              <div className="chat__state">
+                <div className="chat__alert" role="alert">
+                  <span>
+                    No se pudo leer la conversación. La terminal sigue funcionando.
+                    <span className="chat__alertwhy"> {conv.error}</span>
+                  </span>
+                  <button type="button" className="chat__retry" onClick={conv.refrescar}>
+                    Reintentar
+                  </button>
+                </div>
+              </div>
+            ) : vacia ? (
+              <div className="chat__state">
+                <IconChat size={28} />
+                <p>Todavía no hay mensajes en esta sesión.</p>
+                <p className="chat__statenote">Escribe abajo para empezar.</p>
+              </div>
+            ) : (
+              <div ref={lista} className={`chat__list${hasta - desde > LISTA_LARGA ? ' chat__list--long' : ''}`}>
+                {desde > 0 && (
+                  <div ref={marcaArriba} className="chat__more">
+                    <button type="button" className="chat__morebtn" onClick={() => cambiaVentana((v) => windowUp(v, items.length), true)}>
+                      <IconChevronUp size={13} />
+                      Mostrar anteriores ({desde.toLocaleString('es-ES')} más)
+                    </button>
+                  </div>
+                )}
+                {items.slice(desde, hasta).map((it, k) => {
+                  const i = desde + k;
+                  const conCoincidencias = i >= resaltaDesde && i <= resaltaHasta;
+                  return (
+                    <Fragment key={it.key}>
+                      {btwPorPunto.get(i)?.map((b) => <BtwView key={b.id} bloque={b} onTerminal={onTerminal} />)}
+                      <ItemView item={it} consulta={conCoincidencias ? activa : ''} hits={(conCoincidencias && porElemento.get(i)) || SIN_COINCIDENCIAS} curKey={i === itemActual ? actual : null} />
+                    </Fragment>
+                  );
+                })}
+                {enCola && btwPorPunto.get(items.length)?.map((b) => <BtwView key={b.id} bloque={b} onTerminal={onTerminal} />)}
+                {!enCola && (
+                  <div ref={marcaAbajo} className="chat__more">
+                    <button type="button" className="chat__morebtn" onClick={() => cambiaVentana((v) => windowDown(v, items.length), false)}>
+                      <IconChevronDown size={13} />
+                      Mostrar siguientes ({(items.length - hasta).toLocaleString('es-ES')} más)
+                    </button>
+                    <button type="button" className="chat__morebtn" onClick={alFinal}>
+                      <IconArrowDown size={13} />
+                      Ir al final
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {/* La región existe siempre: así el lector de pantalla anuncia la pastilla cuando aparece o cambia su cuenta. */}
+          <div className="chat__pillslot" role="status">
+            {nuevos > 0 && (
+              <button type="button" className="chat__newpill" onClick={alFinal}>
+                <IconArrowDown size={13} />
+                {newMessagesLabel(nuevos)}
+              </button>
+            )}
+          </div>
+          <div className="sr-only" role="status" aria-atomic="true">
+            {anuncio}
+          </div>
         </div>
-        <div className="sr-only" role="status" aria-atomic="true">
-          {anuncio}
-        </div>
+
+        {conv.error !== null && conv.synced && (
+          <div className="chat__stale" role="status">
+            <span>Sin actualizar: {conv.error}</span>
+            <button type="button" className="link-btn" onClick={conv.refrescar}>
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {estado === 'working' && <WorkingIndicator turno={conv.chat.turn} desde={session.updatedAt} />}
+
+        {cuando.permission !== null && (
+          <div className="chat__prompt">
+            <PermissionCard prompt={cuando.permission} step={pasoPermiso} />
+          </div>
+        )}
+
+        {/* La pregunta que anunció el hook y cuya línea aún no ha llegado a la transcripción: al final, antes de la caja. En cuanto llega, pasa a su sitio de la conversación con la misma selección (el borrador es por id). */}
+        {cuando.question !== null && (
+          <div className="chat__prompt">
+            <QuestionCard key={cuando.question.id} item={cuando.question} consulta="" />
+          </div>
+        )}
+
+        {cuando.notice && (
+          <div className="chat__wait" role="status">
+            <span className="chat__waitdot" aria-hidden="true" />
+            <span className="chat__waittext">
+              {aviso.text}
+              {aviso.detail !== null && <span className="chat__waitdetail">{aviso.translated ? aviso.detail : `«${aviso.detail}»`}</span>}
+            </span>
+            <button type="button" className="chat__waitbtn" onClick={onTerminal}>
+              Ir a la terminal
+            </button>
+          </div>
+        )}
+
+        {comandoEspera && (
+          <div className="chat__wait" role="status">
+            <span className="chat__waitdot" aria-hidden="true" />
+            <span className="chat__waittext">El comando espera en la terminal: ábrela para responderlo. No se envían más mensajes hasta que se cierre.</span>
+            <button type="button" className="chat__waitbtn" onClick={onTerminal}>
+              Ir a la terminal
+            </button>
+            <button type="button" className="link-btn" onClick={() => setComandoEspera(false)}>
+              Descartar
+            </button>
+          </div>
+        )}
+
+        <Composer nombre={session.name} onSent={alEnviar} onTerminal={onTerminal} btwContext={() => contextoBtw.current} />
       </div>
-
-      {conv.error !== null && conv.synced && (
-        <div className="chat__stale" role="status">
-          <span>Sin actualizar: {conv.error}</span>
-          <button type="button" className="link-btn" onClick={conv.refrescar}>
-            Reintentar
-          </button>
-        </div>
-      )}
-
-      {estado === 'working' && <WorkingIndicator turno={conv.chat.turn} desde={session.updatedAt} />}
-
-      {esperando && (
-        <div className="chat__wait" role="status">
-          <span className="chat__waitdot" aria-hidden="true" />
-          <span className="chat__waittext">
-            {aviso.text}
-            {aviso.detail !== null && <span className="chat__waitdetail">{aviso.translated ? aviso.detail : `«${aviso.detail}»`}</span>}
-          </span>
-          <button type="button" className="chat__waitbtn" onClick={onTerminal}>
-            Ir a la terminal
-          </button>
-        </div>
-      )}
-
-      {comandoEspera && (
-        <div className="chat__wait" role="status">
-          <span className="chat__waitdot" aria-hidden="true" />
-          <span className="chat__waittext">El comando espera en la terminal: ábrela para responderlo. No se envían más mensajes hasta que se cierre.</span>
-          <button type="button" className="chat__waitbtn" onClick={onTerminal}>
-            Ir a la terminal
-          </button>
-          <button type="button" className="link-btn" onClick={() => setComandoEspera(false)}>
-            Descartar
-          </button>
-        </div>
-      )}
-
-      <Composer nombre={session.name} onSent={alEnviar} onTerminal={onTerminal} btwContext={() => contextoBtw.current} />
-    </div>
+    </PromptContext.Provider>
   );
 }

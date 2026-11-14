@@ -5,6 +5,7 @@ import { useMediaQuery } from '../lib/useMediaQuery.ts';
 import { followKey, isFollowKey } from '../lib/follow.ts';
 import type { FollowKind } from '../lib/follow.ts';
 import { forgetBtw } from '../lib/btw.ts';
+import { forgetPrompts } from '../lib/prompts.ts';
 import { forgetConversation } from '../lib/useConversation.ts';
 import { forgetFollow } from '../lib/useFollow.ts';
 import { visualState } from '../lib/sessions.ts';
@@ -140,6 +141,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     else {
       forgetConversation(name);
       forgetBtw(name);
+      forgetPrompts(name);
     }
     dispatch({ type: 'close', name });
   }, []);

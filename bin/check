@@ -168,6 +168,7 @@ check "claude recibe el hook de títulos" 'run demo && args claude | grep -q "\"
 # Hooks de estado y de título en el --settings de Claude, y proyecto exportado.
 settings() { args claude | sed -n '/^--settings$/{n;p;}'; }
 check "claude registra session-state en todos sus eventos" 'run demo && for ev in SessionStart UserPromptSubmit PostToolUse Notification Stop SessionEnd; do settings | grep -q "\"$ev\":\[.*session-state. --hook" || return 1; done'
+check "claude registra lo pendiente: PreToolUse de AskUserQuestion y PermissionRequest con session-state" 'run demo && s=$(settings) && printf "%s" "$s" | grep -q "\"PreToolUse\":\[{\"matcher\":\"Agent\".*{\"matcher\":\"AskUserQuestion\",\"hooks\":\[{\"type\":\"command\",\"command\":\"[^\"]*session-state. --hook\"}\]}\]" && printf "%s" "$s" | grep -q "\"PermissionRequest\":\[{\"hooks\":\[{\"type\":\"command\",\"command\":\"[^\"]*session-state. --hook\"}\]}\]"'
 check "claude conserva los hooks anteriores junto a session-state" 'run demo && s=$(settings) && printf "%s" "$s" | grep -q "startup|clear.*session-status. --hook" && printf "%s" "$s" | grep -q "subagent-notice" && printf "%s" "$s" | grep -q "session-title. --hook"'
 if command -v python3 >/dev/null 2>&1; then
     cat > "$work/hooks.py" <<'EOF'
@@ -191,6 +192,11 @@ ok = (
     and has("PreToolUse", "subagent-notice", "Agent")
     and has("UserPromptSubmit", "session-title")
     and all(has(e, "session-state") for e in ("SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"))
+    # Lo pendiente: session-state en PreToolUse solo para AskUserQuestion (el de Agent sigue con su aviso) y en PermissionRequest.
+    and has("PreToolUse", "session-state", "AskUserQuestion")
+    and not has("PreToolUse", "session-state", "Agent")
+    and not has("PreToolUse", "subagent-notice", "AskUserQuestion")
+    and has("PermissionRequest", "session-state")
     # El de session-state en SessionStart no lleva matcher: cubre resume y compact.
     and any("session-state" in c for g in hooks["SessionStart"] if "matcher" not in g for c in [h["command"] for h in g["hooks"]])
 )
@@ -241,6 +247,8 @@ ok = (
     # Los hooks anteriores siguen ahí.
     and all(any("session-state" in c for c in commands(e)) for e in ("SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"))
     and any("subagent-notice" in c for c in commands("PreToolUse", "Agent"))
+    and any("session-state" in c for c in commands("PreToolUse", "AskUserQuestion"))
+    and any("session-state" in c for c in commands("PermissionRequest"))
     and any("session-title" in c for c in commands("UserPromptSubmit"))
 )
 sys.exit(0 if ok else 1)
@@ -329,6 +337,30 @@ printf '#!/bin/sh\n[ -z "${FAKE_TMUX_FAIL:-}" ] || exit 1\necho sesion-x\n' > "$
 chmod +x "$work/tmuxbin/tmux"
 check "session-state: guarda la sesión de tmux si hay \$TMUX" 'rm -rf "$ss_state"; PATH="$work/tmuxbin:$PATH" TMUX=/x ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"sesion-x\"" "$ss_file"'
 check "session-state: tmux sin \$TMUX o que falla deja la sesión vacía" 'rm -rf "$ss_state"; PATH="$work/tmuxbin:$PATH" ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"\"" "$ss_file" && rm -f "$ss_file" && PATH="$work/tmuxbin:$PATH" TMUX=/x FAKE_TMUX_FAIL=1 ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Stop\"}" && grep -q "\"tmux_session\":\"\"" "$ss_file"'
+# Lo pendiente (pregunta o permiso): se guarda el JSON del hook tal cual en prompts/, sin tocar el estado.
+ss_prompts="$ss_state/jdev-ai/prompts"
+ss_pfile="$ss_prompts/s1.json"
+ss_ask='{"session_id":"s1","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"¿Color \"x\"?","header":"Color","options":[{"label":"Rojo","description":"a"}],"multiSelect":false}]},"tool_use_id":"toolu_01","cwd":"/p"}'
+ss_perm='{"session_id":"s1","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm -f a.txt","description":"Borra"},"permission_suggestions":[{"type":"setMode","mode":"acceptEdits"}],"cwd":"/p"}'
+ss_same() { [ "$(cat "$1")" = "$2" ]; }
+check "session-state: PreToolUse de AskUserQuestion guarda el JSON tal cual" 'rm -rf "$ss_state"; ss "$ss_ask" && ss_quiet && ss_same "$ss_pfile" "$ss_ask" && ss_json_ok "$ss_pfile"'
+check "session-state: PermissionRequest guarda el JSON tal cual" 'rm -rf "$ss_state"; ss "$ss_perm" && ss_quiet && ss_same "$ss_pfile" "$ss_perm" && ss_json_ok "$ss_pfile"'
+check "session-state: lo pendiente va a prompts/ y no cambia ni crea el estado" 'rm -rf "$ss_state"; ss "$ss_ask" && [ ! -e "$ss_file" ] && [ ! -d "$ss_state/jdev-ai/sessions" ] && ss_expect Stop "" idle && ss "$ss_perm" && ss "$ss_ask" && grep -q "\"state\":\"idle\".*\"event\":\"Stop\"" "$ss_file" && [ "$(ls "$ss_state/jdev-ai/sessions" | wc -l)" -eq 1 ]'
+check "session-state: un PermissionRequest de AskUserQuestion no pisa la pregunta ni se guarda" 'rm -rf "$ss_state"; ss "$ss_ask" && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"AskUserQuestion\",\"tool_input\":{}}" && ss_same "$ss_pfile" "$ss_ask" && rm -rf "$ss_state" && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"AskUserQuestion\",\"tool_input\":{}}" && [ ! -e "$ss_state" ]'
+check "session-state: PreToolUse de otra herramienta, o un PermissionRequest sin herramienta, no se guardan" 'rm -rf "$ss_state"; ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}" && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Agent\"}" && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PermissionRequest\",\"tool_input\":{}}" && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"\"}" && ss_quiet && [ ! -e "$ss_state" ]'
+check "session-state: la tool_name de un valor anidado no cuenta" 'rm -rf "$ss_state"; ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PreToolUse\",\"tool_input\":{\"tool_name\":\"AskUserQuestion\"},\"tool_name\":\"Bash\"}" && [ ! -e "$ss_state" ]'
+check "session-state: un permiso posterior sustituye al anterior" 'rm -rf "$ss_state"; ss "$ss_ask" && ss "$ss_perm" && ss_same "$ss_pfile" "$ss_perm"'
+for ev in PostToolUse UserPromptSubmit Stop SessionEnd; do
+    check "session-state: $ev borra lo pendiente y sigue actualizando el estado" 'rm -rf "$ss_state"; ss "$ss_ask" && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"'$ev'\"}" && ss_quiet && [ ! -e "$ss_pfile" ] && [ -f "$ss_file" ] && grep -q "\"event\":\"'$ev'\"" "$ss_file"'
+done
+check "session-state: SessionStart y los avisos no borran lo pendiente" 'rm -rf "$ss_state"; ss "$ss_perm" && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"SessionStart\"}" && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"Notification\",\"notification_type\":\"permission_prompt\",\"message\":\"Claude needs your permission\"}" && ss_same "$ss_pfile" "$ss_perm" && grep -q "\"state\":\"waiting\"" "$ss_file"'
+check "session-state: borrar lo pendiente de otra sesión no toca la de esta" 'rm -rf "$ss_state"; ss "$ss_ask" && ss "{\"session_id\":\"s2\",\"hook_event_name\":\"Stop\"}" && ss_same "$ss_pfile" "$ss_ask"'
+check "session-state: borrar lo pendiente sin nada guardado sale 0 sin salida" 'rm -rf "$ss_state"; ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PostToolUse\"}" && ss_quiet'
+check "session-state: no guarda lo pendiente si pasa de 256 KiB, y sí si cabe" 'rm -rf "$ss_state"; big=$(awk "BEGIN { for (i = 0; i < 262200; i++) printf \"a\" }"); ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Write\",\"tool_input\":{\"content\":\"$big\"}}" && ss_quiet && [ ! -e "$ss_pfile" ] && small=$(awk "BEGIN { for (i = 0; i < 200000; i++) printf \"a\" }") && ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Write\",\"tool_input\":{\"content\":\"$small\"}}" && [ -f "$ss_pfile" ]'
+check "session-state: lo pendiente no deja temporales ni sesiones" 'rm -rf "$ss_state"; ss "$ss_ask"; ss "$ss_perm"; ss "{\"session_id\":\"s2\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"AskUserQuestion\"}"; [ -z "$(find "$ss_prompts" -type f ! -name "*.json")" ] && [ "$(ls "$ss_prompts" | wc -l)" -eq 2 ]'
+check "session-state: lo pendiente con session_id no válido no escribe" 'rm -rf "$ss_state"; for id in "a\\/b" "..\\/x" "a b" ""; do ss "{\"session_id\":\"$id\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\"}" && ss_quiet || return 1; done; [ ! -e "$ss_state" ]'
+check "session-state: prompts/ no escribible sale 0 sin salida" '[ "$(id -u)" -eq 0 ] || { rm -rf "$ss_state"; mkdir -p "$ss_prompts"; chmod 500 "$ss_prompts"; ss "$ss_ask"; r=$?; chmod 700 "$ss_prompts"; [ $r -eq 0 ] && ss_quiet && [ ! -e "$ss_pfile" ]; }'
+check "session-state: directorio de estado no escribible con lo pendiente sale 0 sin salida" ': > "$work/no-dir"; SS_HOME="$work/no-dir" ss "$ss_ask" && ss_quiet && SS_HOME="$work/no-dir" ss "{\"session_id\":\"s1\",\"hook_event_name\":\"PostToolUse\"}" && ss_quiet'
 check "session-state: sin --hook muestra el uso y sale con 2" '"$work/h/bin/session-state" >/dev/null 2>"$work/ss.err"; r1=$?; "$work/h/bin/session-state" otra >/dev/null 2>&1; r2=$?; [ $r1 -eq 2 ] && [ $r2 -eq 2 ] && grep -q "^Uso:" "$work/ss.err"'
 
 # Statusline del panel: session-statusline guarda el JSON de Claude y no imprime nada.

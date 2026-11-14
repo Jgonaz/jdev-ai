@@ -4,6 +4,8 @@ import { CONVERSATION_MAX_BYTES, isConversationId, isConversationKey, legacyTmux
 import type { ConversationEntry, Done } from './conversations.ts';
 import { DirStore } from './dirstore.ts';
 import { claudeConfigDir } from './paths.ts';
+import { PROMPT_HOOK_MAX_BYTES, parsePromptHook } from './prompt-hook.ts';
+import type { PromptHook } from './prompt-hook.ts';
 import { StateStore, deriveState, stateByTmuxSession } from './states.ts';
 import type { SessionState } from './states.ts';
 import { deleteConversationState } from './purge.ts';
@@ -97,6 +99,8 @@ export type SessionServiceOptions = {
   statuslineDir?: string;
   /** Registro de actividad por sesión; por defecto, `activity/` junto a stateDir. */
   activityDir?: string;
+  /** Lo que espera la persona (pregunta o permiso), que dejan los hooks; por defecto, `prompts/` junto a stateDir. */
+  promptsDir?: string;
   /** Estado de las conversaciones (hecha o abierta); por defecto, `conversations/` junto a stateDir. */
   conversationsDir?: string;
   /** Se invoca cuando cambia el estado de alguna conversación (también las que no están en el panel). */
@@ -124,6 +128,7 @@ export class SessionService {
   private readonly states: StateStore;
   private readonly statuslines: DirStore<Statusline>;
   private readonly activities: DirStore<ActivityEvent[]>;
+  private readonly prompts: DirStore<PromptHook>;
   private readonly conversations: DirStore<ConversationEntry>;
   private readonly conversationsDir: string;
   private readonly titles = new TitleReader();
@@ -165,6 +170,15 @@ export class SessionService {
       onChange: () => this.schedule(),
       pollMs: opts.stateFallbackMs,
     });
+    this.prompts = new DirStore<PromptHook>({
+      dir: opts.promptsDir ?? join(dirname(opts.stateDir), 'prompts'),
+      ext: '.json',
+      maxBytes: PROMPT_HOOK_MAX_BYTES,
+      // El nombre manda: un archivo que dice ser de otra sesión no se usa. No cambia la lista de sesiones.
+      parse: parsePromptHook,
+      onChange: () => {},
+      pollMs: opts.stateFallbackMs,
+    });
     this.conversationsDir = opts.conversationsDir ?? join(dirname(opts.stateDir), 'conversations');
     this.conversations = new DirStore<ConversationEntry>({
       dir: this.conversationsDir,
@@ -186,7 +200,7 @@ export class SessionService {
 
   async start(): Promise<void> {
     this.stopped = false;
-    await Promise.all([this.states.start(), this.statuslines.start(), this.activities.start(), this.conversations.start()]);
+    await Promise.all([this.states.start(), this.statuslines.start(), this.activities.start(), this.prompts.start(), this.conversations.start()]);
     this.emitted = JSON.stringify(await this.refresh());
     this.emittedAccount = JSON.stringify(this.account);
     this.poll = setInterval(() => this.schedule(), this.opts.pollMs ?? 2000);
@@ -198,6 +212,7 @@ export class SessionService {
     this.states.stop();
     this.statuslines.stop();
     this.activities.stop();
+    this.prompts.stop();
     this.conversations.stop();
     if (this.poll) clearInterval(this.poll);
     if (this.timer) clearTimeout(this.timer);
@@ -226,6 +241,17 @@ export class SessionService {
       cwd: file.cwd,
       targets: followTargets(this.activities.snapshot().get(file.sessionId) ?? [], this.restarted.get(file.sessionId) ?? 0),
     };
+  }
+
+  /**
+   * Lo que los hooks dicen que la sesión espera de la persona (pregunta o permiso), o null si no hay nada o la sesión no
+   * tiene esos hooks. Relee el directorio antes de contestar: el chat decide con esto qué pulsar.
+   */
+  async promptHook(name: string): Promise<PromptHook | null> {
+    const file = stateByTmuxSession(this.states.snapshot(), this.current).get(name);
+    if (!file) return null;
+    await this.prompts.refresh();
+    return this.prompts.snapshot().get(file.sessionId) ?? null;
   }
 
   /**
@@ -488,7 +514,7 @@ export class SessionService {
   }
 
   /**
-   * Borra la statusline y la actividad de las sesiones del panel que ya han
+   * Borra la statusline, la actividad y lo pendiente de las sesiones del panel que ya han
    * terminado: su sesión de tmux ya no existe o es posterior al último estado
    * que dejó (el nombre se reutilizó). Los archivos de estado no se tocan.
    */
@@ -501,6 +527,7 @@ export class SessionService {
       this.restarted.delete(f.sessionId);
       if (this.statuslines.snapshot().has(f.sessionId)) await this.statuslines.remove(f.sessionId);
       if (this.activities.snapshot().has(f.sessionId)) await this.activities.remove(f.sessionId);
+      if (this.prompts.snapshot().has(f.sessionId)) await this.prompts.remove(f.sessionId);
     }
   }
 }

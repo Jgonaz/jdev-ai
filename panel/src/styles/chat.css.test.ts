@@ -97,3 +97,61 @@ describe('respuesta de /btw', () => {
     expect(r).toContain('var(--font-ui)');
   });
 });
+
+describe('Preguntas y permisos', () => {
+  const temas = [...tokens.matchAll(/:root(?:,\s*:root)?\[data-theme='(\w+)'\]\s*\{([^}]*)\}/g)];
+  const color = (cuerpo: string, nombre: string): string => new RegExp(`--${nombre}:\\s*(#[0-9a-fA-F]{6})`).exec(cuerpo)?.[1] ?? '';
+  const mezcla = (a: string, pct: number, b: string): string => {
+    const f = (i: number) => Math.round(parseInt(a.slice(i, i + 2), 16) * (pct / 100) + parseInt(b.slice(i, i + 2), 16) * (1 - pct / 100));
+    return `#${[1, 3, 5].map((i) => f(i).toString(16).padStart(2, '0')).join('')}`;
+  };
+  const seccion = css.slice(css.indexOf('/* ---------- Pregunta de Claude'), css.indexOf('/* ---------- Pane estrecho ---------- */'));
+
+  it('solo usa variables de tema: ningún color suelto', () => {
+    expect(seccion.length).toBeGreaterThan(1000);
+    expect(seccion).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    expect(seccion).not.toMatch(/\brgba?\(/);
+  });
+
+  it('el texto de las tarjetas llega a 4,5:1 sobre sus fondos en todos los temas', () => {
+    const PARES: readonly (readonly [string, string])[] = [
+      ['fg', 'bg-surface'],
+      ['fg-soft', 'bg-surface'],
+      ['fg-muted', 'bg-surface'],
+      ['fg', 'waiting-bg'],
+      ['fg-soft', 'waiting-bg'],
+      ['fg-soft', 'bg-raised'],
+      ['fg-muted', 'bg-raised'],
+      ['waiting-text', 'waiting-head'],
+      ['fg-muted', 'waiting-head'],
+      ['fg-muted', 'bg-panel'],
+      ['fg-soft', 'bg-panel'],
+      ['link', 'bg-panel'],
+      ['waiting-ink', 'waiting'],
+      ['working-text', 'bg-surface'],
+      ['working-text', 'working-bg'],
+      ['fg', 'bg-input'],
+      ['fg-muted', 'bg-input'],
+    ];
+    expect(temas).toHaveLength(6);
+    for (const [, nombre, c] of temas) {
+      for (const [a, b] of PARES) expect(contraste(color(c!, a), color(c!, b)), `${nombre}: ${a} sobre ${b}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('el aviso de «no se pudo» (fondo de peligro suave) se lee en todos los temas', () => {
+    for (const [, nombre, c] of temas) {
+      const fondo = mezcla(color(c!, 'danger'), 12, color(c!, 'bg-surface'));
+      const texto = color(c!, 'danger-text') || color(c!, 'danger');
+      expect(contraste(texto, fondo), `${nombre}: texto de peligro`).toBeGreaterThanOrEqual(4.5);
+      expect(contraste(color(c!, 'fg-soft'), fondo), `${nombre}: texto del motivo`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('el pie se apila en el pane estrecho, con el botón a lo ancho y las opciones a 44 px', () => {
+    const estrecho = css.slice(css.indexOf('@container (max-width: 520px)'));
+    expect(regla(estrecho, '  .chat__qfoot')).toContain('flex-direction: column');
+    expect(regla(estrecho, '  .chat__qsend')).toContain('min-height: 44px');
+    expect(regla(css, '.chat__permopt')).toContain('min-height: 44px');
+  });
+});

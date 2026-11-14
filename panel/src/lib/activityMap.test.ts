@@ -310,3 +310,27 @@ describe('lightMapEvent', () => {
     expect(buildBoard(ligeros, s(10))).toEqual(buildBoard(completos, s(10)));
   });
 });
+
+describe('preguntas de la conversación (evento question)', () => {
+  const pregunta: AgentEvent = {
+    type: 'question',
+    id: 'q1',
+    at: s(2),
+    questions: [{ question: '¿Tamaño?', header: 'Tamaño', multiSelect: false, options: [{ label: 'Pequeño', description: 'poco' }] }],
+  };
+
+  it('el mapa la sigue contando en la estación «Tú» como la herramienta que era, sin los textos de la pregunta', () => {
+    expect(lightMapEvent(pregunta)).toEqual({ type: 'tool', id: 'q1', tool: 'AskUserQuestion', verb: 'AskUserQuestion', target: '', at: s(2), station: 'tu' });
+  });
+
+  it('en marcha mientras no tiene resultado y terminada con él', () => {
+    const luz = (es: AgentEvent[]) => es.flatMap((e) => lightMapEvent(e) ?? []);
+    const pendiente = buildBoard(luz([user(s(0)), pregunta]), s(10));
+    expect(pendiente.stations.tu.uses).toBe(2);
+    expect(pendiente.stations.tu.running).toMatchObject([{ id: 'q1', tool: 'AskUserQuestion' }]);
+    expect(pendiente.now).toMatchObject({ kind: 'running', station: 'tu' });
+    const respondida = buildBoard(luz([user(s(0)), pregunta, result('q1', s(8))]), s(10));
+    expect(respondida.stations.tu.running).toEqual([]);
+    expect(respondida.rows[0]).toMatchObject({ status: 'done', station: 'tu', durationMs: 6000 });
+  });
+});

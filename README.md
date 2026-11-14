@@ -398,8 +398,13 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   `bin/session-state` y guardan el estado de cada sesión en
   `~/.local/state/jdev-ai/sessions/`, aunque el panel no esté abierto. Cuando
   una notificación deja la sesión esperando, guarda también su texto (recortado
-  a 300 caracteres, tal como lo escribe Claude, en inglés). Codex, Copilot y
-  OpenCode solo muestran si la sesión está viva.
+  a 300 caracteres, tal como lo escribe Claude, en inglés). Mientras Claude
+  espera una pregunta (`AskUserQuestion`) o un permiso de herramienta, guarda
+  además el JSON del hook en `~/.local/state/jdev-ai/prompts/` (aparte de los
+  estados) y lo borra al terminar la herramienta, al escribir tú, al acabar el
+  turno o al cerrar la sesión: así el chat los muestra aunque la transcripción
+  aún no los traiga. Codex, Copilot y OpenCode solo muestran si la sesión está
+  viva.
 - **Estado de la sesión en la cabecera.** Cada terminal muestra, en tres filas:
   el título con su estado y «⋯»; una línea con el proyecto, la rama o el
   worktree, el modelo y el esfuerzo, el tiempo de sesión y, a la derecha, la
@@ -467,9 +472,29 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
 
   La caja de abajo pega tu mensaje en la sesión de tmux entre corchetes, así que
   los saltos de línea no lo envían antes de tiempo, y después pulsa Enter. El
-  límite es de 64 KiB. Enter envía y Shift+Enter hace un salto de línea. Los
-  permisos y los menús se responden en la terminal: si Claude espera una
-  respuesta así, el chat lo avisa con un botón «Ir a la terminal».
+  límite es de 64 KiB. Enter envía y Shift+Enter hace un salto de línea.
+
+  Las preguntas de Claude (`AskUserQuestion`) y sus permisos de herramienta se
+  contestan desde el chat:
+  - una pregunta sale como una tarjeta, en su sitio de la conversación (al final,
+    antes de la caja, mientras su línea no llega a la transcripción), con
+    cada pregunta, su cabecera y sus opciones con descripción; se elige una
+    opción, varias en las de selección múltiple, o se escribe otra respuesta
+    (de una línea), y «Enviar respuestas» se activa cuando están todas;
+  - un permiso sale encima de la caja con la herramienta, lo que quiere hacer
+    (el comando entero y dónde se ejecuta, el archivo o la URL) y las opciones
+    tal como las ofrece la terminal;
+  - el panel contesta en la terminal pulsando las teclas del menú y comprueba
+    la pantalla tras cada pulsación; si algo no cuadra, se para sin deshacer
+    nada (nunca pulsa Escape), lo avisa con «Ir a la terminal» y puede haber
+    quedado a medias;
+  - al contestar, desde el chat o desde la terminal, la tarjeta queda como
+    respondida con lo elegido y entra en la búsqueda.
+
+  «Chat about this», los menús de comandos como `/model` y los diálogos que el
+  chat no reconoce se siguen respondiendo en la terminal: el chat lo avisa con
+  un botón «Ir a la terminal». Los textos y las teclas son los de Claude Code
+  2.1.325 y pueden cambiar entre versiones.
 
   En la caja también se pueden pegar o soltar imágenes: se suben y su ruta se
   escribe donde está el cursor, y Claude la recibe como adjunto. Mientras

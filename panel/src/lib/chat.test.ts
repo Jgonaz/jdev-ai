@@ -427,3 +427,68 @@ describe('tokens del turno', () => {
     expect(workingView(turno, 0, 5000).elapsed).toBe('0 s');
   });
 });
+
+describe('preguntas (AskUserQuestion)', () => {
+  const preguntas: Extract<AgentEvent, { type: 'question' }>['questions'] = [
+    { question: '¿Qué hacemos con ella?', header: 'Captura IA', multiSelect: false, options: [{ label: 'Retirarla', description: 'Borra las rutas' }, { label: 'Reactivar', description: 'Con cuota' }] },
+    { question: '¿Qué más retiro?', header: 'Limpieza', multiSelect: true, options: [{ label: 'Variables', description: 'GEMINI_API_KEY' }, { label: 'Guía', description: 'captura-ia.md' }] },
+  ];
+  const question = (id: string): AgentEvent => ({ type: 'question', id, questions: preguntas, at: 5000 });
+
+  it('una pregunta es un elemento propio, pendiente hasta que llega su resultado, y corta el grupo de herramientas', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [user('hola'), tool('a', 'Leo', 'x.ts'), question('q1'), tool('b', 'Leo', 'y.ts')]);
+    expect(m.items.map((i) => i.kind)).toEqual(['user', 'tools', 'question', 'tools']);
+    const q = m.items[2]!;
+    expect(q.kind === 'question' && q.id).toBe('q1');
+    expect(q.kind === 'question' && q.result).toBeUndefined();
+  });
+
+  it('el resultado se asocia por id, también si llega en otro trozo, con sus respuestas, y el primero manda', () => {
+    const a = applyChatEvents(EMPTY_CHAT, [question('q1')]);
+    const b = applyChatEvents(a, [result('q1', { summary: 'User answered', answers: { '¿Qué hacemos con ella?': 'Retirarla' } }), result('q1', { summary: 'otro' })]);
+    const q = b.items[0]!;
+    expect(q.kind === 'question' && q.result).toEqual({ error: false, summary: 'User answered', answers: { '¿Qué hacemos con ella?': 'Retirarla' } });
+    // El modelo anterior no cambia: el elemento es otro objeto.
+    expect(a.items[0]).not.toBe(b.items[0]);
+    expect(a.items[0]!.kind === 'question' && a.items[0]!.result).toBeUndefined();
+  });
+
+  it('guarda la hora del resultado si la trae, y no la inventa si falta o es nula', () => {
+    const con = applyChatEvents(applyChatEvents(EMPTY_CHAT, [question('q1')]), [result('q1', { at: 7000 })]).items[0]!;
+    expect(con.kind === 'question' && con.result).toEqual({ error: false, summary: 'ok', at: 7000 });
+    const sin = applyChatEvents(applyChatEvents(EMPTY_CHAT, [question('q1')]), [result('q1', { at: null })]).items[0]!;
+    expect(sin.kind === 'question' && sin.result).toEqual({ error: false, summary: 'ok' });
+  });
+
+  it('sin respuestas estructuradas guarda solo el resumen, y un error queda marcado', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [question('q1'), result('q1', { error: true, summary: 'El usuario rechazó' })]);
+    const q = m.items[0]!;
+    expect(q.kind === 'question' && q.result).toEqual({ error: true, summary: 'El usuario rechazó' });
+  });
+
+  it('la búsqueda encuentra el texto de la pendiente (preguntas y opciones) y, ya respondida, lo elegido', () => {
+    const pendiente = applyChatEvents(EMPTY_CHAT, [question('q1')]);
+    expect(searchChat(pendiente.items, 'gemini_api')).toMatchObject([{ key: 'q0', item: 0, step: null }]);
+    expect(searchChat(pendiente.items, 'captura ia')).toHaveLength(1);
+    expect(searchChat(pendiente.items, 'Retirarla')).toHaveLength(1);
+    const respondida = applyChatEvents(pendiente, [result('q1', { answers: { '¿Qué hacemos con ella?': 'Mantenerla en pausa', '¿Qué más retiro?': 'Guía, «los mocks»' } })]);
+    expect(searchChat(respondida.items, 'en pausa')).toHaveLength(1);
+    expect(searchChat(respondida.items, 'mocks')).toHaveLength(1);
+    expect(searchChat(respondida.items, '¿Qué más')).toHaveLength(1);
+  });
+
+  it('sin respuestas estructuradas la búsqueda cubre el resumen', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [question('q1'), result('q1', { summary: 'Respuesta registrada sin detalle' })]);
+    expect(searchChat(m.items, 'sin detalle')).toHaveLength(1);
+  });
+
+  it('cuenta como mensaje nuevo y el lector de pantalla oye «Claude te pregunta» solo si está pendiente', () => {
+    const m = applyChatEvents(EMPTY_CHAT, [user('hola'), question('q1')]);
+    expect(countNewMessages(m.items, 1)).toBe(1);
+    expect(newRepliesAnnouncement(m.items, 1)).toBe('Claude te pregunta');
+    const mixto = applyChatEvents(m, [msg('antes de seguir'), question('q2')]);
+    expect(newRepliesAnnouncement(mixto.items, 1)).toBe('Nueva respuesta de Claude. Claude te pregunta');
+    const respondida = applyChatEvents(m, [result('q1')]);
+    expect(newRepliesAnnouncement(respondida.items, 1)).toBe('');
+  });
+});

@@ -63,8 +63,11 @@ const espera = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok,
 
 const cerrojos = new Map<string, Promise<void>>();
 
+/** Clave del cerrojo de una sesión: lo comparten el envío de mensajes y las respuestas a preguntas y permisos (chat-answer.ts). */
+export const claveCerrojo = (cfg: TmuxConfig, name: string): string => `${cfg.socket}/${name}`;
+
 /** Ejecuta `fn` cuando terminen los anteriores de la misma clave. */
-async function conCerrojo<T>(clave: string, fn: () => Promise<T>): Promise<T> {
+export async function conCerrojo<T>(clave: string, fn: () => Promise<T>): Promise<T> {
   const previo = cerrojos.get(clave) ?? Promise.resolve();
   let libera!: () => void;
   const mio = new Promise<void>((ok) => (libera = ok));
@@ -82,7 +85,7 @@ async function conCerrojo<T>(clave: string, fn: () => Promise<T>): Promise<T> {
 /** Envía el mensaje a la sesión (ya validado, sesión de Claude) y devuelve lo que responde la API. */
 export async function sendChatMessage(cfg: TmuxConfig, name: string, texto: string, opciones: ChatSendOptions = {}): Promise<ChatSendResult> {
   const t: ChatSendTiming = { ...DEFAULT_TIMING, ...opciones.timing };
-  return conCerrojo(`${cfg.socket}/${name}`, async () => {
+  return conCerrojo(claveCerrojo(cfg, name), async () => {
     const pantalla = await capturePane(cfg, name);
     if (pantalla === null) return NO_EXISTE;
     // Con una ventana abierta el mensaje se pierde (o responde a un diálogo): no se pega.

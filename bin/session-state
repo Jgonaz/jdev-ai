@@ -10,6 +10,23 @@
 # Si la sesión queda esperando por una notificación, guarda también su texto en
 # «message», recortado a 300 caracteres; en el resto de estados queda vacío.
 #
+# Además atiende dos eventos que no cambian el estado y dicen qué espera Claude
+# a la persona (la transcripción no lo trae hasta que se contesta):
+#
+#   PreToolUse (solo AskUserQuestion)   la pregunta completa, con su tool_use_id
+#   PermissionRequest (salvo AskUserQuestion, que ya registró PreToolUse)
+#                                       la herramienta y su entrada
+#
+# Guarda el JSON del hook tal cual, de forma atómica y con un tope de 256 KiB
+# (si lo pasa, no escribe), en
+#
+#   ${XDG_STATE_HOME:-$HOME/.local/state}/jdev-ai/prompts/<session_id>.json
+#
+# aparte del directorio de estados para no confundirlo con uno. Lo borran
+# PostToolUse, UserPromptSubmit, Stop y SessionEnd (la herramienta terminó, la
+# persona escribió, acabó el turno o la sesión). El shell no interpreta el JSON
+# anidado: lo valida y lo lee el panel.
+#
 # Solo escribe un archivo; no necesita que el panel esté arrancado, que lo leerá
 # al iniciarse. El proyecto, el agente y el worktree llegan por las variables
 # JDEV_PROJECT, JDEV_SESSION_AGENT y JDEV_WORKTREE que exporta bin/agent.
@@ -166,12 +183,41 @@ map_state() {
     esac
 }
 
+# Guarda el evento del hook (PreToolUse de AskUserQuestion o PermissionRequest de
+# otra herramienta) como lo pendiente de la sesión. Sin salida de error: ante
+# cualquier problema no escribe nada.
+save_prompt() {
+    tool=$(field tool_name)
+    case "$event:$tool" in
+        PreToolUse:AskUserQuestion) ;;
+        PermissionRequest:AskUserQuestion|PermissionRequest:) return 0 ;;
+        PermissionRequest:*) ;;
+        *) return 0 ;;
+    esac
+    size=$(printf '%s' "$input" | wc -c | tr -d ' ')
+    [ "$size" -le 262144 ] || return 0
+    mkdir -p -- "$prompts_dir" || return 0
+    tmp=$(mktemp "$prompts_dir/.$session_id.XXXXXX") || return 0
+    printf '%s\n' "$input" > "$tmp" || return 0
+    mv -f -- "$tmp" "$prompts_dir/$session_id.json" && tmp=
+}
+
 session_id=$(field session_id)
 case "$session_id" in
     ""|*[!A-Za-z0-9-]*) exit 0 ;;
 esac
 
+state_root=${XDG_STATE_HOME:-${HOME:-}/.local/state}
+[ -n "$state_root" ] && [ "$state_root" != "/.local/state" ] || exit 0
+prompts_dir="$state_root/jdev-ai/prompts"
+
 event=$(field hook_event_name)
+# Lo pendiente no toca el estado: se guarda o se borra y no se sigue.
+case "$event" in
+    PreToolUse|PermissionRequest) save_prompt; exit 0 ;;
+    PostToolUse|UserPromptSubmit|Stop|SessionEnd) rm -f -- "$prompts_dir/$session_id.json" ;;
+esac
+
 message=$(field message)
 map_state "$event" "$(field notification_type)" "$message" || exit 0
 # El texto del aviso solo tiene sentido mientras la sesión espera a la persona.
@@ -181,8 +227,6 @@ else
     message=
 fi
 
-state_root=${XDG_STATE_HOME:-${HOME:-}/.local/state}
-[ -n "$state_root" ] && [ "$state_root" != "/.local/state" ] || exit 0
 dir="$state_root/jdev-ai/sessions"
 mkdir -p -- "$dir" || exit 0
 

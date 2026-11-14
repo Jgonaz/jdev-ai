@@ -1,0 +1,64 @@
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /home/u/proyecto
+
+
+❯ Usa AskUserQuestion con UNA sola pregunta multiSelect: ¿Frutas? opciones Pera, Uva, Kiwi (con descripción). No hagas nada más.
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Frutas  ✔ Submit  →
+
+¿Frutas?
+
+  1. [ ] Pera
+         Fruta de pepita, dulce y jugosa, con textura suave.
+  2. [✔] Uva
+         Fruta pequeña que crece en racimos, dulce o ácida según la variedad.
+  3. [ ] Kiwi
+         Fruta ovalada de piel peluda y pulpa verde ácido-dulce.
+  4. [ ] Type something
+❯    Submit
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · ctrl+g to edit in VS Code · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

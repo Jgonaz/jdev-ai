@@ -46,6 +46,7 @@ import {
   SessionInputError,
   TmuxError,
   attachCommand,
+  capturePane,
   classifyCopyModeInput,
   isPanelSessionName,
   checkScrollRequest,
@@ -60,7 +61,11 @@ import {
 import type { TmuxConfig } from './tmux.ts';
 import { MAX_UPLOAD_BYTES, UploadError, readUploadBody, saveUpload, startUploadCleanup, uploadType } from './uploads.ts';
 import { FollowError, Follower } from './follow.ts';
-import { checkChatMessage } from '../shared/chat.ts';
+import type { FollowContext } from './follow.ts';
+import { checkAnswerRequest, checkChatMessage } from '../shared/chat.ts';
+import { answerPermission, answerQuestion, describePrompt } from './chat-answer.ts';
+import { pendingQuestionOf } from './prompt-hook.ts';
+import type { AnswerTiming } from './chat-answer.ts';
 import { sendChatMessage } from './chat-send.ts';
 import type { ChatSendTiming } from './chat-send.ts';
 import { FOLLOW_ID } from '../shared/follow.ts';
@@ -108,6 +113,8 @@ export type ServerOptions = {
   tmux?: TmuxConfig;
   /** Esperas del envío desde el chat (comandos y /btw); solo las pruebas las cambian. */
   chatTiming?: Partial<ChatSendTiming>;
+  /** Esperas de la respuesta del chat a una pregunta o un permiso de Claude; solo las pruebas las cambian. */
+  answerTiming?: Partial<AnswerTiming>;
   /** Directorio de estado de sesiones; por defecto, el de XDG_STATE_HOME. */
   stateDir?: string;
   /** Estado de las conversaciones (hecha o abierta); por defecto, `conversations/` junto a stateDir. */
@@ -115,6 +122,8 @@ export type ServerOptions = {
   /** Statusline y actividad de las sesiones de Claude; por defecto, `statusline/` y `activity/` junto a stateDir. */
   statuslineDir?: string;
   activityDir?: string;
+  /** Lo que espera la persona (pregunta o permiso), que dejan los hooks; por defecto, `prompts/` junto a stateDir. */
+  promptsDir?: string;
   /** Directorio de configuración de Claude (con projects/ dentro); por defecto, CLAUDE_CONFIG_DIR o ~/.claude. */
   claudeConfigDir?: string;
   /** Raíces bajo las que Claude deja `claude-<uid>/` con la salida de sus shells; por defecto /tmp y TMPDIR. Para pruebas. */
@@ -274,6 +283,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     onConversations: () => broadcast({ type: 'conversations' }),
     statuslineDir: opts.statuslineDir,
     activityDir: opts.activityDir,
+    promptsDir: opts.promptsDir,
     claudeProjectsDir: join(opts.claudeConfigDir ?? claudeConfigDir(), 'projects'),
     listProjects: async () => listProjects(opts.harnessRoot, readSettings(opts.configDir).projects),
     onChange: (lista) => broadcast({ type: 'sessions', sessions: lista }),
@@ -648,6 +658,123 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       } catch (e) {
         console.error('Error enviando el mensaje a la sesión:', e);
         sendJson(res, 500, { error: 'No se pudo enviar el mensaje a la sesión.' });
+      }
+      return;
+    }
+
+    // GET: qué hay abierto ahora en la terminal de una sesión de Claude y el chat puede contestar (ver chat-answer.ts):
+    // `{prompt: null}`, una pregunta de `AskUserQuestion`, un permiso de herramienta con sus opciones, u otra ventana.
+    const pregunta = /^\/api\/sessions\/([^/]+)\/prompt$/.exec(pathname);
+    if (pregunta) {
+      if (metodo !== 'GET') return noPermitido('GET');
+      let nombre: string;
+      try {
+        nombre = decodeURIComponent(pregunta[1]!);
+      } catch {
+        sendJson(res, 400, { error: 'nombre de sesión no válido' });
+        return;
+      }
+      if (!isPanelSessionName(nombre)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se admiten sesiones del panel (jdev-*)' });
+        return;
+      }
+      const origen = sesiones.conversationContext(nombre);
+      if (!origen) {
+        sendJson(res, 404, { error: 'La sesión no existe.' });
+        return;
+      }
+      if ('reason' in origen) {
+        sendJson(res, 404, { error: origen.reason });
+        return;
+      }
+      try {
+        const pantalla = await capturePane(tmux, nombre);
+        if (pantalla === null) {
+          sendJson(res, 404, { error: 'La sesión no existe.' });
+          return;
+        }
+        const aviso = sesiones.list().find((s) => s.name === nombre)?.notice ?? '';
+        const hook = await sesiones.promptHook(nombre);
+        const prompt = await describePrompt(pantalla, { cargaPendiente: () => seguidor.pending(origen.context), aviso, hook, cwd: origen.context.cwd });
+        sendJson(res, 200, { prompt });
+      } catch (e) {
+        if (e instanceof FollowError) {
+          sendJson(res, e.status, { error: e.message });
+          return;
+        }
+        console.error('Error leyendo lo que espera la terminal:', e);
+        sendJson(res, 500, { error: 'No se pudo leer la terminal.' });
+      }
+      return;
+    }
+
+    // POST {kind: 'question', id, answers} | {kind: 'permission', option, label}: contesta en la terminal una pregunta de
+    // Claude o un permiso, pulsando las teclas de su menú y comprobando la pantalla en cada paso (ver chat-answer.ts):
+    // 409 `not-pending` si la pregunta ya no espera, 409 `tui-mismatch` si la pantalla no es la esperada.
+    const respuesta = /^\/api\/sessions\/([^/]+)\/answer$/.exec(pathname);
+    if (respuesta) {
+      if (metodo !== 'POST') return noPermitido('POST');
+      let nombre: string;
+      try {
+        nombre = decodeURIComponent(respuesta[1]!);
+      } catch {
+        sendJson(res, 400, { error: 'nombre de sesión no válido' });
+        return;
+      }
+      if (!isPanelSessionName(nombre)) {
+        sendJson(res, 400, { error: 'nombre de sesión no válido: solo se admiten sesiones del panel (jdev-*)' });
+        return;
+      }
+      const cuerpo = await parseJsonBody(req, res);
+      if (!cuerpo) return;
+      const peticion = checkAnswerRequest(cuerpo);
+      if (!peticion.ok) {
+        sendJson(res, 400, { error: peticion.error });
+        return;
+      }
+      const sesion = sesiones.list().find((s) => s.name === nombre);
+      if (!sesion || !sesion.alive) {
+        sendJson(res, 404, { error: 'La sesión no existe.' });
+        return;
+      }
+      if (sesion.agent !== 'claude') {
+        sendJson(res, 409, { error: sesion.chat.reason ?? 'Solo se puede contestar desde el chat a sesiones de Claude.' });
+        return;
+      }
+      const solicitud = peticion.request;
+      let contexto: FollowContext | null = null;
+      if (solicitud.kind === 'question') {
+        const origen = sesiones.conversationContext(nombre);
+        if (!origen) {
+          sendJson(res, 404, { error: 'La sesión no existe.' });
+          return;
+        }
+        if ('reason' in origen) {
+          sendJson(res, 404, { error: origen.reason });
+          return;
+        }
+        contexto = origen.context;
+      }
+      try {
+        const r =
+          solicitud.kind === 'question'
+            ? await answerQuestion(
+                tmux,
+                nombre,
+                solicitud,
+                // Se calcula con el cerrojo tomado: el hook se relee entonces, y una respuesta anterior ya habrá dejado su resultado.
+                async () => pendingQuestionOf(await seguidor.pending(contexto!), await sesiones.promptHook(nombre)),
+                { timing: opts.answerTiming },
+              )
+            : await answerPermission(tmux, nombre, solicitud, { timing: opts.answerTiming });
+        sendJson(res, r.status, r.body);
+      } catch (e) {
+        if (e instanceof FollowError) {
+          sendJson(res, e.status, { error: e.message });
+          return;
+        }
+        console.error('Error contestando en la sesión:', e);
+        sendJson(res, 500, { error: 'No se pudo contestar en la sesión.' });
       }
       return;
     }

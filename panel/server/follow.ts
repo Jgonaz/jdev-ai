@@ -14,9 +14,9 @@ import type { FileHandle } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { openRegularFile } from './safefile.ts';
 import { resolveTranscript } from './titles.ts';
-import { FOLLOW_ID } from '../shared/follow.ts';
+import { FOLLOW_ID, QUESTION_LIMITS } from '../shared/follow.ts';
 import { classifyTool } from '../shared/stations.ts';
-import type { AgentEvent, AgentFollow, ConversationResponse, ShellFollow } from '../shared/follow.ts';
+import type { AgentEvent, AgentFollow, ConversationResponse, QuestionItem, ShellFollow } from '../shared/follow.ts';
 import type { FollowTargets } from './usage.ts';
 
 /** Bytes que se leen como máximo por respuesta. */
@@ -231,6 +231,50 @@ function eventosDeComando(texto: string, at: number | null): AgentEvent[] | null
 }
 
 /**
+ * Las preguntas de un `AskUserQuestion`, con topes de longitud. null si la entrada no trae una lista de preguntas con
+ * opciones, o si excede `QUESTION_LIMITS` en preguntas u opciones: entonces no se ofrece contestarla en el chat.
+ */
+export function leePreguntas(entrada: Record<string, unknown> | null): QuestionItem[] | null {
+  const brutas = entrada?.questions;
+  if (!Array.isArray(brutas) || brutas.length === 0 || brutas.length > QUESTION_LIMITS.questions) return null;
+  const preguntas: QuestionItem[] = [];
+  for (const b of brutas) {
+    const q = objeto(b);
+    const texto = cadena(q?.question);
+    if (!q || texto === null || !Array.isArray(q.options) || q.options.length === 0 || q.options.length > QUESTION_LIMITS.options) return null;
+    const opciones: QuestionItem['options'] = [];
+    for (const ob of q.options) {
+      const o = objeto(ob);
+      const etiqueta = cadena(o?.label);
+      if (!o || etiqueta === null) return null;
+      opciones.push({ label: recorta(etiqueta, QUESTION_LIMITS.label), description: recorta(typeof o.description === 'string' ? o.description.trim() : '', QUESTION_LIMITS.description) });
+    }
+    preguntas.push({
+      question: recorta(texto.trim(), QUESTION_LIMITS.question),
+      header: recorta(typeof q.header === 'string' ? q.header.trim() : '', QUESTION_LIMITS.header),
+      multiSelect: q.multiSelect === true,
+      options: opciones,
+    });
+  }
+  return preguntas;
+}
+
+/** `toolUseResult.answers` de la línea de un `tool_result` de `AskUserQuestion`; undefined si falta o no tiene la forma esperada. */
+function leeRespuestas(resultado: unknown): Record<string, string> | undefined {
+  const brutas = objeto(objeto(resultado)?.answers);
+  if (!brutas) return undefined;
+  const claves = Object.keys(brutas);
+  if (claves.length === 0 || claves.length > QUESTION_LIMITS.questions) return undefined;
+  const respuestas: Record<string, string> = {};
+  for (const k of claves) {
+    const v = brutas[k];
+    if (typeof v !== 'string') return undefined;
+    respuestas[recorta(k, QUESTION_LIMITS.question)] = recorta(v, QUESTION_LIMITS.answer);
+  }
+  return respuestas;
+}
+
+/**
  * Interpreta líneas completas de un transcript. Con `conversacion` es el de la
  * sesión principal: se emiten también los mensajes reales de la persona
  * (`user`) y no hay encargo (`task`). Sin ella es el de un subagente y `primero`
@@ -295,6 +339,7 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
           if (!bloque) continue;
           if (bloque.type === 'tool_result' && typeof bloque.tool_use_id === 'string') {
             const resultado = textoDeResultado(bloque.content);
+            const respuestas = conversacion ? leeRespuestas(o.toolUseResult) : undefined;
             eventos.push({
               type: 'result',
               id: bloque.tool_use_id,
@@ -303,6 +348,7 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
               lines: resultado.split('\n').filter((l) => l.trim() !== '').length,
               at,
               ...(conversacion && resultado.trim() !== '' ? { output: recorta(resultado.trim(), MAX_OUTPUT) } : {}),
+              ...(respuestas ? { answers: respuestas } : {}),
             });
           } else if (conversacion) {
             if (ajeno) continue;
@@ -349,6 +395,14 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
             const informe = cadena(entrada?.message);
             if (informe) eventos.push({ type: 'message', text: recorta(informe.trim(), MAX_MESSAGE), at });
             continue;
+          }
+          if (conversacion && nombre === 'AskUserQuestion') {
+            // En la conversación, la pregunta es una tarjeta que se puede contestar, no una herramienta más.
+            const preguntas = leePreguntas(entrada);
+            if (preguntas) {
+              eventos.push({ type: 'question', id: bloque.id, questions: preguntas, at });
+              continue;
+            }
           }
           const h = describeTool(nombre, entrada, cwd);
           eventos.push({
@@ -482,6 +536,27 @@ const MAX_CACHE = 200;
 
 type ShellLocation = { path: string; startedAt: number | null };
 
+/** Cuánto del final del transcript se mira para saber qué espera Claude (la llamada pendiente es siempre de las últimas líneas). */
+const PENDING_TAIL_BYTES = 2 * 1024 * 1024;
+
+type QuestionEvent = Extract<AgentEvent, { type: 'question' }>;
+type ToolEvent = Extract<AgentEvent, { type: 'tool' }>;
+
+/**
+ * Pregunta y herramientas lanzadas por Claude que aún no tienen resultado en el transcript, y los ids que sí lo tienen
+ * (`resolved`: sirve para saber que algo que anunció un hook ya se contestó aunque su `tool_use` no se haya leído).
+ */
+export type PendingWork = { question: QuestionEvent | null; tools: ToolEvent[]; resolved: ReadonlySet<string> };
+
+/** De una lista de eventos de la conversación, lo que no tiene `result`: la última pregunta y las herramientas, en orden. */
+export function pendingWork(eventos: readonly AgentEvent[]): PendingWork {
+  const resueltos = new Set<string>();
+  for (const e of eventos) if (e.type === 'result') resueltos.add(e.id);
+  const pendientes = eventos.filter((e): e is QuestionEvent | ToolEvent => (e.type === 'question' || e.type === 'tool') && !resueltos.has(e.id));
+  const preguntas = pendientes.filter((e): e is QuestionEvent => e.type === 'question');
+  return { question: preguntas[preguntas.length - 1] ?? null, tools: pendientes.filter((e): e is ToolEvent => e.type === 'tool'), resolved: resueltos };
+}
+
 export class Follower {
   private readonly projectsDir: string;
   private readonly tmpRoots: string[];
@@ -558,6 +633,33 @@ export class Follower {
         more: v.more,
         events: parseAgentLines(v.texto, { primero: desde === 0, cwd: ctx.cwd || null, conversacion: true }),
       };
+    } finally {
+      await abierto.fh.close().catch(() => {});
+    }
+  }
+
+  /**
+   * Lo que Claude tiene pendiente de la persona según el final del transcript (los últimos `PENDING_TAIL_BYTES`): la última
+   * pregunta (`AskUserQuestion`) y las herramientas lanzadas, ambas sin resultado todavía. Sin transcript, o sin nada
+   * pendiente, es `{ question: null, tools: [], resolved: ∅ }`.
+   */
+  async pending(ctx: FollowContext): Promise<PendingWork> {
+    if (this.uid === null || !SESSION_FILE.test(ctx.sessionId)) throw noHayDatos('no se pueden leer archivos de Claude en este sistema.');
+    const real = await this.transcript(ctx, true);
+    if (real === null) return { question: null, tools: [], resolved: new Set() };
+    const abierto = await abrirDelUsuario(real, this.uid);
+    if (!abierto) throw noHayDatos('el transcript de la sesión no existe o no es un archivo de Claude.');
+    try {
+      const desde = Math.max(0, abierto.size - PENDING_TAIL_BYTES);
+      let buf = await leer(abierto.fh, desde, abierto.size - desde);
+      // Solo líneas completas: se descarta la primera si el trozo empieza a mitad, y una última sin terminar.
+      if (desde > 0) {
+        const nl = buf.indexOf(0x0a);
+        buf = nl >= 0 ? buf.subarray(nl + 1) : Buffer.alloc(0);
+      }
+      const ultimo = buf.lastIndexOf(0x0a);
+      buf = ultimo >= 0 ? buf.subarray(0, ultimo + 1) : Buffer.alloc(0);
+      return pendingWork(parseAgentLines(buf.toString('utf8'), { primero: false, cwd: ctx.cwd || null, conversacion: true }));
     } finally {
       await abierto.fh.close().catch(() => {});
     }

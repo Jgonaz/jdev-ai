@@ -1,0 +1,64 @@
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /home/u/proyecto
+
+
+❯ Usa AskUserQuestion con dos preguntas: la primera de selección simple (¿Color? opciones Rojo, Verde, Azul, con descripción) y la segunda multiSelect (¿Frutas? opciones Pera, Uva, Kiwi, con descripción). No hagas nada más.
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Color  ☐ Frutas  ✔ Submit  →
+
+¿Frutas?
+
+❯ 1. [ ] Pera
+         Fruta dulce y jugosa de piel suave.
+  2. [ ] Uva
+         Fruta pequeña que crece en racimos.
+  3. [ ] Kiwi
+         Fruta ácida de pulpa verde con semillas negras.
+  4. [ ] Type something
+     Submit
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

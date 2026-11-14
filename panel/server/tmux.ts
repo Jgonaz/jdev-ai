@@ -772,6 +772,22 @@ export async function typeLine(cfg: TmuxConfig, name: string, texto: string): Pr
   return true;
 }
 
+/**
+ * Teclea `texto` tal cual en la terminal de la sesión (send-keys -l: sin interpretar nombres de tecla) y no
+ * pulsa nada más, ni siquiera Enter. Pensado para un texto corto de una línea (la fila de «Type something» de un
+ * menú de Claude); un texto que empiece por «-» o acabe en «;» llega intacto. Devuelve false si la sesión no existe.
+ */
+export async function typeText(cfg: TmuxConfig, name: string, texto: string): Promise<boolean> {
+  if (!isPanelSessionName(name)) return false;
+  try {
+    await runTmux(cfg, ['send-keys', '-t', `=${name}:`, '-l', '--', arg(texto)]);
+  } catch (e) {
+    if (noSession(e)) return false;
+    throw e;
+  }
+  return true;
+}
+
 let pegados = 0;
 const PASTE_ENTER_DELAY_MS = 120;
 

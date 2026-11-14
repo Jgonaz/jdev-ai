@@ -1,0 +1,64 @@
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /home/u/proyecto
+
+
+❯ Usa AskUserQuestion con UNA sola pregunta multiSelect: ¿Frutas? opciones Pera, Uva, Kiwi (con descripción). No hagas nada más.
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Frutas  ✔ Submit  →
+
+Review your answers
+
+ ● ¿Frutas?
+   → Uva
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

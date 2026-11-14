@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FOLLOW_CHUNK, FollowError, Follower, SHELL_TAIL_LINES, buscarSalida, describeTool, leerLineas, parseAgentLines } from './follow.ts';
+import { FOLLOW_CHUNK, FollowError, Follower, SHELL_TAIL_LINES, buscarSalida, describeTool, leerLineas, parseAgentLines, pendingWork } from './follow.ts';
 import type { AgentEvent, FollowContext } from './follow.ts';
 import { asistenteConUso, comandos, comandosDeSistema, conversacionMuestra, encargo, interno, lanzamientoShell, persona, personaConImagen, resultado, sinteticos, subagenteMuestra, texto, usar } from './follow-fixtures.ts';
 
@@ -753,5 +753,158 @@ describe('Follower', () => {
     ].join('\n') + '\n';
     const ev = parseAgentLines(lineas, { primero: false, cwd: null });
     expect(ev.find((e) => e.type === 'result')).toMatchObject({ summary: 'Clicked «Enviar»' });
+  });
+});
+
+// Transcripciones reales de Claude Code 2.1.325 (recortadas): una pregunta con dos preguntas (simple y múltiple), una con una
+// sola pregunta contestada dos veces (la segunda con texto libre) y un Bash.
+const fixture = (nombre: string): string => readFileSync(join(import.meta.dirname, 'fixtures', 'questions', nombre), 'utf8');
+const lineasDe = (texto: string): string[] => texto.split('\n').filter((l) => l !== '');
+const conversacion = (texto: string): AgentEvent[] => parseAgentLines(texto, { primero: true, cwd: null, conversacion: true });
+
+describe('parseAgentLines: AskUserQuestion en la conversación', () => {
+  it('la pregunta es un evento `question` con sus preguntas, opciones y descripciones, y no un `tool`', () => {
+    const e = conversacion(fixture('dos-preguntas.jsonl'));
+    expect(e.some((x) => x.type === 'tool')).toBe(false);
+    const q = e.find((x): x is Extract<AgentEvent, { type: 'question' }> => x.type === 'question');
+    expect(q).toEqual({
+      type: 'question',
+      id: 'toolu_016dSrLZuGQ7seg1rPR1wLwy',
+      at: Date.parse('2026-11-14T09:40:49.073Z'),
+      questions: [
+        {
+          question: '¿Color?',
+          header: 'Color',
+          multiSelect: false,
+          options: [
+            { label: 'Rojo', description: 'Color rojo' },
+            { label: 'Verde', description: 'Color verde' },
+            { label: 'Azul', description: 'Color azul' },
+          ],
+        },
+        {
+          question: '¿Frutas?',
+          header: 'Frutas',
+          multiSelect: true,
+          options: [
+            { label: 'Pera', description: 'Fruta pera' },
+            { label: 'Uva', description: 'Fruta uva' },
+            { label: 'Kiwi', description: 'Fruta kiwi' },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('el resultado de ese id lleva `answers` de toolUseResult (la selección múltiple y el texto libre, unidos por «, »)', () => {
+    const r = conversacion(fixture('dos-preguntas.jsonl')).find((x): x is Extract<AgentEvent, { type: 'result' }> => x.type === 'result');
+    expect(r).toMatchObject({ id: 'toolu_016dSrLZuGQ7seg1rPR1wLwy', error: false, answers: { '¿Color?': 'Verde', '¿Frutas?': 'Pera, Kiwi, Mango' } });
+    const simples = conversacion(fixture('pregunta-simple.jsonl')).filter((x): x is Extract<AgentEvent, { type: 'result' }> => x.type === 'result');
+    expect(simples.map((x) => x.answers)).toEqual([{ '¿Tamaño?': 'Mediano' }, { '¿Tamaño?': 'Enorme' }]);
+  });
+
+  it('sin `toolUseResult.answers` el resultado va sin respuestas estructuradas', () => {
+    const sin = lineasDe(fixture('dos-preguntas.jsonl'))
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+      .map((o) => {
+        delete o.toolUseResult;
+        return JSON.stringify(o);
+      })
+      .join('\n');
+    const r = conversacion(sin).find((x): x is Extract<AgentEvent, { type: 'result' }> => x.type === 'result');
+    expect(r).toBeDefined();
+    expect(r).not.toHaveProperty('answers');
+    // Una respuesta con otra forma tampoco se acepta.
+    const rara = lineasDe(fixture('pregunta-simple.jsonl'))
+      .map((l) => l.replace('"answers":{"¿Tamaño?":"Mediano"}', '"answers":{"¿Tamaño?":3}'))
+      .join('\n');
+    expect(conversacion(rara).filter((x) => x.type === 'result' && 'answers' in x)).toHaveLength(1);
+  });
+
+  it('fuera de la conversación (un subagente) sigue siendo una herramienta, sin `answers`', () => {
+    const e = parseAgentLines(fixture('dos-preguntas.jsonl'), { primero: false, cwd: null });
+    expect(e.some((x) => x.type === 'question')).toBe(false);
+    expect(e.find((x) => x.type === 'tool')).toMatchObject({ tool: 'AskUserQuestion', station: 'tu' });
+    expect(e.find((x) => x.type === 'result')).not.toHaveProperty('answers');
+  });
+
+  it('con más preguntas u opciones que los topes, o sin forma de pregunta, se queda como herramienta', () => {
+    const entrada = (input: unknown) => usar('q1', 'AskUserQuestion', input as Record<string, unknown>).replace('"isSidechain":true', '"isSidechain":false');
+    const opcion = { label: 'Sí', description: '' };
+    const pregunta = (opciones: unknown[]) => ({ question: '¿Vale?', header: 'Vale', multiSelect: false, options: opciones });
+    expect(conversacion(entrada({ questions: [pregunta([opcion, opcion])] })).map((x) => x.type)).toEqual(['question']);
+    expect(conversacion(entrada({ questions: [pregunta(Array(9).fill(opcion))] })).map((x) => x.type)).toEqual(['tool']);
+    expect(conversacion(entrada({ questions: Array(7).fill(pregunta([opcion, opcion])) })).map((x) => x.type)).toEqual(['tool']);
+    expect(conversacion(entrada({ questions: [] })).map((x) => x.type)).toEqual(['tool']);
+    expect(conversacion(entrada({ questions: [{ question: '¿Vale?' }] })).map((x) => x.type)).toEqual(['tool']);
+    expect(conversacion(entrada({})).map((x) => x.type)).toEqual(['tool']);
+  });
+
+  it('acota la longitud de los textos', () => {
+    const largo = 'x'.repeat(3000);
+    const linea = usar('q1', 'AskUserQuestion', { questions: [{ question: largo, header: largo, multiSelect: true, options: [{ label: largo, description: largo }] }] }).replace('"isSidechain":true', '"isSidechain":false');
+    const q = conversacion(linea)[0] as Extract<AgentEvent, { type: 'question' }>;
+    expect(q.questions[0]!.question.length).toBe(1000);
+    expect(q.questions[0]!.header.length).toBe(100);
+    expect(q.questions[0]!.options[0]!.label.length).toBe(300);
+    expect(q.questions[0]!.options[0]!.description.length).toBe(1000);
+  });
+});
+
+describe('pendingWork y Follower.pending', () => {
+  let tmp: string;
+  let proyectos: string;
+  const sid = '41cec992-d9cb-4e41-b81b-b97eaa95fa11';
+  const ctx = (): FollowContext => ({
+    sessionId: sid,
+    transcriptPath: join(proyectos, '-proj', `${sid}.jsonl`),
+    cwd: '/home/u/proyecto',
+    targets: { subagents: new Map(), shells: new Map() },
+  });
+  const seguidor = () => new Follower({ projectsDir: proyectos, tmpRoots: [] });
+  const escribe = (texto: string) => writeFileSync(join(proyectos, '-proj', `${sid}.jsonl`), texto);
+
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'jdev-pending-'));
+    proyectos = join(tmp, 'claude', 'projects');
+    mkdirSync(join(proyectos, '-proj'), { recursive: true });
+  });
+  afterEach(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it('la pregunta sin resultado está pendiente; con resultado, ya no', async () => {
+    const [prompt, pregunta, resultadoLinea] = lineasDe(fixture('dos-preguntas.jsonl'));
+    escribe(`${prompt}\n${pregunta}\n`);
+    const pendiente = await seguidor().pending(ctx());
+    expect(pendiente.question).toMatchObject({ type: 'question', id: 'toolu_016dSrLZuGQ7seg1rPR1wLwy' });
+    expect(pendiente.tools).toEqual([]);
+    expect(pendiente.resolved.has('toolu_016dSrLZuGQ7seg1rPR1wLwy')).toBe(false);
+    appendFileSync(join(proyectos, '-proj', `${sid}.jsonl`), `${resultadoLinea}\n`);
+    const despues = await seguidor().pending(ctx());
+    expect(despues).toEqual({ question: null, tools: [], resolved: new Set(['toolu_016dSrLZuGQ7seg1rPR1wLwy']) });
+  });
+
+  it('las herramientas sin resultado salen en orden, con su resumen', async () => {
+    const [prompt, uso] = lineasDe(fixture('permiso-bash.jsonl'));
+    escribe(`${prompt}\n${uso}\n`);
+    const { question, tools } = await seguidor().pending(ctx());
+    expect(question).toBeNull();
+    expect(tools).toMatchObject([{ id: 'toolu_01HSh1XPZ931KpQcnefB5jao', tool: 'Bash', verb: 'Ejecuto', target: 'rm -f borrame.txt' }]);
+  });
+
+  it('solo mira el final del archivo, descarta la línea cortada y la que aún se escribe, y sin transcript no hay nada pendiente', async () => {
+    const [prompt, pregunta] = lineasDe(fixture('dos-preguntas.jsonl'));
+    const relleno = Array.from({ length: 2500 }, (_, i) => persona(`mensaje ${i} ${'x'.repeat(1000)}`)).join('\n');
+    escribe(`${relleno}\n${prompt}\n${pregunta}\n${persona('a medias').slice(0, 20)}`);
+    expect((await seguidor().pending(ctx())).question?.id).toBe('toolu_016dSrLZuGQ7seg1rPR1wLwy');
+    rmSync(join(proyectos, '-proj', `${sid}.jsonl`));
+    expect(await seguidor().pending(ctx())).toEqual({ question: null, tools: [], resolved: new Set() });
+  });
+
+  it('pendingWork se queda con la última pregunta pendiente', () => {
+    const q = (id: string): AgentEvent => ({ type: 'question', id, questions: [], at: null });
+    const r: AgentEvent = { type: 'result', id: 'b', error: false, summary: '', lines: 0 };
+    expect(pendingWork([q('a'), q('b'), r, q('c')]).question?.id).toBe('c');
+    expect(pendingWork([q('a'), q('b'), r, { ...r, id: 'a' }]).question).toBeNull();
+    expect([...pendingWork([q('a'), r]).resolved]).toEqual(['b']);
   });
 });

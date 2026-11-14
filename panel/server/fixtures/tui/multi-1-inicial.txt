@@ -1,0 +1,64 @@
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /home/u/proyecto
+
+
+❯ Usa AskUserQuestion con dos preguntas: la primera de selección simple (¿Color? opciones Rojo, Verde, Azul, con descripción) y la segunda multiSelect (¿Frutas? opciones Pera, Uva, Kiwi, con descripción). No hagas nada más.
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Color  ☐ Frutas  ✔ Submit  →
+
+¿Color?
+
+❯ 1. Rojo
+     Color cálido asociado a pasión y energía.
+  2. Verde
+     Color asociado a naturaleza y calma.
+  3. Azul
+     Color asociado a confianza y serenidad.
+  4. Type something.
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

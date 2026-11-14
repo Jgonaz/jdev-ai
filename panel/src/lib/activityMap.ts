@@ -32,6 +32,9 @@ export function lightMapEvent(e: AgentEvent): AgentEvent | null {
   switch (e.type) {
     case 'tool':
       return { type: 'tool', id: e.id, tool: e.tool, verb: e.verb, target: e.target, at: e.at, ...(e.station !== undefined ? { station: e.station } : {}) };
+    case 'question':
+      // En la conversación, `AskUserQuestion` llega como `question` (no como `tool`): el mapa la sigue contando en la estación «Tú», con su resultado para el fin.
+      return { type: 'tool', id: e.id, tool: 'AskUserQuestion', verb: 'AskUserQuestion', target: '', at: e.at, station: 'tu' };
     case 'result':
       return { type: 'result', id: e.id, error: e.error, summary: '', lines: 0, at: e.at ?? null };
     case 'message':

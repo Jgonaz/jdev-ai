@@ -5,8 +5,21 @@ import type { Station } from './stations.ts';
 
 export type { Station };
 
+/**
+ * Topes de lo que se acepta de un `AskUserQuestion` para ofrecer contestarlo desde el chat. Más preguntas u opciones
+ * que esto (Claude Code admite 4 preguntas con 4 opciones) se siguen emitiendo como una herramienta más y se contestan
+ * en la terminal: así lo que el chat envía siempre se corresponde con el menú de la TUI. Los números del 1 al 9 eligen
+ * opción en el menú, y la fila de texto libre ocupa un número más.
+ */
+export const QUESTION_LIMITS = { questions: 6, options: 8, question: 1000, header: 100, label: 300, description: 1000, answer: 2000 } as const;
+
 export type FollowKind = 'agent' | 'shell';
 export type FollowState = 'running' | 'finished';
+
+export type QuestionOption = { label: string; description: string };
+
+/** Una pregunta de `AskUserQuestion`; con `multiSelect` se pueden marcar varias opciones. */
+export type QuestionItem = { question: string; header: string; multiSelect: boolean; options: QuestionOption[] };
 
 /** Un evento de un subagente, ya interpretado por el servidor. */
 export type AgentEvent =
@@ -21,7 +34,18 @@ export type AgentEvent =
    * líneas con texto. `output` (solo en la conversación de una sesión) es el texto, recortado, para buscar en él.
    * `at` es la hora de la línea del transcript (para la duración de la llamada); falta en servidores antiguos.
    */
-  | { type: 'result'; id: string; error: boolean; summary: string; lines: number; output?: string; at?: number | null }
+  /**
+   * `answers` (solo en la conversación de una sesión) llega en el resultado de un `AskUserQuestion`: `{ pregunta: respuesta }`
+   * tal como la guardó Claude Code (en las de selección múltiple, las opciones unidas por «, » y el texto libre al final).
+   * Falta si la línea del transcript no la trae.
+   */
+  | { type: 'result'; id: string; error: boolean; summary: string; lines: number; output?: string; at?: number | null; answers?: Record<string, string> }
+  /**
+   * Pregunta de Claude a la persona (`AskUserQuestion`), solo en la conversación de una sesión: ahí sustituye al evento
+   * `tool` de esa herramienta (el mapa de actividad la sigue contando en la estación «tu»). Está pendiente mientras su
+   * `id` no tenga `result`. Con más preguntas u opciones que `QUESTION_LIMITS` se emite como `tool`.
+   */
+  | { type: 'question'; id: string; questions: QuestionItem[]; at: number | null }
   | { type: 'message'; text: string; at: number | null }
   /** Mensaje de la persona (solo en la conversación de una sesión). `images` cuenta las imágenes adjuntas, si hay. */
   | { type: 'user'; text: string; at: number | null; images?: number }

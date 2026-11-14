@@ -1,0 +1,22 @@
+────────────────────────────────────────────────────────────────────────────────
+←  ☐ Captura IA  ☐ Limpieza  ✔ Submit  →
+
+│ La captura de gastos por voz y foto (Gemini) lleva desactivada desde la 0.2.37
+│ y no se usa. ¿Qué hacemos con ella?
+
+❯ 1. Retirarla del todo (Recommended)
+     Cambio OpenSpec que borra las rutas, los composables, la UI de voz y foto,
+     los tests, la configuración (GEMINI_API_KEY, EXPENSE_EXTRACTION_*) y sus
+     requisitos de la spec.
+  2. Reactivar con allowlist + cuota
+     Gemini Flash-Lite de pago, solo para una lista de usuarios por variable de
+     entorno y con límite diario. Implica una migración.
+  3. Reactivar solo con cuota
+     Para cualquier usuario registrado, con límite diario. Implica una
+     migración.
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+

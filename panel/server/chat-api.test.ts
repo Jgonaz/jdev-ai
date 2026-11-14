@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startServer } from './main.ts';
 import type { RunningServer } from './main.ts';
 import { CHAT_NO_TRANSCRIPT, CHAT_ONLY_CLAUDE } from './sessions.ts';
-import { killServer, pasteMessage, tmuxConfig } from './tmux.ts';
+import { killServer, pasteMessage, pressKey, tmuxConfig, typeText } from './tmux.ts';
 import type { TmuxConfig } from './tmux.ts';
 import { conversacionMuestra, persona } from './follow-fixtures.ts';
 
@@ -85,6 +85,7 @@ describe('vista chat: GET /conversation y POST /input', () => {
       claudeConfigDir: join(tmp, 'claude'),
       pollMs: 200,
       stateFallbackMs: 200,
+      answerTiming: { pollMs: 20, stepTimeoutMs: 300, doneTimeoutMs: 300 },
     });
     base = `http://127.0.0.1:${srv.port}`;
     claude = await crear('claude');
@@ -263,6 +264,215 @@ describe('vista chat: GET /conversation y POST /input', () => {
       await pasteMessage(cfg, 'jdev-foo-9999', 'dos');
       const { stdout } = await tmuxCli('list-buffers');
       expect(stdout).not.toContain('jdev-msg-');
+    });
+  });
+  describe('GET /prompt y POST /answer', () => {
+    const preguntas = (readFileSync(join(import.meta.dirname, 'fixtures', 'questions', 'dos-preguntas.jsonl'), 'utf8').split('\n').filter((l) => l !== ''));
+    const pantalla = async () => (await tmuxCli('capture-pane', '-p', '-t', `=${claude}:`)).stdout;
+    const prompt = async (nombre: string) => {
+      const r = await api('GET', `/api/sessions/${encodeURIComponent(nombre)}/prompt`);
+      return { status: r.status, cache: r.headers.get('cache-control'), body: (await r.json()) as { error?: string; prompt?: unknown } };
+    };
+    const contestar = async (nombre: string, cuerpo: unknown, extra: Record<string, string> = {}) => {
+      const r = await api('POST', `/api/sessions/${encodeURIComponent(nombre)}/answer`, cuerpo, extra);
+      return { status: r.status, body: (await r.json()) as Record<string, unknown> };
+    };
+    // El eco de la terminal (modo canónico) deja en pantalla lo que se teclea, así que se «dibuja» un diálogo tecleando sus líneas.
+    const dibuja = async (lineas: string[]) => {
+      for (const l of lineas) {
+        await tmuxCli('send-keys', '-t', `=${claude}:`, '-l', '--', l);
+        await tmuxCli('send-keys', '-t', `=${claude}:`, 'Enter');
+      }
+      await vi.waitFor(async () => expect(await pantalla()).toContain(lineas.at(-1)!));
+    };
+
+    it('GET /prompt exige el token, solo admite GET y valida el nombre y la sesión', async () => {
+      expect((await fetch(`${base}/api/sessions/${claude}/prompt`)).status).toBe(401);
+      expect((await api('POST', `/api/sessions/${claude}/prompt`, {})).status).toBe(405);
+      expect((await prompt('otra-cosa')).status).toBe(400);
+      expect((await prompt('jdev-foo-9999')).body.error).toBe('La sesión no existe.');
+      expect(await prompt(sinEstado)).toMatchObject({ status: 404, body: { error: CHAT_NO_TRANSCRIPT } });
+      expect(await prompt(codex)).toMatchObject({ status: 404, body: { error: CHAT_ONLY_CLAUDE } });
+    });
+
+    it('GET /prompt sin nada abierto responde {prompt: null}, sin caché', async () => {
+      expect(await prompt(claude)).toEqual({ status: 200, cache: 'no-store', body: { prompt: null } });
+    });
+
+    it('POST /answer exige el token, solo admite POST y un origen propio, y valida el nombre y el cuerpo', async () => {
+      const ok = { kind: 'permission', option: 1, label: 'Yes' };
+      expect((await fetch(`${base}/api/sessions/${claude}/answer`, { method: 'POST', body: JSON.stringify(ok) })).status).toBe(401);
+      expect((await api('GET', `/api/sessions/${claude}/answer`)).status).toBe(405);
+      expect((await contestar(claude, ok, { Origin: 'http://evil.example' })).status).toBe(403);
+      expect((await contestar('otra-cosa', ok)).status).toBe(400);
+      for (const malo of [{}, { kind: 'otra' }, { kind: 'permission', option: 0, label: 'Yes' }, { kind: 'question', id: 'x', answers: [] }, [], 'no es json', '{"kind":']) {
+        expect((await contestar(claude, malo)).status, JSON.stringify(malo)).toBe(400);
+      }
+      const enorme = await api('POST', `/api/sessions/${claude}/answer`, { kind: 'permission', option: 1, label: 'x'.repeat(100 * 1024) }).then((r) => r.status, () => 'cortado');
+      expect([400, 'cortado']).toContain(enorme);
+    });
+
+    it('POST /answer: 404 si la sesión no existe y 409 si no es de Claude', async () => {
+      const ok = { kind: 'permission', option: 1, label: 'Yes' };
+      expect(await contestar('jdev-foo-9999', ok)).toMatchObject({ status: 404, body: { error: 'La sesión no existe.' } });
+      expect(await contestar(codex, ok)).toMatchObject({ status: 409, body: { error: CHAT_ONLY_CLAUDE } });
+    });
+
+    it('POST /answer de una pregunta: 409 not-pending si no hay ninguna; con una pendiente pero sin menú en la terminal, 409 tui-mismatch sin pulsar nada', async () => {
+      const cuerpo = { kind: 'question', id: 'toolu_016dSrLZuGQ7seg1rPR1wLwy', answers: [{ options: [1] }, { options: [0, 2], text: 'Mango\nrico' }] };
+      expect(await contestar(claude, cuerpo)).toMatchObject({ status: 409, body: { code: 'not-pending' } });
+
+      appendFileSync(transcript, `${preguntas[1]}\n`);
+      const antes = readFileSync(recibido, 'utf8');
+      const r = await contestar(claude, cuerpo);
+      expect(r).toMatchObject({ status: 409, body: { code: 'tui-mismatch', step: 'menu' } });
+      expect(String(r.body.error)).toContain('No se ha pulsado ninguna tecla');
+      // Las respuestas que no encajan con la pregunta pendiente se rechazan antes de mirar la terminal.
+      expect(await contestar(claude, { ...cuerpo, answers: [{ options: [1] }] })).toMatchObject({ status: 400 });
+      expect(await contestar(claude, { ...cuerpo, id: 'toolu_otra' })).toMatchObject({ status: 409, body: { code: 'not-pending' } });
+      await new Promise((ok) => setTimeout(ok, 100));
+      expect(readFileSync(recibido, 'utf8')).toBe(antes);
+      // Con el resultado en la transcripción ya no está pendiente.
+      appendFileSync(transcript, `${preguntas[2]}\n`);
+      expect(await contestar(claude, cuerpo)).toMatchObject({ status: 409, body: { code: 'not-pending' } });
+    });
+
+    it('un diálogo de permiso en la pantalla: /prompt lo describe y /answer comprueba la etiqueta antes de pulsar y que el diálogo se cierre', async () => {
+      await dibuja([' Bash command', '   rm -rf build', ' Do you want to proceed?', ' ❯ 1. Yes', '   2. No, and tell Claude what to do differently']);
+      expect(await prompt(claude)).toMatchObject({
+        status: 200,
+        body: {
+          prompt: {
+            kind: 'permission',
+            tool: null,
+            question: 'Do you want to proceed?',
+            options: [
+              { n: 1, label: 'Yes' },
+              { n: 2, label: 'No, and tell Claude what to do differently' },
+            ],
+          },
+        },
+      });
+
+      // Etiqueta distinta: no se pulsa nada.
+      expect(await contestar(claude, { kind: 'permission', option: 1, label: 'No' })).toMatchObject({ status: 409, body: { code: 'tui-mismatch', step: 'etiqueta' } });
+      expect(await pantalla()).not.toMatch(/^1$/m);
+
+      // Etiqueta correcta: se pulsa su número (queda en el eco), pero este «Claude» no cierra el diálogo: no se da por enviada.
+      expect(await contestar(claude, { kind: 'permission', option: 1, label: 'Yes' })).toMatchObject({ status: 409, body: { code: 'tui-mismatch', step: 'permiso' } });
+      await vi.waitFor(async () => expect(await pantalla()).toMatch(/^1$/m));
+      await tmuxCli('send-keys', '-t', `=${claude}:`, 'C-u');
+    });
+  });
+
+  describe('GET /prompt y POST /answer con lo que dejan los hooks (jdev-ai/prompts/)', () => {
+    const archivo = () => join(tmp, 'jdev-ai', 'prompts', `${sid}.json`);
+    const hookBase = { session_id: sid, transcript_path: transcript, cwd: '/home/u/proyecto' };
+    const escribeHook = (hook: Record<string, unknown>) => {
+      mkdirSync(join(tmp, 'jdev-ai', 'prompts'), { recursive: true });
+      writeFileSync(archivo(), JSON.stringify({ ...hookBase, ...hook }));
+    };
+    const pantalla = async () => (await tmuxCli('capture-pane', '-p', '-t', `=${claude}:`)).stdout;
+    const prompt = async () => {
+      const r = await api('GET', `/api/sessions/${claude}/prompt`);
+      return { status: r.status, body: (await r.json()) as { prompt?: Record<string, unknown> | null } };
+    };
+    const contestar = async (cuerpo: unknown) => {
+      const r = await api('POST', `/api/sessions/${claude}/answer`, cuerpo);
+      return { status: r.status, body: (await r.json()) as Record<string, unknown> };
+    };
+    const dibuja = async (lineas: string[]) => {
+      // Sube lo que hubiera: el lector mira de abajo arriba y un menú antiguo seguiría a la vista.
+      await tmuxCli('send-keys', '-N', '60', '-t', `=${claude}:`, 'Enter');
+      for (const l of lineas) {
+        await tmuxCli('send-keys', '-t', `=${claude}:`, '-l', '--', l);
+        await tmuxCli('send-keys', '-t', `=${claude}:`, 'Enter');
+      }
+      await vi.waitFor(async () => expect(await pantalla()).toContain(lineas.at(-1)!));
+    };
+    const SEP = '─'.repeat(40);
+    const pregunta = {
+      question: '¿Qué tono?',
+      header: 'Tono',
+      multiSelect: false,
+      options: [
+        { label: 'Serio', description: 'Formal' },
+        { label: 'Suave', description: 'Cercano' },
+      ],
+    };
+
+    it('la pregunta sale del hook aunque la transcripción no traiga su línea, se contesta y deja de estar pendiente con su resultado', async () => {
+      escribeHook({ hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [pregunta] }, tool_use_id: 'toolu_hook1' });
+      await dibuja([SEP, ' ☐ Tono', '', '¿Qué tono?', '', '❯ 1. Serio', '     Formal', '  2. Suave', '     Cercano', '  3. Type something.', SEP, '  4. Chat about this', '', 'Enter to select · Tab/Arrow keys to navigate · Esc to cancel']);
+      await vi.waitFor(async () =>
+        expect(await prompt()).toMatchObject({ status: 200, body: { prompt: { kind: 'question', id: 'toolu_hook1', screen: 'menu', active: 0, questions: [{ question: '¿Qué tono?', header: 'Tono' }] } } }),
+      );
+
+      // /answer la acepta como pendiente: pulsa el número (queda en el eco), pero este «Claude» no cierra el menú.
+      expect(await contestar({ kind: 'question', id: 'toolu_otro', answers: [{ options: [0] }] })).toMatchObject({ status: 409, body: { code: 'not-pending' } });
+      expect(await contestar({ kind: 'question', id: 'toolu_hook1', answers: [{ options: [1] }] })).toMatchObject({ status: 409, body: { code: 'tui-mismatch', step: 'envio' } });
+      await vi.waitFor(async () => expect(await pantalla()).toMatch(/^2$/m));
+
+      // Con su resultado en la transcripción ya no está pendiente, aunque el archivo siga ahí.
+      const linea = JSON.stringify({ type: 'user', timestamp: '2026-11-14T10:00:00.000Z', message: { role: 'user', content: [{ type: 'tool_result', content: 'ok', tool_use_id: 'toolu_hook1' }] } });
+      appendFileSync(transcript, `${linea}\n`);
+      expect(await prompt()).toMatchObject({ status: 200, body: { prompt: { kind: 'other' } } });
+      expect(await contestar({ kind: 'question', id: 'toolu_hook1', answers: [{ options: [1] }] })).toMatchObject({ status: 409, body: { code: 'not-pending' } });
+    });
+
+    it('sin el archivo del hook se vuelve al comportamiento anterior: sin pregunta en la transcripción, el menú es otra ventana', async () => {
+      rmSync(archivo(), { force: true });
+      await vi.waitFor(async () => expect(await prompt()).toMatchObject({ body: { prompt: { kind: 'other' } } }));
+      expect(await contestar({ kind: 'question', id: 'toolu_hook2', answers: [{ options: [0] }] })).toMatchObject({ status: 409, body: { code: 'not-pending' } });
+    });
+
+    it('el permiso lleva la herramienta, el comando y dónde se ejecuta; el hook de otro comando se ignora', async () => {
+      await dibuja([SEP, ' Bash command', '   rm -rf build', ' Do you want to proceed?', ' ❯ 1. Yes', '   2. No, and tell Claude what to do differently']);
+      escribeHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'rm -rf build', description: 'Borrar la carpeta build' }, cwd: '/home/u/proyecto/sub' });
+      await vi.waitFor(async () =>
+        expect(await prompt()).toMatchObject({
+          body: {
+            prompt: {
+              kind: 'permission',
+              tool: 'Bash',
+              input: { verb: 'Ejecuto', target: 'rm -rf build', text: 'rm -rf build', description: 'Borrar la carpeta build', where: 'sub' },
+              options: [{ n: 1, label: 'Yes' }, { n: 2, label: 'No, and tell Claude what to do differently' }],
+            },
+          },
+        }),
+      );
+
+      // Las opciones y la etiqueta que se comprueba al contestar siguen siendo las de la pantalla.
+      expect(await contestar({ kind: 'permission', option: 1, label: 'No' })).toMatchObject({ status: 409, body: { code: 'tui-mismatch', step: 'etiqueta' } });
+
+      escribeHook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'git push --force' } });
+      await vi.waitFor(async () => {
+        const { body } = await prompt();
+        expect(body.prompt).toMatchObject({ kind: 'permission', tool: null });
+        expect(body.prompt).not.toHaveProperty('input');
+      });
+
+      // Un hook de pregunta tampoco se toma por un permiso, y sin archivo no hay detalle.
+      rmSync(archivo(), { force: true });
+      await vi.waitFor(async () => expect((await prompt()).body.prompt).not.toHaveProperty('input'));
+      await tmuxCli('send-keys', '-t', `=${claude}:`, 'C-u');
+    });
+  });
+
+  describe('typeText y pressKey', () => {
+    it('teclean tal cual un texto que empieza por «-» o acaba en «;», sin pulsar Enter', async () => {
+      const antes = readFileSync(recibido, 'utf8');
+      expect(await typeText(cfg, claude, '-x; $HOME \;')).toBe(true);
+      expect(await pressKey(cfg, claude, '7')).toBe(true);
+      await vi.waitFor(async () => expect((await tmuxCli('capture-pane', '-p', '-t', `=${claude}:`)).stdout).toContain('-x; $HOME \;7'));
+      expect(readFileSync(recibido, 'utf8')).toBe(antes);
+      await pressKey(cfg, claude, 'Enter');
+      await vi.waitFor(() => expect(readFileSync(recibido, 'utf8')).toBe(`${antes}-x; $HOME \;7\n`));
+    });
+
+    it('typeText devuelve false si la sesión no existe o su nombre no es del panel', async () => {
+      expect(await typeText(cfg, 'jdev-foo-9999', 'hola')).toBe(false);
+      expect(await typeText(cfg, 'otra-cosa', 'hola')).toBe(false);
     });
   });
 });

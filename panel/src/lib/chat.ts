@@ -4,7 +4,8 @@
 
 import type { Token, Tokens } from 'marked';
 import { decodeEntities, lex } from '../components/Markdown.tsx';
-import type { AgentEvent } from '../../shared/follow.ts';
+import type { AgentEvent, QuestionItem } from '../../shared/follow.ts';
+import { questionSearchTexts } from './prompts.ts';
 import { formatElapsed, formatTokens } from './statusline.ts';
 
 export type ChatResult = { error: boolean; summary: string; lines: number; output?: string };
@@ -19,11 +20,16 @@ export type ChatStep = {
   result?: ChatResult;
 };
 
+/** Cómo terminó una pregunta de `AskUserQuestion`: `answers` es `{ pregunta: respuesta }` tal como la guardó Claude Code, si la trae. */
+export type ChatQuestionResult = { error: boolean; summary: string; answers?: Record<string, string>; /** Hora de la línea del resultado, si la trae. */ at?: number };
+
 export type ChatItem =
   | { kind: 'user'; key: string; text: string; at: number | null; images: number }
   | { kind: 'agent'; key: string; text: string; at: number | null }
   /** Comando de Claude Code (`/goal close`) con su salida local, si la tuvo. `name` va sin la barra. */
   | { kind: 'command'; key: string; name: string; args: string; at: number | null; output?: { text: string; error: boolean } }
+  /** Pregunta de Claude a la persona (`AskUserQuestion`), en el sitio de su `tool_use`. Está pendiente mientras no tenga `result`. */
+  | { kind: 'question'; key: string; id: string; questions: QuestionItem[]; at: number | null; result?: ChatQuestionResult }
   /** Herramientas ejecutadas seguidas, entre dos mensajes. */
   | { kind: 'tools'; key: string; steps: ChatStep[]; errors: number; at: number | null };
 
@@ -98,12 +104,15 @@ export function applyChatEvents(previo: ChatModel, eventos: readonly AgentEvent[
   const items = base.items.slice();
   let next = base.next;
   let turn = base.turn;
-  // Posición de cada herramienta (elemento, paso), construida solo si llega algún resultado.
+  // Posición de cada herramienta (elemento, paso) y de cada pregunta (elemento, -1), construida solo si llega algún resultado.
   const tabla: { m: Map<string, [number, number]> | null } = { m: null };
   const indexa = (): Map<string, [number, number]> => {
     if (tabla.m) return tabla.m;
     const m = new Map<string, [number, number]>();
-    items.forEach((it, i) => it.kind === 'tools' && it.steps.forEach((s, j) => m.set(s.id, [i, j])));
+    items.forEach((it, i) => {
+      if (it.kind === 'tools') it.steps.forEach((s, j) => m.set(s.id, [i, j]));
+      else if (it.kind === 'question') m.set(it.id, [i, -1]);
+    });
     tabla.m = m;
     return m;
   };
@@ -133,6 +142,9 @@ export function applyChatEvents(previo: ChatModel, eventos: readonly AgentEvent[
       const ultimo = items.length - 1;
       const it = items[ultimo];
       if (it && it.kind === 'command' && !it.output) items[ultimo] = { ...it, output: { text: e.text, error: e.error } };
+    } else if (e.type === 'question') {
+      items.push({ kind: 'question', key: `q${next++}`, id: e.id, questions: e.questions, at: e.at });
+      tabla.m?.set(e.id, [items.length - 1, -1]);
     } else if (e.type === 'tool') {
       const paso: ChatStep = { id: e.id, tool: e.tool, verb: e.verb, target: e.target, detail: e.detail, at: e.at };
       const ultimo = items.length - 1;
@@ -148,6 +160,12 @@ export function applyChatEvents(previo: ChatModel, eventos: readonly AgentEvent[
     } else if (e.type === 'result') {
       const pos = indexa().get(e.id);
       if (!pos) continue;
+      const destino = items[pos[0]]!;
+      if (destino.kind === 'question') {
+        // Una pregunta se contesta una sola vez: el primer resultado manda.
+        if (!destino.result) items[pos[0]] = { ...destino, result: { error: e.error, summary: e.summary, ...(e.answers !== undefined ? { answers: e.answers } : {}), ...(typeof e.at === 'number' ? { at: e.at } : {}) } };
+        continue;
+      }
       const g = clona(pos[0]);
       const paso = g.steps[pos[1]]!;
       if (paso.result) continue;
@@ -345,6 +363,7 @@ function pajares(it: ChatItem): Pajar[] {
   if (it.kind === 'user') r = [{ key: it.key, step: null, textos: [pliega(it.text)] }];
   else if (it.kind === 'agent') r = [{ key: it.key, step: null, textos: markdownPieces(it.text).map(pliega) }];
   else if (it.kind === 'command') r = [{ key: it.key, step: null, textos: [commandLine(it), it.output?.text ?? ''].filter((t) => t !== '').map(pliega) }];
+  else if (it.kind === 'question') r = [{ key: it.key, step: null, textos: questionSearchTexts(it).map(pliega) }];
   else {
     r = it.steps.map((s, j) => ({
       key: stepKey(it.key, j),
@@ -435,13 +454,19 @@ export const newMessagesLabel = (n: number): string => `${n} ${n === 1 ? 'mensaj
 
 /**
  * Lo que anuncia el lector de pantalla cuando llegan elementos tras los primeros `anunciados`: solo las respuestas de
- * Claude (lo que la persona escribe ya lo sabe) y de forma agregada, nunca el texto. Cadena vacía si no hay nada que decir.
+ * Claude (lo que la persona escribe ya lo sabe) y sus preguntas pendientes, de forma agregada, nunca el texto. Cadena
+ * vacía si no hay nada que decir.
  */
 export function newRepliesAnnouncement(items: readonly ChatItem[], anunciados: number): string {
   let n = 0;
-  for (let i = Math.max(0, anunciados); i < items.length; i++) if (items[i]!.kind === 'agent') n++;
-  if (n === 0) return '';
-  return n === 1 ? 'Nueva respuesta de Claude' : newMessagesLabel(n);
+  let preguntas = 0;
+  for (let i = Math.max(0, anunciados); i < items.length; i++) {
+    const it = items[i]!;
+    if (it.kind === 'agent') n++;
+    else if (it.kind === 'question' && !it.result) preguntas++;
+  }
+  const respuestas = n === 0 ? '' : n === 1 ? 'Nueva respuesta de Claude' : newMessagesLabel(n);
+  return [respuestas, preguntas === 0 ? '' : 'Claude te pregunta'].filter((t) => t !== '').join('. ');
 }
 
 /** Aviso de que Claude espera en la terminal: una frase propia y, aparte, el detalle que dio el hook. */

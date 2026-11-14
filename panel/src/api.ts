@@ -22,7 +22,7 @@ import type {
   PlaceChanges,
 } from './types.ts';
 import type { ActivityAgent, ActivityRange, ActivityResponse } from '../shared/activity.ts';
-import type { ChatSendResponse } from '../shared/chat.ts';
+import type { AnswerRequest, AnswerResponse, ChatSendResponse, PromptResponse } from '../shared/chat.ts';
 import type { ConversationResponse, FollowKind, FollowResponse } from '../shared/follow.ts';
 import type { SettingsPatch } from './lib/settingsPatch.ts';
 import { parseImageHeaders } from './lib/imageZoom.ts';
@@ -140,6 +140,12 @@ export const api = {
   /** Envía un mensaje (de una o varias líneas) a la sesión de Claude, como si se escribiera en su terminal. */
   sendInput: (sesion: string, text: string) =>
     request<ChatSendResponse>(`/api/sessions/${encodeURIComponent(sesion)}/input`, { method: 'POST', body: JSON.stringify({ text }) }),
+  /** Qué hay abierto en la terminal de una sesión de Claude y el chat puede contestar: una pregunta, un permiso, otra ventana o nada. */
+  prompt: (sesion: string, signal?: AbortSignal) =>
+    request<PromptResponse>(`/api/sessions/${encodeURIComponent(sesion)}/prompt`, { signal }).then((r) => r.prompt ?? null),
+  /** Contesta en la terminal una pregunta de Claude o un permiso. Falla con 409 `tui-mismatch` o `not-pending` (ver `AnswerConflict`). */
+  answer: (sesion: string, cuerpo: AnswerRequest) =>
+    request<AnswerResponse>(`/api/sessions/${encodeURIComponent(sesion)}/answer`, { method: 'POST', body: JSON.stringify(cuerpo) }),
   /** Sonidos de Windows disponibles para los avisos ([] fuera de WSL). */
   windowsSounds: () => request<{ windows: string[] }>('/api/sounds'),
   scrollState: (nombre: string, signal?: AbortSignal) =>
