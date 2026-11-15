@@ -37,6 +37,7 @@ export const es = {
       newSession: 'Nueva sesión',
       projects: 'Proyectos',
       legend: 'luces piloto',
+      finished: 'Terminadas',
       tabsLabel: 'Sesiones abiertas',
       states: { waiting: 'Te espera', working: 'Trabajando', idle: 'En reposo', done: 'Hecha' },
       viewLabel: 'Vista de la sesión',
@@ -160,7 +161,16 @@ export const es = {
     // Datos inventados: ningún proyecto, sesión ni cifra es real.
     projects: [
       { name: 'tienda-web', mono: 'TW', color: '#b79cf2' },
-      { name: 'api-pedidos', mono: 'AP', color: '#f0935a' },
+      // `finished`: conversaciones hechas que no están en el panel, dentro de «Terminadas».
+      {
+        name: 'api-pedidos',
+        mono: 'AP',
+        color: '#f0935a',
+        finished: [
+          { title: 'Límite de peticiones', place: 'principal', time: '6 d' },
+          { title: 'Logs estructurados', place: 'principal', time: '8 d' },
+        ],
+      },
       { name: 'docs', mono: 'DO', color: '#7fb0f5' },
     ],
     sessions: [

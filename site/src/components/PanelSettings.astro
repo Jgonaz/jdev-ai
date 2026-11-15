@@ -44,8 +44,8 @@ const accentColor: Record<string, string> = {
             <>
               <p class="pn-set__h">{t.appearance.theme}</p>
               <div class="pn-themes" role="group" aria-label={t.appearance.theme}>
-                {t.appearance.themes.map((theme, n) => (
-                  <button type="button" class={`pn-theme pn-theme--${theme.id}`} data-set={`theme:${theme.id}`} aria-pressed={n === 0 ? 'true' : 'false'}>
+                {t.appearance.themes.map((theme) => (
+                  <button type="button" class={`pn-theme pn-theme--${theme.id}`} data-set={`theme:${theme.id}`} aria-pressed={theme.id === 'grafito' ? 'true' : 'false'}>
                     <span class="pn-theme__preview" aria-hidden="true">
                       <span class="pn-theme__bar" />
                       <span class="pn-theme__row">

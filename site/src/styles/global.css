@@ -951,6 +951,82 @@ td.no {
   color: var(--fg-muted);
 }
 
+/* Conversaciones hechas fuera del panel, atenuadas y plegadas en «Terminadas». */
+.pn-row--prev {
+  color: var(--fg-muted);
+}
+
+.pn-row--prev .pn-row__title {
+  color: inherit;
+}
+
+.pn-fin {
+  min-height: 32px;
+  padding: 0 10px 0 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pn-fin:hover,
+.pn-fin[aria-expanded='true'] {
+  color: var(--fg-soft);
+}
+
+.pn-fin__label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pn-fin__line {
+  flex: 1;
+  height: 1px;
+  background: var(--fg-dim);
+  opacity: 0.6;
+}
+
+.pn-fin__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.pn-fin__chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: transform 0.12s;
+}
+
+.pn-fin[aria-expanded='true'] .pn-fin__chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pn-fin__chevron {
+    transition: none;
+  }
+}
+
+.pn-fin__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pn-fin__list[hidden] {
+  display: none;
+}
+
 /* Luces piloto: el estado se distingue por forma (punto con halo, anillo que gira,
    anillo quieto, check) y por el texto accesible, no solo por color. */
 .pn-light {

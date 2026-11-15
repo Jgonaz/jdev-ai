@@ -44,6 +44,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
 <div
   class="pn"
   data-panel
+  data-g-theme="grafito"
   data-view="term"
   data-period="week"
   data-on-ascii
@@ -123,6 +124,35 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
                   <span class="pn-row__time">{s.time}</span>
                 </button>
               ))}
+            {/* Conversaciones hechas fuera del panel, plegadas en «Terminadas». Decorativas: en el panel real se retoman. */}
+            {project.finished && (
+              <button
+                type="button"
+                class="pn-fin"
+                data-collapse={`fin${projects.indexOf(project)}`}
+                aria-controls={`pn-fin-${lang}-${projects.indexOf(project)}`}
+                aria-expanded="false"
+              >
+                <span class="pn-fin__label">{ui.finished}</span>
+                <span class="pn-fin__line" aria-hidden="true" />
+                <span class="pn-fin__count">{project.finished.length}</span>
+                <svg class="pn-fin__chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+              </button>
+            )}
+            {project.finished && (
+              <div class="pn-fin__list" id={`pn-fin-${lang}-${projects.indexOf(project)}`} hidden>
+                {project.finished.map((r) => (
+                  <div class="pn-row pn-row--prev pn-row--done">
+                    <span class="pn-light pn-light--done" role="img" aria-label={ui.states.done} />
+                    <span class="pn-row__text">
+                      <span class="pn-row__title">{r.title}</span>
+                      <span class="pn-row__state">{r.place}</span>
+                    </span>
+                    <span class="pn-row__time">{r.time}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))
       }

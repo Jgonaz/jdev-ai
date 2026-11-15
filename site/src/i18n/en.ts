@@ -35,6 +35,7 @@ export const en: Dictionary = {
       newSession: 'New session',
       projects: 'Projects',
       legend: 'status lights',
+      finished: 'Finished',
       tabsLabel: 'Open sessions',
       states: { waiting: 'Waiting for you', working: 'Working', idle: 'Idle', done: 'Done' },
       viewLabel: 'Session view',
@@ -154,7 +155,15 @@ export const en: Dictionary = {
     },
     projects: [
       { name: 'web-shop', mono: 'WS', color: '#b79cf2' },
-      { name: 'orders-api', mono: 'OA', color: '#f0935a' },
+      {
+        name: 'orders-api',
+        mono: 'OA',
+        color: '#f0935a',
+        finished: [
+          { title: 'Rate limiting', place: 'main', time: '6 d' },
+          { title: 'Structured logs', place: 'main', time: '8 d' },
+        ],
+      },
       { name: 'docs', mono: 'DO', color: '#7fb0f5' },
     ],
     sessions: [
