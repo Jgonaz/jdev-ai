@@ -60,8 +60,11 @@ export type SessionUsage = {
 
 export type SessionActivity = {
   subagents: { id: string; type: string; since: number | null }[];
-  /** `id` permite seguir su salida; falta si Claude no lo dio con un formato válido. */
-  shells: { label: string; id?: string }[];
+  /**
+   * `id` permite seguir su salida; falta si Claude no lo dio con un formato válido. `server` marca las de larga vida
+   * (servidor, watch), que no mantienen la sesión en «Trabajando».
+   */
+  shells: { label: string; id?: string; server?: true }[];
   artifacts: { url: string; title: string | null }[];
 };
 

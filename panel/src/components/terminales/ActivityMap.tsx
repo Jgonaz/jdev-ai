@@ -44,6 +44,8 @@ export type ActivityMapProps = {
   model: string;
   /** Subagentes activos, de los mismos datos que la cabecera. */
   subagents: number;
+  /** Shells en segundo plano que hacen esperar a la persona (no los servidores). */
+  shells: number;
   /** La vista está a la vista: sin ella no hay pulsos ni repintados. */
   active: boolean;
   /** Desplegable «Actividad reciente» abierto. El mapa y la línea de «ahora» se mantienen al día aunque esté cerrado. */
@@ -116,7 +118,7 @@ function Pulses({ pulsos, activo, alPodar }: { pulsos: readonly Pulse[]; activo:
  * estaciones con sus radios, la ruta reciente, halos y manecillas de lo que sigue en marcha, y debajo la línea de «ahora»
  * y, en un desplegable, las últimas filas. El dibujo (SVG) es decorativo y las filas son su equivalente textual.
  */
-export function ActivityMap({ events, total, epoch, synced, state, percent, model, subagents, active, listOpen, onListToggle }: ActivityMapProps) {
+export function ActivityMap({ events, total, epoch, synced, state, percent, model, subagents, shells, active, listOpen, onListToggle }: ActivityMapProps) {
   const reducido = useMediaQuery('(prefers-reduced-motion: reduce)');
   const visible = useDocumentVisible();
   const interrumpida = state === 'other';
@@ -164,7 +166,8 @@ export function ActivityMap({ events, total, epoch, synced, state, percent, mode
 
   const errorPulses = useMemo(() => new Set<Station>(pulsos.filter((p) => p.kind === 'error').map((p) => p.station)), [pulsos]);
   // Con subagentes trabajando, lo que está en marcha es Agentes, no el modelo de la sesión principal.
-  const pensando = state === 'working' && board.now.kind !== 'running' && subagents === 0;
+  // Con el turno acabado y solo shells en segundo plano, el modelo no está pensando: espera a que terminen.
+  const pensando = state === 'working' && board.now.kind !== 'running' && subagents === 0 && !(board.now.kind === 'ready' && shells > 0);
   const estaciones = useMemo(
     () => stationViews(board, { now: ahora, interrupted: interrumpida, errorPulses, thinking: pensando, subagents }),
     [board, ahora, interrumpida, errorPulses, pensando, subagents],
@@ -174,7 +177,7 @@ export function ActivityMap({ events, total, epoch, synced, state, percent, mode
   const anillo = contextRing(percent);
   const trabajando = estaciones.some((s) => s.running);
   const linea: NowLine = synced
-    ? nowLine(board, { interrupted: interrumpida, working: state === 'working', subagents })
+    ? nowLine(board, { interrupted: interrumpida, working: state === 'working', subagents, shells })
     : { glyph: '·', tone: 'faint', text: 'Sin datos todavía', time: '' };
   const filas = useMemo(() => viewRows(board, interrumpida), [board, interrumpida]);
 

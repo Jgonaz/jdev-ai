@@ -54,6 +54,7 @@ const props = (over: Partial<ActivityMapProps> = {}): ActivityMapProps => ({
   percent: 34,
   model: 'Opus 5.5',
   subagents: 0,
+  shells: 0,
   active: true,
   listOpen: true,
   onListToggle: () => undefined,

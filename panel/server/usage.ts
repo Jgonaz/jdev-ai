@@ -233,8 +233,11 @@ export type ActiveSubagent = { id: string; type: string; since: number | null };
 export type ShellTask = { id: string | null; label: string };
 export type SessionActivity = {
   subagents: ActiveSubagent[];
-  /** Descripción (o comando) de las shells y monitores en marcha en el último Stop, con su id para seguirlas. */
-  shells: { label: string; id?: string }[];
+  /**
+   * Descripción (o comando) de las shells y monitores en marcha en el último Stop, con su id para seguirlas.
+   * `server` marca las que parecen de larga vida (un servidor de desarrollo, un watch…): no hacen esperar a la persona.
+   */
+  shells: { label: string; id?: string; server?: true }[];
   artifacts: { url: string; title: string | null }[];
 };
 
@@ -350,10 +353,33 @@ export function deriveActivity(eventos: readonly ActivityEvent[], notBefore = 0)
   }
   const resultado: SessionActivity = {
     subagents: [...subagentes.values()].slice(0, MAX_SUBAGENTES),
-    shells: shells.slice(0, MAX_SHELLS).map((t) => (t.id === null ? { label: t.label } : { label: t.label, id: t.id })),
+    shells: shells.slice(0, MAX_SHELLS).map((t) => ({
+      label: t.label,
+      ...(t.id === null ? {} : { id: t.id }),
+      ...(looksLikeServer(t.label) ? { server: true as const } : {}),
+    })),
     artifacts: [...artifacts].slice(-MAX_ARTIFACTS).map(([url, title]) => ({ url, title })),
   };
   return resultado.subagents.length + resultado.shells.length + resultado.artifacts.length === 0 ? null : resultado;
+}
+
+// Palabras de un proceso que no termina solo: servidores, watchers y seguimientos de logs. «dev» no cuenta dentro de
+// una ruta («/dev/null») ni de otra palabra; sí como script («dev», «dev:web»).
+const SERVIDOR =
+  /(?<![\w/.-])(?:dev|serve|server|start|watch|preview|storybook|nodemon|runserver|uvicorn|gunicorn)(?![\w/.-])|--watch\b|\btail\b[^|;&]*\s-[a-z]*f|\bhttp\.server\b|\bcompose\s+up\b/i;
+
+/** ¿El texto de la tarea parece un proceso de larga vida (servidor, watch, `tail -f`) en lugar de algo que acaba? */
+export function looksLikeServer(label: string): boolean {
+  return SERVIDOR.test(label);
+}
+
+/**
+ * ¿Hay en segundo plano algo cuyo final espera la persona? Subagentes y shells que no parecen servidores. Tras el
+ * Stop de la sesión, los subagentes que quedan son los lanzados en segundo plano.
+ */
+export function waitsOnBackground(actividad: SessionActivity | null): boolean {
+  if (!actividad) return false;
+  return actividad.subagents.length > 0 || actividad.shells.some((t) => !t.server);
 }
 
 /**

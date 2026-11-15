@@ -365,6 +365,9 @@ describe('filas y línea de ahora', () => {
   it('respuesta lista con lo que tardó el turno; sin actividad, esperando la primera herramienta', () => {
     const ev: AgentEvent[] = [{ type: 'user', text: '', at: s(0) }, { type: 'message', text: '', at: s(252) }];
     expect(nowLine(buildBoard(ev, s(300)), { interrupted: false, working: false })).toEqual({ glyph: '·', tone: 'faint', text: 'Respuesta lista', time: '4 min 12 s' });
+    // Turno acabado, pero la sesión sigue trabajando: espera a sus shells en segundo plano.
+    expect(nowLine(buildBoard(ev, s(300)), { interrupted: false, working: true, shells: 2 })).toEqual({ glyph: '●', tone: 'accent', text: 'En segundo plano · 2 shells en marcha', time: '' });
+    expect(nowLine(buildBoard(ev, s(300)), { interrupted: false, working: false, shells: 1 })).toMatchObject({ text: 'Respuesta lista' });
     expect(nowLine(buildBoard([], s(1)), { interrupted: false, working: true })).toMatchObject({ text: 'Esperando la primera herramienta' });
   });
 

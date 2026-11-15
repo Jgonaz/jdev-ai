@@ -12,7 +12,7 @@ import { deleteConversationState } from './purge.ts';
 import { TitleReader, appendCustomTitle, defaultTitle, parseTitle, resolveTranscript } from './titles.ts';
 import { createSession, isPanelSessionName, killSession, listSessions, setSessionTitle } from './tmux.ts';
 import type { CreateOptions, SessionPlan, TmuxConfig } from './tmux.ts';
-import { ACTIVITY_MAX_BYTES, STATUSLINE_MAX_BYTES, accountFrom, deriveActivity, followTargets, parseActivityLog, parseStatusline } from './usage.ts';
+import { ACTIVITY_MAX_BYTES, STATUSLINE_MAX_BYTES, accountFrom, deriveActivity, followTargets, parseActivityLog, parseStatusline, waitsOnBackground } from './usage.ts';
 import type { Account, ActivityEvent, SessionActivity, SessionUsage, Statusline } from './usage.ts';
 import type { Project } from './projects.ts';
 import type { FollowContext } from './follow.ts';
@@ -466,13 +466,21 @@ export class SessionService {
       const branch = s.worktree
         ? (proyecto?.worktrees.find((w) => w.name === s.worktree)?.branch ?? null)
         : (proyecto?.branch ?? null);
+      // Una sesión terminada ya no tiene nada en marcha, aunque su último Stop dijera otra cosa.
+      const actividad =
+        file && s.alive && file.state !== 'ended'
+          ? deriveActivity(this.activities.snapshot().get(file.sessionId) ?? [], this.restarted.get(file.sessionId) ?? 0)
+          : null;
+      // El turno acabó, pero la persona sigue esperando a lo que dejó en segundo plano (tests, un merge, un
+      // subagente): cuenta como trabajando hasta que un Stop posterior diga que ya no queda nada.
+      const estado = deriveState(file, s.alive);
       lista.push({
         name: s.name,
         project: s.project,
         agent: s.agent,
         worktree: s.worktree,
         branch,
-        state: deriveState(file, s.alive),
+        state: estado === 'idle' && waitsOnBackground(actividad) ? 'working' : estado,
         tracked: file !== undefined,
         title: parsed && parsed.title !== '' ? parsed.title : defaultTitle(s.project),
         done: resolveDone(entrada, parsed?.closed ?? false),
@@ -482,11 +490,7 @@ export class SessionService {
         created: s.created,
         notice: file && s.alive && file.state === 'waiting' ? file.message : '',
         usage: (file ? this.statuslines.snapshot().get(file.sessionId)?.usage : undefined) ?? null,
-        // Una sesión terminada ya no tiene nada en marcha, aunque su último Stop dijera otra cosa.
-        activity:
-          file && s.alive && file.state !== 'ended'
-            ? deriveActivity(this.activities.snapshot().get(file.sessionId) ?? [], this.restarted.get(file.sessionId) ?? 0)
-            : null,
+        activity: actividad,
         archived: this.opts.archive?.hasSession(s.name, s.created) ?? false,
         run: s.agent === SHELL_AGENT && s.run !== '' ? s.run : null,
         chat: chatInfo(s.agent, file),

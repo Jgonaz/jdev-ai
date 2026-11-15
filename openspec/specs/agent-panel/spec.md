@@ -59,6 +59,8 @@ El diálogo Nueva sesión SHALL permitir elegir proyecto (incluido el propio har
 
 La barra lateral SHALL agrupar las sesiones por proyecto y SHALL mostrar de cada una su título, agente, rama o worktree, tiempo desde el último cambio y estado. Los estados SHALL ser: te espera (el agente necesita una respuesta o un permiso), trabajando, en reposo y hecha (la conversación está marcada como hecha en su estado de conversación o, por compatibilidad, su título lleva la marca antigua `[Closed]`). Los estados SHALL distinguirse por forma y texto además de por color; una conversación hecha SHALL mostrarse con un check y el texto «Hecha», sin tachar el título. Para agentes que no informan del estado, el panel SHALL mostrar solo si la sesión está viva.
 
+Una sesión de Claude cuyo turno ha terminado SHALL seguir «trabajando» mientras el último Stop registre subagentes o shells en segundo plano en marcha, salvo las shells que parezcan procesos de larga vida (servidor de desarrollo, `start`, `serve`, `preview`, `watch`, `tail -f` y similares), que no hacen esperar a la persona. Pasará a «en reposo», con su aviso de turno terminado, cuando un Stop posterior ya no registre ninguna.
+
 #### Scenario: Agente pide permiso
 
 - **WHEN** Claude Code en una sesión del panel pide permiso para ejecutar un comando
@@ -68,6 +70,16 @@ La barra lateral SHALL agrupar las sesiones por proyecto y SHALL mostrar de cada
 
 - **WHEN** la persona envía un mensaje o concede el permiso
 - **THEN** la sesión pasa a «trabajando» y, al terminar el turno del agente, a «en reposo»
+
+#### Scenario: Tests en segundo plano
+
+- **WHEN** Claude termina el turno con la suite de tests corriendo en una shell en segundo plano
+- **THEN** la sesión sigue en «trabajando» y pasa a «en reposo» cuando Claude acaba el turno en que recibe el aviso de que la suite terminó
+
+#### Scenario: Servidor en segundo plano
+
+- **WHEN** Claude termina el turno con solo `pnpm dev` en segundo plano
+- **THEN** la sesión pasa a «en reposo»
 
 #### Scenario: Título actualizado por el agente
 

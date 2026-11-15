@@ -522,9 +522,13 @@ export type NowLine = { glyph: '●' | '·'; tone: 'accent' | 'faint'; text: str
 /** La línea de «ahora»: lo que se ejecuta, la respuesta lista o la espera. `working` es que la sesión está trabajando. */
 export function nowLine(
   board: Board,
-  { interrupted, working, subagents = 0 }: { interrupted: boolean; working: boolean; subagents?: number },
+  { interrupted, working, subagents = 0, shells = 0 }: { interrupted: boolean; working: boolean; subagents?: number; shells?: number },
 ): NowLine {
   const n = board.now;
+  // El turno acabó, pero la sesión sigue trabajando: espera a las shells que dejó en segundo plano (tests, un merge…).
+  if (n.kind === 'ready' && working && shells > 0 && subagents === 0 && !interrupted) {
+    return { glyph: '●', tone: 'accent', text: `En segundo plano · ${shells} ${shells === 1 ? 'shell' : 'shells'} en marcha`, time: '' };
+  }
   // Subagentes en segundo plano: su llamada ya devolvió resultado, pero siguen trabajando.
   if (n.kind !== 'running' && subagents > 0 && !interrupted) {
     return { glyph: '●', tone: 'accent', text: `Agentes · ${subagents} ${subagents === 1 ? 'subagente' : 'subagentes'} en marcha`, time: '' };

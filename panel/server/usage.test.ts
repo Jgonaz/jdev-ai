@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { accountFrom, deriveActivity, followTargets, isArtifactUrl, isStateFileName, parseActivityLog, parseStatusline, readStateFile } from './usage.ts';
+import { accountFrom, deriveActivity, followTargets, isArtifactUrl, isStateFileName, looksLikeServer, parseActivityLog, parseStatusline, readStateFile, waitsOnBackground } from './usage.ts';
 import { statuslineMuestra } from './statusline-fixtures.ts';
 import type { Statusline } from './usage.ts';
 
@@ -180,10 +180,10 @@ describe('parseActivityLog / deriveActivity', () => {
       ),
     ].join('\n');
     expect(deriveActivity(parseActivityLog(log))?.shells).toEqual([
-      { label: 'pnpm dev', id: 'b1' },
+      { label: 'pnpm dev', id: 'b1', server: true },
       { label: 'Espera el despliegue', id: 'b3' },
       { label: 'ci/logs', id: 'b4' },
-      { label: 'tail -f x', id: 'b7' },
+      { label: 'tail -f x', id: 'b7', server: true },
     ]);
   });
 
@@ -294,7 +294,7 @@ describe('parseActivityLog / deriveActivity', () => {
 
   it('lee la salida real de bin/session-activity (hora y el resto del evento en la misma línea)', () => {
     const real = '{"jdev_at":"2026-11-02T16:54:02Z","session_id":"s1", "hook_event_name":"Stop", "background_tasks":[{"id":"b","type":"shell","status":"running","command":"npm start"}]}';
-    expect(deriveActivity(parseActivityLog(real))?.shells).toEqual([{ label: 'npm start', id: 'b' }]);
+    expect(deriveActivity(parseActivityLog(real))?.shells).toEqual([{ label: 'npm start', id: 'b', server: true }]);
   });
 });
 
@@ -336,5 +336,24 @@ describe('lectura segura de archivos de estado', () => {
     } finally {
       rmSync(fuera, { recursive: true, force: true });
     }
+  });
+});
+
+describe('looksLikeServer / waitsOnBackground', () => {
+  it('reconoce los procesos de larga vida y no confunde las rutas ni otras palabras', () => {
+    for (const l of ['pnpm dev', 'npm run dev:web', 'npm start', 'vite preview', 'vitest --watch', 'tail -f /tmp/x.log', 'tail -n 50 -f log', 'python3 -m http.server 8000', 'docker compose up', 'Start dev server', 'bin/panel start']) {
+      expect(looksLikeServer(l), l).toBe(true);
+    }
+    for (const l of ['pnpm test', 'pnpm test:e2e > /dev/null 2>&1', 'bin/worktree merge feature', 'bin/check', 'pnpm build', 'devrun.test.ts', 'git restart-x', 'npx playwright test', 'Suite e2e completa']) {
+      expect(looksLikeServer(l), l).toBe(false);
+    }
+  });
+
+  it('solo hacen esperar los subagentes y las shells que no son servidores', () => {
+    expect(waitsOnBackground(null)).toBe(false);
+    expect(waitsOnBackground({ subagents: [], shells: [{ label: 'pnpm dev', server: true }], artifacts: [] })).toBe(false);
+    expect(waitsOnBackground({ subagents: [], shells: [], artifacts: [{ url: 'https://claude.ai/artifact/x', title: null }] })).toBe(false);
+    expect(waitsOnBackground({ subagents: [], shells: [{ label: 'pnpm dev', server: true }, { label: 'pnpm test' }], artifacts: [] })).toBe(true);
+    expect(waitsOnBackground({ subagents: [{ id: 'a', type: 'qa', since: null }], shells: [], artifacts: [] })).toBe(true);
   });
 });

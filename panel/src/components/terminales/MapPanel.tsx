@@ -38,6 +38,7 @@ function LiveMap({ session, active, listOpen, onListToggle, imagesOpen, onImages
         percent={contextView(session)?.percent ?? null}
         model={session.usage?.model ?? ''}
         subagents={workCounts(session.activity).subagents}
+        shells={session.activity?.shells.filter((t) => !t.server).length ?? 0}
         active={active}
         listOpen={listOpen}
         onListToggle={onListToggle}

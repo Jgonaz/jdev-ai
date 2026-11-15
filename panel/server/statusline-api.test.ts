@@ -20,8 +20,9 @@ type Sesion = {
   name: string;
   agent: string;
   tracked: boolean;
+  state: string;
   usage: { model: string | null; effort: string | null; context: { used: number | null; size: number | null; percent: number | null } | null; updatedAt: number } | null;
-  activity: { subagents: { id: string; type: string; since: number | null }[]; shells: { label: string; id?: string }[]; artifacts: { url: string; title: string | null }[] } | null;
+  activity: { subagents: { id: string; type: string; since: number | null }[]; shells: { label: string; id?: string; server?: true }[]; artifacts: { url: string; title: string | null }[] } | null;
 };
 type Cuenta = { fiveHour: { percent: number; resetsAt: number | null } | null; sevenDay: { percent: number } | null; updatedAt: number } | null;
 
@@ -165,7 +166,7 @@ describe('statusline y actividad de las sesiones de Claude', () => {
     expect(s.usage).toMatchObject({ model: 'Opus 5.5', effort: 'medium', context: { used: 194000, size: 1000000, percent: 19 } });
     expect(s.activity).toEqual({
       subagents: [{ id: 'a1', type: 'qa', since: expect.any(Number) }],
-      shells: [{ label: 'pnpm dev', id: 'b1' }],
+      shells: [{ label: 'pnpm dev', id: 'b1', server: true }],
       artifacts: [{ url: 'https://claude.ai/artifact/6AW2wshSfooPFsidhdegjU', title: 'Plan de pruebas' }],
     });
     // Una sesión de Codex nunca tiene estos datos.
@@ -179,6 +180,23 @@ describe('statusline y actividad de las sesiones de Claude', () => {
       sevenDay: { percent: 22 },
     });
     expect(await cuenta()).toMatchObject({ fiveHour: { percent: 3.4 }, sevenDay: { percent: 22 } });
+  });
+
+  it('tras el Stop sigue trabajando mientras espera a tareas en segundo plano que no son servidores', async () => {
+    const stop = (tareas: unknown[]) => ({ jdev_at: new Date().toISOString(), hook_event_name: 'Stop', background_tasks: tareas });
+    const estadoDe = async () => (await lista()).find((s) => s.name === claude)?.state;
+    escribirEstado('abc-1', claude, { state: 'idle', event: 'Stop' });
+    // El subagente qa en segundo plano hace esperar; el servidor de desarrollo no.
+    await vi.waitFor(async () => expect(await estadoDe()).toBe('working'));
+
+    registrar('abc-1', stop([{ id: 'b1', type: 'shell', status: 'running', command: 'pnpm dev' }]));
+    await vi.waitFor(async () => expect(await estadoDe()).toBe('idle'));
+
+    registrar('abc-1', stop([{ id: 'b2', type: 'shell', status: 'running', command: 'pnpm test:e2e > /dev/null' }]));
+    await vi.waitFor(async () => expect(await estadoDe()).toBe('working'));
+
+    registrar('abc-1', stop([{ id: 'b2', type: 'shell', status: 'completed', command: 'pnpm test:e2e > /dev/null' }]));
+    await vi.waitFor(async () => expect(await estadoDe()).toBe('idle'));
   });
 
   it('una statusline nueva actualiza el contexto y los límites, y lo empuja por /ws/events', async () => {
