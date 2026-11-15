@@ -129,6 +129,16 @@ export const IconImage = (p: Props) => (
     <path d="M21 17l-5-5-9 8" />
   </Svg>
 );
+export const IconMaximize = (p: Props) => (
+  <Svg {...p}>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </Svg>
+);
+export const IconMinimize = (p: Props) => (
+  <Svg {...p}>
+    <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+  </Svg>
+);
 export const IconZoomOut = (p: Props) => (
   <Svg {...p}>
     <path d="M5 12h14" />

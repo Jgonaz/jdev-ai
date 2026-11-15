@@ -30,6 +30,14 @@
   font-size: var(--text-lg);
   font-weight: 600;
 }
+.modal__actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.modal__actions + .modal__close {
+  margin-left: 4px;
+}
 .modal__close {
   margin-left: auto;
   width: 36px;

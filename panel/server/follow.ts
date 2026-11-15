@@ -167,6 +167,8 @@ const SINTETICO = /^<(?:system-reminder|local-command-|command-|bash-|task-notif
 const RECORDATORIOS = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
 // Claude Code guarda un pegado largo (>~1000 caracteres) envuelto: `\n\n<pasted_content id="2a51">\n…\n</pasted_content id="2a51">\n`.
 // Solo se quita cuando abre y cierra con el mismo id; uno sin cerrar o con otro id se deja tal cual.
+/** Ruta de una imagen pegada en Claude Code, en la línea interna que la acompaña. */
+const IMAGEN_PEGADA = /\[Image: source: ([^\]\n]+)\]/g;
 const PEGADO = /<pasted_content id="([^"\s]+)">\n?([\s\S]*?)\n?<\/pasted_content id="\1">\n?/g;
 
 /**
@@ -314,6 +316,15 @@ export function parseAgentLines(texto: string, opciones: { primero: boolean; cwd
       // Mensaje de usuario que no escribió la persona: metadatos, resúmenes de compactación o eventos de otro origen.
       const origen = objeto(o.origin);
       const ajeno = o.isMeta === true || o.isCompactSummary === true || (origen !== null && origen.kind !== 'human');
+      if (conversacion && o.isMeta === true) {
+        // Las imágenes pegadas llegan en el mensaje en base64; su ruta, en una línea interna aparte.
+        const t = textoDeUsuario(contenido);
+        const rutas = t === null ? [] : [...t.matchAll(IMAGEN_PEGADA)].map((m) => m[1]!.trim());
+        if (rutas.length > 0) {
+          for (const path of rutas) eventos.push({ type: 'image', path, at });
+          continue;
+        }
+      }
       if (conversacion && o.isMeta !== true) {
         // Comandos y su salida local (los isMeta, con instrucciones internas, no se muestran).
         const t = textoDeUsuario(contenido);

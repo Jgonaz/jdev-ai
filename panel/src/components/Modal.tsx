@@ -14,6 +14,10 @@ type Props = {
   role?: 'dialog' | 'alertdialog';
   /** Selector CSS del elemento que recibe el foco al abrir. */
   initialFocus?: string;
+  /** Clase extra del diálogo (variantes de tamaño). */
+  className?: string;
+  /** Botones de la cabecera, a la izquierda de la «×». */
+  actions?: ReactNode;
 };
 
 /**
@@ -30,7 +34,7 @@ function moverEnPie(e: KeyboardEvent<HTMLElement>): void {
 }
 
 /** Diálogo modal accesible: role, aria-modal, foco atrapado y cierre con Escape. */
-export function Modal({ title, onClose, children, footer, width = 640, role = 'dialog', initialFocus }: Props) {
+export function Modal({ title, onClose, children, footer, width = 640, role = 'dialog', initialFocus, className, actions }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const idTitulo = useId();
   const cerrar = useRef(onClose);
@@ -48,11 +52,12 @@ export function Modal({ title, onClose, children, footer, width = 640, role = 'd
 
   return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} className="modal" role={role} aria-modal="true" aria-labelledby={idTitulo} style={{ width }} tabIndex={-1}>
+      <div ref={ref} className={className ? `modal ${className}` : 'modal'} role={role} aria-modal="true" aria-labelledby={idTitulo} style={{ width }} tabIndex={-1}>
         <div className="modal__head">
           <h1 id={idTitulo} className="modal__title">
             {title}
           </h1>
+          {actions && <div className="modal__actions">{actions}</div>}
           {/* En una confirmación, Cancelar y Escape ya cierran: la «×» queda fuera del orden de Tab para que recorra solo las opciones. */}
           <button type="button" className="icon-btn modal__close" aria-label="Cerrar" tabIndex={role === 'alertdialog' ? -1 : undefined} onClick={onClose}>
             <IconClose />

@@ -5,6 +5,8 @@ import { MAP_MAX_EVENTS, lightMapEvent } from './activityMap.ts';
 import { EMPTY_CHAT, applyChatEvents, conversationDelay } from './chat.ts';
 import type { ChatModel } from './chat.ts';
 import { errorDelay } from './follow.ts';
+import { EMPTY_SHARED_IMAGES, collectSharedImages } from './sharedImages.ts';
+import type { SharedImages } from './sharedImages.ts';
 
 /** Lo último que se sabe de la conversación de una sesión. Vive fuera del componente: al volver a la vista chat no se relee todo. */
 export type ConversationEntry = {
@@ -15,6 +17,8 @@ export type ConversationEntry = {
   mapEvents: readonly AgentEvent[];
   /** Eventos que han llegado al mapa desde el último reinicio, también los ya descartados: la diferencia entre dos lecturas son los eventos nuevos. */
   mapTotal: number;
+  /** Imágenes compartidas por la persona y por el agente (desplegable «Imágenes» del panel derecho). */
+  images: SharedImages;
   /** Byte desde el que pedir lo siguiente. */
   from: number;
   /** Tamaño de la transcripción en la última respuesta (para el progreso de la primera carga). */
@@ -36,6 +40,7 @@ export const EMPTY_CONVERSATION: ConversationEntry = {
   chat: EMPTY_CHAT,
   mapEvents: [],
   mapTotal: 0,
+  images: EMPTY_SHARED_IMAGES,
   from: 0,
   size: 0,
   synced: false,
@@ -55,7 +60,7 @@ export function applyConversation(previa: ConversationEntry, r: ConversationResp
   const base = { lastOk: ahora, error: null, failures: 0, version: previa.version + 1, sessionId: r.sessionId, size: r.size };
   // Otra sesión pedida desde un byte que no era el 0: esta respuesta no empieza al principio del archivo.
   if (cambioSesion && !r.reset && previa.from !== 0) {
-    return { ...base, chat: EMPTY_CHAT, mapEvents: [], mapTotal: 0, from: 0, synced: false };
+    return { ...base, chat: EMPTY_CHAT, mapEvents: [], mapTotal: 0, images: EMPTY_SHARED_IMAGES, from: 0, synced: false };
   }
   const empezar = r.reset || cambioSesion;
   const ligeros = r.events.flatMap((e) => lightMapEvent(e) ?? []);
@@ -65,6 +70,7 @@ export function applyConversation(previa: ConversationEntry, r: ConversationResp
     chat: applyChatEvents(previa.chat, r.events, empezar),
     mapEvents: mapEvents.length > MAP_MAX_EVENTS ? mapEvents.slice(-MAP_MAX_EVENTS) : mapEvents,
     mapTotal: (empezar ? 0 : previa.mapTotal) + ligeros.length,
+    images: collectSharedImages(empezar ? EMPTY_SHARED_IMAGES : previa.images, r.events),
     from: r.from,
     synced: r.more ? (empezar ? false : previa.synced) : true,
   };

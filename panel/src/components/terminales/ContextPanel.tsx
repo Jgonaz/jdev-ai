@@ -36,7 +36,10 @@ export function ContextPanel({ style, hidden = false }: { style?: CSSProperties;
             <span className="context__whoname">{sesion.title}</span>
             <span className="context__whoagent">{sesion.agent === 'shell' ? 'terminal' : sesion.agent}</span>
           </div>
-          <MapPanel session={sesion} active={!hidden && !dialogOpen} activityOpen={prefs.mapActivityOpen} onActivityToggle={(o) => setPrefs({ mapActivityOpen: o })} />
+          <MapPanel session={sesion} active={!hidden && !dialogOpen} activityOpen={prefs.mapActivityOpen} onActivityToggle={(o) => setPrefs({ mapActivityOpen: o })}
+            imagesOpen={prefs.mapImagesOpen}
+            onImagesToggle={(o) => setPrefs({ mapImagesOpen: o })}
+          />
           {motivo !== null ? (
             <div className="context__ses context__ses--plain">
               <SessionDetails session={sesion} project={proyecto} command={comando} />

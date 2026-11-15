@@ -52,7 +52,7 @@ const sesion = (over: Partial<SessionInfo> = {}): SessionInfo => ({
 });
 const monta = (s: SessionInfo, active = true, activityOpen = false, onActivityToggle: (o: boolean) => void = () => undefined) =>
   act(async () => {
-    raiz.render(createElement(MapPanel, { session: s, active, activityOpen, onActivityToggle }));
+    raiz.render(createElement(MapPanel, { session: s, active, activityOpen, onActivityToggle, imagesOpen: false, onImagesToggle: () => undefined }));
   });
 
 describe('MapPanel: estados sin mapa', () => {

@@ -524,9 +524,17 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   en las terminales sin agente el conmutador está desactivado y explica por qué.
 - **Mapa de actividad.** El panel derecho de Terminales muestra la sesión activa
   (o la que lanzó la pestaña de seguimiento activa). Arriba están su nombre y
-  agente, el mapa y la línea de lo que se ejecuta ahora. Debajo hay dos
-  desplegables, abiertos de entrada, que recuerdan si los cierras:
+  agente, el mapa y la línea de lo que se ejecuta ahora. Debajo hay unos
+  desplegables que recuerdan si los abres o cierras:
   - «Actividad reciente (N)», con las filas de actividad;
+  - «Imágenes (N)», plegado de entrada y solo si hay alguna: las imágenes de la
+    conversación en dos cuadrículas, «Compartidas por ti» (las que pegas en
+    Claude Code y las rutas de tus mensajes) y «Compartidas por el agente» (las
+    rutas de imagen de sus mensajes, no las que solo lee). Al pulsar una se abre
+    en un modal a su tamaño real (si no cabe, se desplaza dentro), con un botón
+    para ampliarlo a toda la ventana y flechas (o ← →) para pasar a las demás. Las que ya no están
+    en disco (las pegadas suelen vivir en `/tmp`) se ven como un recuadro con su
+    nombre y avisan al abrirlas;
   - «Sesión», con el proyecto, la rama, el worktree, el agente, la ruta, el
     comando para adjuntar la sesión desde otra terminal y los enlaces al backlog
     y al historial del proyecto.

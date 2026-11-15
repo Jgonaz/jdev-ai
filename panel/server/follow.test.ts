@@ -122,7 +122,8 @@ describe('parseAgentLines en modo conversación', () => {
   });
 
   it('descarta los user sintéticos: recordatorios, meta, comandos locales, bash, notificaciones, interrupciones y resúmenes', () => {
-    expect(eventos(sinteticos().join('\n'))).toEqual([]);
+    // De la línea interna con la ruta de una imagen pegada solo queda la ruta.
+    expect(eventos(sinteticos().join('\n'))).toEqual([{ type: 'image', path: '/tmp/captura.png', at: expect.any(Number) }]);
     const json = JSON.stringify(eventos());
     for (const ajeno of ['Recordatorio', 'inyectado', 'Caveat', 'ls -la', 'total 0', 'task-id', 'interrupted', 'Resumen de la conversación', 'otro origen', 'en cola']) {
       expect(json).not.toContain(ajeno);
@@ -244,7 +245,13 @@ describe('parseAgentLines en modo conversación', () => {
   });
 
   it('el orden de la conversación se conserva', () => {
-    expect(eventos().map((x) => x.type)).toEqual(['user', 'message', 'tool', 'result', 'tool', 'result', 'message', 'user', 'user', 'message']);
+    expect(eventos().map((x) => x.type)).toEqual(['user', 'image', 'message', 'tool', 'result', 'tool', 'result', 'message', 'user', 'user', 'message']);
+  });
+
+  it('emite la ruta de cada imagen pegada en Claude Code, aunque la línea interna traiga varias', () => {
+    const l = JSON.stringify({ type: 'user', isMeta: true, message: { role: 'user', content: [{ type: 'text', text: '[Image: source: /tmp/a.png]\n[Image: source: /tmp/b c.png]' }] } });
+    expect(eventos(l).map((x) => (x.type === 'image' ? x.path : x.type))).toEqual(['/tmp/a.png', '/tmp/b c.png']);
+    expect(parseAgentLines(l, { primero: false, cwd: null })).toEqual([]);
   });
 
   it('ignora lo de los subagentes (isSidechain) y los tipos desconocidos', () => {

@@ -47,6 +47,11 @@ export type AgentEvent =
    */
   | { type: 'question'; id: string; questions: QuestionItem[]; at: number | null }
   | { type: 'message'; text: string; at: number | null }
+  /**
+   * Imagen que la persona pegó en Claude Code (solo en la conversación de una sesión): la ruta que Claude Code guarda en
+   * una línea interna `[Image: source: <ruta>]` tras el mensaje. Puede que ya no exista (suele vivir en /tmp).
+   */
+  | { type: 'image'; path: string; at: number | null }
   /** Mensaje de la persona (solo en la conversación de una sesión). `images` cuenta las imágenes adjuntas, si hay. */
   | { type: 'user'; text: string; at: number | null; images?: number }
   /** Comando de Claude Code (`/goal close`) escrito por la persona (solo en la conversación). `name` va sin la barra. */

@@ -422,3 +422,167 @@
       stroke-opacity 0.3s !important;
   }
 }
+
+/* ---------- Imágenes compartidas: dos cuadrículas de miniaturas y el modal ---------- */
+.context__imgs {
+  margin: -12px 12px 12px;
+}
+.context__imgs .collapsible__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 4px 14px;
+}
+.imgs__h {
+  margin: 0 0 8px;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+.imgs__n {
+  margin-left: 4px;
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+}
+.imgs__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.imgs__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-term);
+  cursor: zoom-in;
+}
+.imgs__thumb:hover,
+.imgs__thumb:focus-visible {
+  border-color: var(--fg-dim);
+}
+.imgs__thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Ya no está en disco: recuadro rayado con su nombre, para saber que existió. */
+.imgs__thumb--missing {
+  border-style: dashed;
+  background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--fg-dim) 18%, transparent) 6px 7px);
+  cursor: pointer;
+}
+.imgs__ph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+  padding: 4px;
+  color: var(--fg-faint);
+}
+.imgs__phname {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-term);
+  font-size: var(--text-2xs);
+}
+.imgm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.imgm__stage {
+  position: relative;
+  min-height: 0;
+}
+/* Tamaño real: la imagen no se encoge; si no cabe, se desplaza dentro (margin: auto la centra sin cortar el borde). */
+.imgm__scroll {
+  display: flex;
+  min-height: 240px;
+  max-height: calc(100dvh - 250px);
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--bg-term);
+}
+.imgm__img {
+  display: block;
+  flex: none;
+  max-width: none;
+  margin: auto;
+}
+.imgm__scroll > .imgm__missing {
+  margin: auto;
+}
+.imgm__nav {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  background: color-mix(in srgb, var(--bg-surface) 85%, transparent);
+  border-color: var(--line);
+}
+.imgm__nav--prev {
+  left: 8px;
+  rotate: 180deg;
+}
+.imgm__nav--next {
+  right: 8px;
+}
+/* Ampliado: el modal ocupa la ventana y la imagen todo el alto libre. */
+.modal--full {
+  height: calc(100dvh - 32px);
+}
+.modal--full .modal__body {
+  display: flex;
+  flex-direction: column;
+}
+.modal--full .imgm {
+  flex: 1;
+  min-height: 0;
+}
+.modal--full .imgm__stage {
+  flex: 1;
+  display: flex;
+}
+.modal--full .imgm__scroll {
+  flex: 1;
+  max-height: none;
+}
+.imgm__missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+.imgm__missing p {
+  margin: 0;
+  line-height: 1.5;
+}
+.imgm__meta {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+.imgm__path {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+}

@@ -4,6 +4,7 @@ import { contextView, workCounts } from '../../lib/statusline.ts';
 import { useConversation } from '../../lib/useConversation.ts';
 import type { SessionInfo } from '../../types.ts';
 import { ActivityMap } from './ActivityMap.tsx';
+import { SharedImagesSection } from './SharedImages.tsx';
 
 /**
  * Por qué una sesión no tiene mapa, en una línea, o null si lo tiene. Sirve también para que el panel sepa si «Sesión»
@@ -15,7 +16,9 @@ export function noMapReason(session: SessionInfo): string | null {
   return null;
 }
 
-function LiveMap({ session, active, listOpen, onListToggle }: { session: SessionInfo; active: boolean; listOpen: boolean; onListToggle: (open: boolean) => void }) {
+type Toggles = { listOpen: boolean; onListToggle: (open: boolean) => void; imagesOpen: boolean; onImagesToggle: (open: boolean) => void };
+
+function LiveMap({ session, active, listOpen, onListToggle, imagesOpen, onImagesToggle }: { session: SessionInfo; active: boolean } & Toggles) {
   const estado = visualState(session);
   // Comparte el sondeo con la vista chat de la misma sesión si está abierta.
   const conv = useConversation(session.name, active, estado === 'working');
@@ -39,6 +42,7 @@ function LiveMap({ session, active, listOpen, onListToggle }: { session: Session
         listOpen={listOpen}
         onListToggle={onListToggle}
       />
+      <SharedImagesSection images={conv.images} session={session.name} open={imagesOpen} onToggle={onImagesToggle} />
     </>
   );
 }
@@ -47,9 +51,24 @@ function LiveMap({ session, active, listOpen, onListToggle }: { session: Session
  * Mapa de actividad del panel derecho para la sesión de Claude `session` (la de la pestaña activa o, en una de
  * seguimiento, la que la lanzó), o la nota de una línea con el motivo si no hay mapa. `active` es que la pantalla está a
  * la vista y sin diálogo encima; la conversación se lee mientras lo esté, aunque «Actividad reciente» esté plegada.
+ * Debajo, el desplegable «Imágenes» con las compartidas en la conversación, si hay alguna.
  */
-export function MapPanel({ session, active, activityOpen, onActivityToggle }: { session: SessionInfo; active: boolean; activityOpen: boolean; onActivityToggle: (open: boolean) => void }) {
+export function MapPanel({
+  session,
+  active,
+  activityOpen,
+  onActivityToggle,
+  imagesOpen,
+  onImagesToggle,
+}: {
+  session: SessionInfo;
+  active: boolean;
+  activityOpen: boolean;
+  onActivityToggle: (open: boolean) => void;
+  imagesOpen: boolean;
+  onImagesToggle: (open: boolean) => void;
+}) {
   const motivo = noMapReason(session);
   if (motivo !== null) return <p className="context__nomap">{motivo}</p>;
-  return <LiveMap key={session.name} session={session} active={active} listOpen={activityOpen} onListToggle={onActivityToggle} />;
+  return <LiveMap key={session.name} session={session} active={active} listOpen={activityOpen} onListToggle={onActivityToggle} imagesOpen={imagesOpen} onImagesToggle={onImagesToggle} />;
 }

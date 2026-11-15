@@ -1160,7 +1160,7 @@ El servidor SHALL ofrecer la lista de cambios y el diff de un archivo solo para 
 
 ### Requirement: Mapa de actividad de una sesión
 
-El panel derecho de Terminales SHALL ser un solo panel de la sesión activa, sin selector de vistas. Mostrará, por este orden, el nombre de la sesión y su agente, el mapa de actividad, la línea de lo que se ejecuta en ese momento y dos desplegables: «Actividad reciente (N)» y «Sesión». Los dos empezarán abiertos y el panel SHALL recordar si cada uno está abierto. El panel SHALL empezar a la altura de las tarjetas de terminal, bajo la barra de pestañas. Con una pestaña de seguimiento activa, el panel SHALL ser el de la sesión que la lanzó.
+El panel derecho de Terminales SHALL ser un solo panel de la sesión activa, sin selector de vistas. Mostrará, por este orden, el nombre de la sesión y su agente, el mapa de actividad, la línea de lo que se ejecuta en ese momento y los desplegables «Actividad reciente (N)», «Imágenes (N)» (solo si hay imágenes) y «Sesión». «Actividad reciente» y «Sesión» empezarán abiertos y el panel SHALL recordar si cada desplegable está abierto. El panel SHALL empezar a la altura de las tarjetas de terminal, bajo la barra de pestañas. Con una pestaña de seguimiento activa, el panel SHALL ser el de la sesión que la lanzó.
 
 «Sesión» SHALL mostrar el proyecto, la rama, el worktree, el agente y la ruta del proyecto, el comando para adjuntar la sesión desde otra terminal con un botón para copiarlo, y los enlaces al backlog y al historial del proyecto.
 
@@ -1176,6 +1176,18 @@ El mapa SHALL mostrar un núcleo central y las estaciones Tú, Modelo, Memoria, 
 - cada subagente activo SHALL verse como un punto en la estación Agentes.
 
 «Actividad reciente» SHALL mostrar las últimas 16 filas de actividad, con su estado (en marcha, hecha o fallida) y su duración. Las llamadas terminadas y consecutivas en una misma estación SHALL agruparse en una fila. El mapa SHALL seguir actualizándose aunque el desplegable esté cerrado.
+
+Si en la conversación de la sesión se han compartido imágenes, entre «Actividad reciente» y «Sesión» SHALL aparecer un desplegable «Imágenes (N)», cerrado de entrada y cuyo estado se recuerda. Dentro, las imágenes SHALL mostrarse en cuadrículas de miniaturas, de la más reciente a la más antigua, en dos apartados: «Compartidas por ti» (las pegadas en Claude Code y las rutas de imagen de los mensajes de la persona) y «Compartidas por el agente» (las rutas de imagen de sus mensajes; las que solo lee con una herramienta SHALL NOT contar). Una ruta SHALL contar una sola vez, para quien la compartió primero. Al pulsar una miniatura, la imagen SHALL abrirse en un modal a su tamaño real, sin reducirla (con desplazamiento si no cabe en la ventana), con su nombre, quién la compartió, su ruta, controles para pasar a la anterior y a la siguiente y un botón para ampliar el modal a toda la ventana y volver a su tamaño. Una imagen que ya no se pueda leer SHALL mostrarse como un recuadro con su nombre y, al abrirla, el modal SHALL avisar de que ya no está en disco.
+
+#### Scenario: Imágenes de los dos
+
+- **WHEN** la persona ha pegado una captura en Claude Code y el agente ha citado en un mensaje la ruta de otra
+- **THEN** «Imágenes (2)» muestra la captura en «Compartidas por ti» y la otra en «Compartidas por el agente»
+
+#### Scenario: Imagen que ya no existe
+
+- **WHEN** una imagen pegada vivía en `/tmp` y ya se borró
+- **THEN** su miniatura es un recuadro con su nombre y, al pulsarla, el modal avisa de que ya no está en disco
 
 Las etiquetas SHALL mostrar solo nombres (archivo, host de una URL, nombre del comando o de la herramienta), nunca contenidos.
 

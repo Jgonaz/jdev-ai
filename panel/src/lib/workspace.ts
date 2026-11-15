@@ -193,11 +193,13 @@ export type UiPrefs = {
   mapActivityOpen: boolean;
   /** Desplegable «Sesión» del panel derecho de Terminales (abierto por defecto). */
   mapSessionOpen: boolean;
+  /** Desplegable «Imágenes» del panel derecho de Terminales (plegado por defecto). */
+  mapImagesOpen: boolean;
 };
 const UI_KEY = 'jdev-panel:ui';
 
 export function loadUiPrefs(storage: Pick<Storage, 'getItem'> | null = safeStorage()): UiPrefs {
-  const defecto: UiPrefs = { contextOpen: true, hideDone: false, mapActivityOpen: true, mapSessionOpen: true };
+  const defecto: UiPrefs = { contextOpen: true, hideDone: false, mapActivityOpen: true, mapSessionOpen: true, mapImagesOpen: false };
   try {
     // `hideClosed` es el nombre anterior de `hideDone` («Ocultar cerradas»): se migra al leer.
     const v = JSON.parse(storage?.getItem(UI_KEY) ?? 'null') as (Partial<UiPrefs> & { hideClosed?: unknown }) | null;
@@ -208,6 +210,7 @@ export function loadUiPrefs(storage: Pick<Storage, 'getItem'> | null = safeStora
       // La antigua `rightView` (selector Contexto | Mapa) ya no existe: si está guardada, se ignora y desaparece al guardar.
       mapActivityOpen: typeof v?.mapActivityOpen === 'boolean' ? v.mapActivityOpen : defecto.mapActivityOpen,
       mapSessionOpen: typeof v?.mapSessionOpen === 'boolean' ? v.mapSessionOpen : defecto.mapSessionOpen,
+      mapImagesOpen: typeof v?.mapImagesOpen === 'boolean' ? v.mapImagesOpen : defecto.mapImagesOpen,
     };
   } catch {
     return defecto;
