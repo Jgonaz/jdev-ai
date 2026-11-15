@@ -129,7 +129,7 @@ export type RecentSession = {
   /** Actividad en los últimos minutos: puede seguir abierta en otra ventana. */
   possiblyOpen: boolean;
   sizeBytes: number;
-  /** Archivada en la barra lateral: sale de «Anteriores» y se muestra en «Archivadas». */
+  /** Archivada en la barra lateral: sale de su proyecto y se muestra en «Archivadas». */
   archived: boolean;
 };
 

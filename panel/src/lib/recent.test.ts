@@ -11,6 +11,7 @@ import {
   recentPlace,
   resumeRequest,
   sessionNamesKey,
+  splitDone,
   visibleRecent,
 } from './recent.ts';
 
@@ -71,6 +72,15 @@ describe('groupRecent', () => {
       ['a', ['2']],
       ['b', ['1']],
     ]);
+  });
+});
+
+describe('splitDone', () => {
+  it('separa las pendientes de las hechas sin cambiar el orden', () => {
+    const hecha = { done: { at: null, by: 'agent' as const, note: null } };
+    const { pending, done } = splitDone([reciente('1', 'a', hecha), reciente('2', 'a'), reciente('3', 'a', hecha), reciente('4', 'a')]);
+    expect(pending.map((r) => r.id)).toEqual(['2', '4']);
+    expect(done.map((r) => r.id)).toEqual(['1', '3']);
   });
 });
 

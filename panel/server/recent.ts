@@ -15,7 +15,11 @@ const HORA = 60 * 60 * 1000;
 
 /** Solo se listan las sesiones con actividad en los últimos 30 días. */
 export const RECENT_MAX_AGE_MS = 30 * 24 * HORA;
-/** Máximo de sesiones recientes por proyecto (checkout principal y worktrees juntos). */
+/**
+ * Máximo de sesiones recientes por proyecto (checkout principal y worktrees
+ * juntos), aparte para las pendientes y para las hechas: muchas hechas
+ * recientes no deben esconder una pendiente más antigua.
+ */
 export const RECENT_MAX_PER_PROJECT = 15;
 /** Máximo de conversaciones archivadas por proyecto: su cuota es aparte, no gasta la de las demás. */
 export const RECENT_MAX_ARCHIVED_PER_PROJECT = 15;
@@ -146,8 +150,8 @@ export class RecentIndex {
   /**
    * Sesiones recientes de los proyectos dados, de la más reciente a la más
    * antigua, sin las de `exclude` (ids que ya están en el panel), sin las
-   * vacías y con los límites de RECENT_MAX_AGE_MS y RECENT_MAX_PER_PROJECT.
-   * Los ids de `archived` no cuentan en ese máximo (archivar deja ver las
+   * vacías y con los límites de RECENT_MAX_AGE_MS y RECENT_MAX_PER_PROJECT
+   * (uno para las pendientes y otro para las hechas). Los ids de `archived` no cuentan en ese máximo (archivar deja ver las
    * siguientes): se listan aparte, con su propio máximo, y solo dentro de los
    * últimos RECENT_MAX_AGE_MS; las más antiguas no se muestran aunque sigan archivadas.
    */
@@ -171,26 +175,31 @@ export class RecentIndex {
     const salida: RecentSession[] = [];
     for (const lista of porProyecto.values()) {
       lista.sort((a, b) => b.mtimeMs - a.mtimeMs || a.id.localeCompare(b.id));
-      let n = 0;
+      let nPendientes = 0;
+      let nHechas = 0;
       let nArchivadas = 0;
       for (const c of lista) {
         const archivada = archivadas.has(c.id);
-        if (archivada ? nArchivadas >= RECENT_MAX_ARCHIVED_PER_PROJECT : n >= RECENT_MAX_PER_PROJECT) continue;
+        const llenas = nPendientes >= RECENT_MAX_PER_PROJECT && nHechas >= RECENT_MAX_PER_PROJECT;
+        if (archivada ? nArchivadas >= RECENT_MAX_ARCHIVED_PER_PROJECT : llenas) continue;
         if (!(await this.hasMessages(c))) continue;
         const bruto = bestTitle(await this.titles.readTitles(c.path));
         const parsed = bruto === null ? null : parseTitle(bruto);
+        const done = this.doneOf(c.id, parsed?.closed ?? false);
+        if (!archivada && (done ? nHechas : nPendientes) >= RECENT_MAX_PER_PROJECT) continue;
         salida.push({
           id: c.id,
           project: c.location.project,
           worktree: c.location.worktree,
           title: parsed && parsed.title !== '' ? parsed.title : `Sin título · ${c.id.slice(0, 8)}`,
-          done: this.doneOf(c.id, parsed?.closed ?? false),
+          done,
           lastActivity: Math.round(c.mtimeMs),
           possiblyOpen: ahora - c.mtimeMs < POSSIBLY_OPEN_MS,
           sizeBytes: c.size,
         });
         if (archivada) nArchivadas++;
-        else n++;
+        else if (done) nHechas++;
+        else nPendientes++;
       }
     }
     salida.sort((a, b) => b.lastActivity - a.lastActivity || a.id.localeCompare(b.id));

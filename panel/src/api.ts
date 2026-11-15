@@ -105,7 +105,7 @@ export const api = {
   stopProject: (proyecto: string) =>
     request<{ stopped: boolean; graceful: boolean }>(`${projectBase(proyecto)}/run`, { method: 'DELETE' }),
   recent: () => request<{ recent: RecentSession[] }>('/api/recent').then((r) => r.recent),
-  /** Archiva o desarchiva una sesión del panel (por su nombre de tmux) o una conversación de «Anteriores» (por su id). */
+  /** Archiva o desarchiva una sesión del panel (por su nombre de tmux) o una conversación fuera del panel (por su id). */
   setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) =>
     request<ArchiveList>('/api/archive', { method: 'PUT', body: JSON.stringify({ kind, id, archived }) }),
   /** Elimina definitivamente algo archivado: una conversación (su transcript) o una sesión (la termina y borra su transcript). */

@@ -185,6 +185,18 @@ El panel SHALL ofrecer una pantalla de Ajustes con tema (Carbón por defecto, Gr
 
 El panel SHALL listar por proyecto las sesiones recientes de Claude Code que no estén ya en el panel, a partir de los transcripts que Claude guarda para el checkout principal del proyecto y sus worktrees, con su título (el último `custom-title` o, si no hay, el último `ai-title`), worktree y fecha de última actividad. Cada una SHALL poder retomarse en una terminal nueva del panel mediante `bin/agent` con `--resume <id>`. Antes de retomar, el panel SHALL advertir que la sesión debe cerrarse en su ventana original y SHALL destacar las que tengan actividad muy reciente, porque podrían seguir abiertas.
 
+En la barra lateral, las sesiones recientes que no estén marcadas como hechas SHALL mostrarse sueltas en su proyecto, debajo de sus sesiones en marcha, y las hechas SHALL agruparse en un apartado plegable «Terminadas (N)». Pendientes y hechas SHALL tener cada una su propio máximo por proyecto. Una sesión del panel en marcha SHALL seguir con las demás sesiones en marcha aunque esté hecha.
+
+#### Scenario: Conversaciones a medias al abrir el panel
+
+- **WHEN** la persona abre el panel sin terminales en marcha y balanz.io tiene conversaciones recientes sin marcar como hechas y otras hechas
+- **THEN** ve las que no están hechas sueltas bajo balanz.io y las hechas dentro de «Terminadas», plegado
+
+#### Scenario: Muchas hechas recientes
+
+- **WHEN** las conversaciones más recientes de un proyecto están hechas y llenan su máximo, y hay otra más antigua sin hacer
+- **THEN** la que no está hecha sigue apareciendo suelta en su proyecto
+
 #### Scenario: Retomar una sesión abierta fuera del panel
 
 - **WHEN** la persona elige «Retomar en el panel» en una sesión reciente de balanz.io y confirma el aviso
@@ -632,7 +644,7 @@ Los datos de subagentes, tareas en segundo plano y artifacts SHALL llegar por ho
 
 ### Requirement: Tooltip de las conversaciones de la barra lateral
 
-Al pasar el ratón por una sesión o una conversación de «Anteriores» de la barra lateral, o al darle el foco con el teclado, el panel SHALL mostrar un tooltip con su título completo, su proyecto, su rama o worktree y su agente.
+Al pasar el ratón por una sesión o una conversación de la barra lateral que no está en el panel, o al darle el foco con el teclado, el panel SHALL mostrar un tooltip con su título completo, su proyecto, su rama o worktree y su agente.
 
 Si la sesión está viva y tiene datos de la statusline, el tooltip SHALL añadir:
 
@@ -655,13 +667,13 @@ El tooltip SHALL cerrarse al salir de la fila, al perder el foco o con Esc.
 
 ### Requirement: Archivar conversaciones de la barra lateral
 
-El menú contextual de las sesiones del panel y de las conversaciones de «Anteriores» SHALL ofrecer «Archivar». Lo archivado SHALL dejar de mostrarse en su proyecto, en «Anteriores» y en «En segundo plano», y SHALL aparecer en una sección «Archivadas (N)» plegable, debajo de «En segundo plano». Esa sección SHALL ocultarse si está vacía.
+El menú contextual de las sesiones del panel y de las conversaciones que no están en el panel SHALL ofrecer «Archivar». Lo archivado SHALL dejar de mostrarse en su proyecto, en «Terminadas» y en «En segundo plano», y SHALL aparecer en una sección «Archivadas (N)» plegable, debajo de «En segundo plano». Esa sección SHALL ocultarse si está vacía.
 
 Desde «Archivadas», la persona SHALL poder abrir una sesión, retomar una conversación y desarchivarlas.
 
 Archivar SHALL NOT terminar la sesión ni cerrar su pestaña. Una sesión archivada que espera a la persona SHALL seguir contando en los avisos de la cabecera, el título de la pestaña e Inicio. En Inicio, las demás sesiones archivadas SHALL NOT contar en los recuentos «trabajando» y «en reposo» ni en las tarjetas de proyecto.
 
-Las conversaciones archivadas SHALL NOT contar en el límite de «Anteriores»: archivar una SHALL dejar aparecer la siguiente. Retomar una conversación archivada SHALL desarchivarla.
+Las conversaciones archivadas SHALL NOT contar en el límite de las sesiones recientes: archivar una SHALL dejar aparecer la siguiente. Retomar una conversación archivada SHALL desarchivarla.
 
 La lista de archivadas SHALL guardarse en la configuración del panel y conservarse al reiniciarlo. Las sesiones archivadas que dejan de existir SHALL salir de la lista.
 
@@ -675,12 +687,12 @@ El menú contextual de lo archivado SHALL ofrecer además «Eliminar definitivam
 #### Scenario: Desarchivar
 
 - **WHEN** la persona elige «Desarchivar» en una conversación de «Archivadas»
-- **THEN** vuelve a «Anteriores» de su proyecto
+- **THEN** vuelve a su proyecto, suelta si no está hecha o en «Terminadas» si lo está
 
 #### Scenario: Archivar deja aparecer la siguiente
 
-- **WHEN** un proyecto tiene más conversaciones que el límite de «Anteriores» y la persona archiva una de ellas
-- **THEN** «Anteriores» sigue mostrando el mismo número de conversaciones, con la siguiente en antigüedad
+- **WHEN** un proyecto tiene más conversaciones que el límite de las sesiones recientes y la persona archiva una de ellas
+- **THEN** su proyecto sigue mostrando el mismo número de conversaciones, con la siguiente en antigüedad
 
 #### Scenario: Retomar una archivada
 
@@ -785,7 +797,7 @@ El diálogo Nueva sesión, el menú del agente por defecto de la cabecera y el a
 
 Una terminal sin agente SHALL llevar un icono de terminal en lugar de la luz de estado, en la barra lateral, las pestañas, «En segundo plano», «Archivadas» y el tooltip, y su título por defecto SHALL ser «<proyecto> · Nueva terminal», como el de cualquier sesión nueva sin título. SHALL NOT tener statusline, seguimiento ni estado de turnos, aunque se lance un agente dentro de ella. SHALL NOT contar en los avisos (cabecera, título de la pestaña, notificaciones y sonidos) ni en los recuentos y las tarjetas de Inicio. Si la shell termina, la sesión SHALL mostrarse como terminada igual que las demás.
 
-Una terminal sin agente SHALL funcionar con pestañas, distribuciones, scroll, renombrado, copia del comando para adjuntar, archivado y terminar sesión. «Retomar» y «Anteriores» SHALL NOT aplicarse.
+Una terminal sin agente SHALL funcionar con pestañas, distribuciones, scroll, renombrado, copia del comando para adjuntar, archivado y terminar sesión. «Retomar» y las sesiones recientes SHALL NOT aplicarse.
 
 #### Scenario: Abrir una terminal en un proyecto
 
@@ -823,7 +835,7 @@ El harness SHALL guardar, fuera del título, si cada conversación está abierta
 
 El agente SHALL marcarla con `bin/session-done` (o reabrirla con `--open`) en lugar de renombrarla. Cuando la persona vuelva a escribir en una conversación hecha abierta con `bin/agent`, un hook SHALL reabrirla.
 
-El panel SHALL ofrecer «Marcar como hecha» y «Reabrir» en el menú contextual de las sesiones del panel, de sus pestañas y de las conversaciones de «Anteriores». El tooltip de una conversación hecha SHALL indicar cuándo y quién la marcó y su nota. Marcar como hecha SHALL NOT terminar ni archivar la sesión.
+El panel SHALL ofrecer «Marcar como hecha» y «Reabrir» en el menú contextual de las sesiones del panel, de sus pestañas y de las conversaciones que no están en el panel. El tooltip de una conversación hecha SHALL indicar cuándo y quién la marcó y su nota. Marcar como hecha SHALL NOT terminar ni archivar la sesión.
 
 #### Scenario: La persona marca una conversación como hecha
 

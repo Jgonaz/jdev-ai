@@ -279,7 +279,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     archive: archivo,
     stateDir: opts.stateDir ?? sessionStateDir(),
     conversationsDir: opts.conversationsDir,
-    // Cambia el estado de alguna conversación: las de «Anteriores» no viajan en la lista de sesiones.
+    // Cambia el estado de alguna conversación: las de fuera del panel no viajan en la lista de sesiones.
     onConversations: () => broadcast({ type: 'conversations' }),
     statuslineDir: opts.statuslineDir,
     activityDir: opts.activityDir,
@@ -1262,8 +1262,8 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   }
 
   // PUT /api/archive {kind: 'session' | 'conversation', id, archived}: archiva o
-  // desarchiva una sesión del panel (su nombre de tmux) o una conversación de
-  // «Anteriores» (su id de Claude) y responde con la lista actual. No toca la
+  // desarchiva una sesión del panel (su nombre de tmux) o una conversación
+  // fuera del panel (su id de Claude) y responde con la lista actual. No toca la
   // sesión ni el transcript: solo la lista de archived.json.
   //
   // DELETE /api/archive {kind, id, confirm: true}: elimina definitivamente algo
@@ -1384,7 +1384,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
 
   // PUT /api/conversations/:clave/state {state: 'done' | 'open', note?}: marca una
   // conversación como hecha o la reabre, como la persona. La clave es el id de una
-  // conversación de Claude conocida (de una sesión del panel o de «Anteriores») o
+  // conversación de Claude conocida (de una sesión del panel o fuera del panel) o
   // `tmux-…` de una sesión del panel sin conversación de Claude. Al reabrir, si el
   // título guardado lleva la marca antigua «[Closed] » se quita. No toca la sesión.
   async function conversationApi(req: IncomingMessage, res: ServerResponse, pathname: string, metodo: string): Promise<void> {
@@ -1425,7 +1425,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       sendJson(res, 400, { error: nota.error });
       return;
     }
-    // Solo conversaciones que el panel conoce: las de sus sesiones o las de «Anteriores».
+    // Solo conversaciones que el panel conoce: las de sus sesiones o las de fuera del panel.
     await sesiones.refresh();
     const proyectos = await sesiones.projectList();
     const sesion = sesiones.list().find((s) => s.conversationKey === clave);

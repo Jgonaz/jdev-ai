@@ -1171,7 +1171,7 @@
 .slrow--done .slrow__title {
   color: var(--fg-muted);
 }
-/* Conversación archivada: atenuada como las de «Anteriores»; «Retomar» al pasar por encima. */
+/* Conversación archivada: atenuada como las de fuera del panel; «Retomar» al pasar por encima. */
 .slrow--conv {
   color: var(--fg-muted);
 }
@@ -1207,7 +1207,7 @@
   }
 }
 
-/* ---------- Conversaciones anteriores (atenuadas: no son terminales vivas) ---------- */
+/* ---------- Conversaciones fuera del panel (atenuadas: no son terminales vivas) ---------- */
 .recent__chevron {
   flex: none;
   transition: transform 0.12s;
@@ -1220,37 +1220,11 @@
     transition: none;
   }
 }
-/* Conversaciones anteriores dentro de cada proyecto (plegadas por defecto). */
+/* Conversaciones fuera del panel de cada proyecto: sueltas las pendientes y plegadas en «Terminadas» las hechas. */
 .prev {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-.prev__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 32px;
-  padding: 0 10px 0 24px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--fg-muted);
-  font-size: var(--text-sm);
-  text-align: left;
-}
-.prev__head:hover {
-  background: color-mix(in srgb, var(--bg-raised) 55%, transparent);
-  color: var(--fg);
-}
-.prev__icon {
-  flex: none;
-}
-.prev__count {
-  margin-left: auto;
-  font-family: var(--font-term);
-  font-size: var(--text-xs);
 }
 .rrow {
   position: relative;
@@ -1310,6 +1284,60 @@
 .rmore:hover {
   color: var(--fg);
   text-decoration: underline;
+}
+/* «Ver N más» de la barra lateral: texto del tamaño de las filas, alineado con sus títulos. */
+.rmore--side {
+  min-height: 32px;
+  margin-left: 49px;
+  padding: 0;
+  font-size: var(--text-md);
+}
+.rmore--side:hover {
+  text-decoration: none;
+}
+/* «Terminadas»: separador con etiqueta, línea, número y flecha al final. */
+.fin__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px 0 26px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--fg-faint);
+  text-align: left;
+}
+.fin__head:hover,
+.fin__head[aria-expanded='true'] {
+  color: var(--fg-soft);
+}
+.fin__label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.fin__line {
+  flex: 1;
+  height: 1px;
+  background: var(--fg-dim);
+  opacity: 0.6;
+}
+.fin__count {
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+}
+.fin__chevron {
+  flex: none;
+  transition: transform 0.12s;
+}
+.fin__chevron--open {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fin__chevron {
+    transition: none;
+  }
 }
 
 /* ---------- Visor de imágenes (ocupa el lugar del panel de Contexto) ---------- */

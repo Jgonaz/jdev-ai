@@ -559,22 +559,27 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
 
   La clasificación por estaciones y el dibujo están adaptados de
   [lot-map](https://github.com/alexeyw/lot-map) (MIT, © 2026 Aleksei Volodin).
-- **Conversaciones anteriores.** Dentro de cada proyecto de la barra lateral,
-  bajo sus sesiones en marcha, un apartado plegado «Anteriores (N)» lista (tres,
-  con «Ver más») las conversaciones de Claude Code que no están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de
+- **Conversaciones fuera del panel.** Dentro de cada proyecto de la barra
+  lateral, bajo sus sesiones en marcha, se ven las conversaciones de Claude Code
+  que no están en el panel, leídas de los transcripts de `~/.claude/projects/` (o de
   `CLAUDE_CONFIG_DIR`) del checkout principal y los worktrees, de los últimos
-  30 días y con un máximo de 15 por proyecto. «Retomar en el panel» abre una
+  30 días. Las que no están marcadas como hechas aparecen sueltas (tres, con
+  «Ver más»), para no perder de vista lo que quedó a medias al abrir el panel;
+  las hechas van en un apartado plegado «Terminadas (N)». Hay un máximo de 15
+  pendientes y 15 hechas por proyecto, así que muchas hechas recientes no
+  esconden una pendiente más antigua. Una sesión viva sigue arriba aunque esté
+  hecha. «Retomar en el panel» abre una
   terminal nueva con `bin/agent <proyecto> -- --resume <id>`. Cierra antes la
   sesión en su ventana original: dos procesos sobre la misma conversación se
   pisarían el historial. El panel avisa de las que tuvieron actividad en los
   últimos 3 minutos porque pueden seguir abiertas en otra ventana.
 - **Tooltip y archivado en la barra lateral.** Al pasar el ratón (400 ms) o con
-  el foco del teclado por una sesión o una conversación de «Anteriores», un
+  el foco del teclado por una sesión o una conversación fuera del panel, un
   tooltip muestra su título completo, el proyecto, la rama o el worktree y el
   agente; en una sesión viva de Claude añade el modelo y el esfuerzo, la barra de
   contexto, el tiempo y el trabajo en curso. «Archivar» en el menú contextual
   (barra, pestañas y «⋯») aparta una sesión o una conversación sin terminarla ni
-  cerrar su pestaña: sale de su proyecto, de «Anteriores» y de «En segundo plano»
+  cerrar su pestaña: sale de su proyecto, de «Terminadas» y de «En segundo plano»
   y pasa a un apartado plegable «Archivadas (N)», debajo de «En segundo plano»,
   desde el que se abre, se retoma o se desarchiva. Desde ahí, «Eliminar
   definitivamente…» (con confirmación) borra del disco el transcript de Claude de
@@ -584,7 +589,7 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   últimos 3 minutos (podría seguir abierta en otra ventana). Una sesión archivada que espera
   sigue contando en la cabecera, el título de la pestaña e Inicio; las demás no
   cuentan en los recuentos ni en las tarjetas de Inicio. Las conversaciones
-  archivadas no gastan el límite de «Anteriores» (15 por proyecto; las archivadas
+  archivadas no gastan el límite de las conversaciones fuera del panel (15 pendientes y 15 hechas por proyecto; las archivadas
   tienen su propio máximo y solo se ven dentro de los últimos 30 días) y retomar
   una la desarchiva. La lista se guarda en `~/.config/jdev-ai/archived.json` (respeta `XDG_CONFIG_HOME`; las
   sesiones que dejan de existir salen solas, máximo 500 conversaciones).
@@ -686,8 +691,8 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   «Copiar comando para adjuntar», «Marcar como hecha» o «Reabrir» (no en las
   terminales sin agente), «Cerrar pestaña» (solo si está abierta) y «Terminar
   sesión…» (con confirmación); son las mismas acciones de «Más acciones». Las
-  conversaciones de «Anteriores» y «Archivadas» tienen también «Marcar como
-  hecha» y «Reabrir». Una conversación hecha se muestra con un check y el texto
+  conversaciones fuera del panel y las de «Archivadas» tienen también «Marcar como
+  hecha» y «Reabrir»: al marcar o reabrir una, pasa de las pendientes a «Terminadas» o al revés. Una conversación hecha se muestra con un check y el texto
   «Hecha» (sin tachar el título), su tooltip dice cuándo y quién la marcó (tú o
   el agente) y su nota, y el filtro «Ocultar hechas» de la barra lateral la
   oculta (salvo si te espera). Marcarla no termina ni archiva la sesión. Se mueve con las flechas, Inicio y Fin; Esc o un clic fuera lo

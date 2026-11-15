@@ -17,7 +17,7 @@ const KEY_GUARD_MS = 500;
 const ERROR_MS = 4000;
 
 /**
- * Menú contextual de las conversaciones de «Anteriores» y de «Archivadas»
+ * Menú contextual de las conversaciones fuera del panel y de «Archivadas»
  * (clic derecho, tecla ContextMenu o Mayús+F10): Retomar, Marcar como hecha o
  * Reabrir, Archivar o Desarchivar y, si está archivada, Eliminar
  * definitivamente. Como el de las sesiones, el llamador pasa `onContextMenu` y

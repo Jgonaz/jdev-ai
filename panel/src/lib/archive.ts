@@ -55,7 +55,7 @@ export function archivedEntries(
 
 export const archivedKey = (e: ArchivedEntry): string => (e.kind === 'session' ? `s:${e.session.name}` : `c:${e.recent.id}`);
 
-/** Sesiones y conversaciones que siguen en su proyecto y en «Anteriores». */
+/** Sesiones y conversaciones que siguen en su proyecto (sesiones vivas, sin terminar y «Terminadas»). */
 export const notArchived = <T extends { archived: boolean }>(items: readonly T[]): T[] => items.filter((i) => !i.archived);
 
 /**

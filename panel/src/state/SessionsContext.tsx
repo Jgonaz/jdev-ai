@@ -27,7 +27,7 @@ type SessionsValue = {
   /** Sesiones recientes de Claude que se pueden retomar (sin las que ya están en el panel). */
   recent: RecentSession[];
   reloadRecent: () => void;
-  /** Archiva o desarchiva una sesión del panel (por su nombre) o una conversación de «Anteriores» (por su id); lanza si el servidor la rechaza. */
+  /** Archiva o desarchiva una sesión del panel (por su nombre) o una conversación fuera del panel (por su id); lanza si el servidor la rechaza. */
   setArchived: (kind: 'session' | 'conversation', id: string, archived: boolean) => Promise<void>;
   /** Elimina definitivamente una sesión o conversación archivada (no se puede deshacer). */
   deleteArchived: (kind: 'session' | 'conversation', id: string) => Promise<void>;

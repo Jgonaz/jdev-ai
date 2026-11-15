@@ -150,7 +150,7 @@ describe('API de archivadas', () => {
     expect((await archivar('session', nombre, true)).status).toBe(200);
   });
 
-  it('archiva una conversación de «Anteriores» y la marca en /api/recent', async () => {
+  it('archiva una conversación fuera del panel y la marca en /api/recent', async () => {
     expect((await recientes()).map((r) => [r.id, r.archived]).sort()).toEqual([[conversacion, false], [otra, false]].sort());
     const r = await archivar('conversation', conversacion, true);
     expect(r.status).toBe(200);

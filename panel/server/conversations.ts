@@ -11,7 +11,7 @@ import { join } from 'node:path';
 //   <clave>.json   {"state":"done"|"open","at":"<ISO>","by":"user"|"agent","note":"…"}
 //
 // La clave es el id de la conversación de Claude (UUID, el de sus transcripts y
-// «Anteriores») o, en sesiones del panel sin conversación de Claude (Codex,
+// de las conversaciones fuera del panel) o, en sesiones del panel sin conversación de Claude (Codex,
 // terminal…), `tmux-<nombre>-<creación en milisegundos>`: así un nombre de tmux
 // reutilizado, aunque sea en el mismo segundo, no hereda el estado de la sesión
 // anterior. Las claves con la creación en segundos (formato anterior) se siguen leyendo.

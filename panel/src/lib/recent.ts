@@ -26,6 +26,11 @@ export function groupRecent(
   return grupos;
 }
 
+/** Separa las pendientes (se ven sueltas en su proyecto) de las hechas (van dentro de «Terminadas»), sin cambiar el orden. */
+export function splitDone<T extends Pick<RecentSession, 'done'>>(items: readonly T[]): { pending: T[]; done: T[] } {
+  return { pending: items.filter((r) => r.done === null), done: items.filter((r) => r.done !== null) };
+}
+
 /** Las primeras `RECENT_COLLAPSED` o todas si el grupo está desplegado. */
 export function visibleRecent<T>(items: readonly T[], expandido: boolean, limite = RECENT_COLLAPSED): { shown: T[]; hidden: number } {
   if (expandido || items.length <= limite) return { shown: [...items], hidden: 0 };

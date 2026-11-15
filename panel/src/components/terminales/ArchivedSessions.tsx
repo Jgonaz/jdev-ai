@@ -61,7 +61,7 @@ function ArchivedRow({ entry, session, conversation }: { entry: ArchivedEntry; s
   );
 }
 
-/** «Retomar» al pasar por una conversación, como en «Anteriores». */
+/** «Retomar» al pasar por una conversación, como en las de fuera del panel. */
 function ArchivedAction() {
   return (
     <span className="rrow__action" aria-hidden="true">

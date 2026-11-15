@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { archivedEntries, notArchived } from '../../lib/archive.ts';
-import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, visibleRecent } from '../../lib/recent.ts';
+import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, splitDone, visibleRecent } from '../../lib/recent.ts';
 import type { RecentGroup } from '../../lib/recent.ts';
 import { groupSessions, isRunning, sessionMeta, visualState } from '../../lib/sessions.ts';
 import type { ProjectGroup } from '../../lib/sessions.ts';
@@ -11,7 +11,7 @@ import { useNow } from '../../lib/useNow.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { ProjectInfo, RecentSession, SessionInfo } from '../../types.ts';
-import { IconCheck, IconChevron, IconClock, IconFilter, IconPlus } from '../Icons.tsx';
+import { IconCheck, IconChevronDown, IconClock, IconFilter, IconPlus } from '../Icons.tsx';
 import { Monogram } from '../Monogram.tsx';
 import { StatusLight } from '../StatusLight.tsx';
 import { ArchivedSection } from './ArchivedSessions.tsx';
@@ -107,50 +107,74 @@ function RecentRow({
   );
 }
 
+/** «Ver más (N)» / «Ver menos» de una lista de conversaciones que enseña solo las primeras. */
+function MoreButton({ total, hidden, expandido, onToggle }: { total: number; hidden: number; expandido: boolean; onToggle: () => void }) {
+  if (total <= RECENT_COLLAPSED) return null;
+  return (
+    <button type="button" className="rmore rmore--side" aria-expanded={expandido} onClick={onToggle}>
+      {expandido ? 'Ver menos' : `Ver más (${hidden})`}
+    </button>
+  );
+}
+
 /**
- * Conversaciones anteriores de Claude del proyecto que no están en marcha en el
- * panel (terminadas o abiertas en otra ventana). Plegadas por defecto: se
- * retoman desde aquí y pasan a ser sesiones vivas del mismo proyecto.
+ * Conversaciones de Claude del proyecto sin terminar que no están en marcha en
+ * el panel (cerradas sin marcar como hechas o abiertas en otra ventana). Se ven
+ * sueltas bajo las sesiones vivas, para no perder de vista lo que quedó a medias
+ * al abrir el panel; se retoman desde aquí y pasan a ser sesiones vivas.
  */
-function Previous({ project, items, ahora, menu }: { project: ProjectInfo; items: RecentSession[]; ahora: number; menu: ConversationHandlers }) {
+function Pending({ project, items, ahora, menu }: { project: ProjectInfo; items: RecentSession[]; ahora: number; menu: ConversationHandlers }) {
+  const { openResume } = useWorkspace();
+  const [expandido, setExpandido] = useState(false);
+  const { shown, hidden } = visibleRecent(items, expandido);
+  return (
+    <div className="prev" role="group" aria-label={`${project.name}: conversaciones sin terminar`}>
+      {shown.map((r) => (
+        <RecentRow key={r.id} r={r} project={project} ahora={ahora} onResume={() => openResume(r)} menu={menu} />
+      ))}
+      <MoreButton total={items.length} hidden={hidden} expandido={expandido} onToggle={() => setExpandido(!expandido)} />
+    </div>
+  );
+}
+
+/** Conversaciones hechas del proyecto que no están en marcha en el panel. Plegadas por defecto. */
+function Finished({ project, items, ahora, menu }: { project: ProjectInfo; items: RecentSession[]; ahora: number; menu: ConversationHandlers }) {
   const { openResume } = useWorkspace();
   const [abierto, setAbierto] = useState(false);
   const [expandido, setExpandido] = useState(false);
   const { shown, hidden } = visibleRecent(items, expandido);
   return (
-    <div className="prev" role="group" aria-label={`${project.name}: conversaciones anteriores`}>
-      <button type="button" className="prev__head" aria-expanded={abierto} onClick={() => setAbierto(!abierto)}>
-        <IconChevron size={11} className={`recent__chevron${abierto ? ' recent__chevron--open' : ''}`} />
-        <IconClock size={12} className="prev__icon" />
-        <span>Anteriores</span>
-        <span className="prev__count">{items.length}</span>
+    <div className="prev" role="group" aria-label={`${project.name}: conversaciones terminadas`}>
+      {/* Separador con etiqueta y flecha al final: no compite con las filas de conversación. */}
+      <button type="button" className="fin__head" aria-expanded={abierto} onClick={() => setAbierto(!abierto)}>
+        <span className="fin__label">Terminadas</span>
+        <span className="fin__line" aria-hidden="true" />
+        <span className="fin__count">{items.length}</span>
+        <IconChevronDown size={12} className={`fin__chevron${abierto ? ' fin__chevron--open' : ''}`} />
       </button>
       {abierto && (
         <>
           {shown.map((r) => (
             <RecentRow key={r.id} r={r} project={project} ahora={ahora} onResume={() => openResume(r)} menu={menu} />
           ))}
-          {items.length > RECENT_COLLAPSED && (
-            <button type="button" className="rmore" aria-expanded={expandido} onClick={() => setExpandido(!expandido)}>
-              {expandido ? 'Ver menos' : `Ver más (${hidden})`}
-            </button>
-          )}
+          <MoreButton total={items.length} hidden={hidden} expandido={expandido} onToggle={() => setExpandido(!expandido)} />
         </>
       )}
     </div>
   );
 }
 
-type SidebarGroup = { project: ProjectInfo; sessions: SessionInfo[]; previous: RecentSession[] };
+type SidebarGroup = { project: ProjectInfo; sessions: SessionInfo[]; pending: RecentSession[]; done: RecentSession[] };
 
-/** Une las sesiones vivas y las anteriores por proyecto: primero los que tienen sesiones vivas. */
-function mergeGroups(vivas: ProjectGroup[], anteriores: RecentGroup[]): SidebarGroup[] {
+/** Une las sesiones vivas y las conversaciones que no están en el panel por proyecto: primero los que tienen sesiones vivas. */
+function mergeGroups(vivas: ProjectGroup[], recientes: RecentGroup[]): SidebarGroup[] {
   const porId = new Map<string, SidebarGroup>();
-  for (const g of vivas) porId.set(g.project.id, { project: g.project, sessions: g.sessions, previous: [] });
-  for (const g of anteriores) {
+  for (const g of vivas) porId.set(g.project.id, { project: g.project, sessions: g.sessions, pending: [], done: [] });
+  for (const g of recientes) {
+    const partes = splitDone(g.items);
     const existente = porId.get(g.project.id);
-    if (existente) existente.previous = g.items;
-    else porId.set(g.project.id, { project: g.project, sessions: [], previous: g.items });
+    if (existente) Object.assign(existente, partes);
+    else porId.set(g.project.id, { project: g.project, sessions: [], ...partes });
   }
   return [...porId.values()];
 }
@@ -188,7 +212,8 @@ function Group({ g, ahora, menu, conversationMenu }: { g: SidebarGroup; ahora: n
           <SessionRow s={s} project={g.project} ahora={ahora} abierta={visible.includes(s.name)} onOpen={() => openSession(s.name)} menu={menu} />
         </Fragment>
       ))}
-      {g.previous.length > 0 && <Previous project={g.project} items={g.previous} ahora={ahora} menu={conversationMenu} />}
+      {g.pending.length > 0 && <Pending project={g.project} items={g.pending} ahora={ahora} menu={conversationMenu} />}
+      {g.done.length > 0 && <Finished project={g.project} items={g.done} ahora={ahora} menu={conversationMenu} />}
     </section>
   );
 }
@@ -200,7 +225,7 @@ export function Sidebar({ style }: { style?: CSSProperties }) {
   const sinAbrir = useLiveUnopened();
   const { menu, open: menuAbierto, onContextMenu, onKeyDown } = useSessionMenu({ withOpen: true });
   const conversacion = useConversationMenu();
-  // Lo archivado sale de su proyecto, de «Anteriores» y de «En segundo plano»: tiene su propia sección.
+  // Lo archivado sale de su proyecto, de «Terminadas» y de «En segundo plano»: tiene su propia sección.
   const activas = notArchived(sessions);
   const vivas = groupSessions(activas, projects, { hideDone: prefs.hideDone });
   const grupos = mergeGroups(vivas, groupRecent(notArchived(recent), projects, { hideDone: prefs.hideDone }));

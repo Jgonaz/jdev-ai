@@ -6,7 +6,7 @@ import { SESSION_ID } from './recent.ts';
 import { isPanelSessionName } from './tmux.ts';
 
 // Lo que la persona ha archivado en la barra lateral: sesiones del panel y
-// conversaciones de «Anteriores». Archivar solo aparta (no termina ni borra
+// conversaciones fuera del panel. Archivar solo aparta (no termina ni borra
 // nada), así que es una lista pequeña en la configuración del panel.
 
 /** Máximo de entradas de cada lista; al pasarse, se descartan las más antiguas. */

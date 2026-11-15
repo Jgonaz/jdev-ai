@@ -751,7 +751,7 @@ describe('API de sesiones y terminal', () => {
       expect((await lista()).find((s) => s.name === sesion.name)?.done).toMatchObject({ by: 'user', note: 'Revisada' });
     });
 
-    it('marca y reabre una conversación de «Anteriores», y refleja lo que escribe otro proceso', async () => {
+    it('marca y reabre una conversación fuera del panel, y refleja lo que escribe otro proceso', async () => {
       mkdirSync(dirClaude(), { recursive: true });
       const transcript = join(dirClaude(), `${idAnterior}.jsonl`);
       writeFileSync(transcript, '{"type":"user","message":{"content":"hola"}}\n{"type":"custom-title","customTitle":"[Closed] Vieja","sessionId":"x"}\n');

@@ -172,6 +172,16 @@ describe('RecentIndex', () => {
     expect(r.at(-1)!.id).toBe(uuid(17));
   });
 
+  it('las pendientes y las hechas tienen cada una su cupo: muchas hechas no esconden una pendiente antigua', async () => {
+    const hecha = { at: null, by: 'agent' as const, note: null };
+    for (let i = 1; i <= 20; i++) transcript(balanz, '', uuid(i), mensajes, i * MIN);
+    transcript(balanz, '', uuid(30), mensajes, 30 * MIN);
+    const propio = new RecentIndex({ projectsDir, now: () => AHORA, doneOf: (id) => (id === uuid(30) ? null : hecha) });
+    const r = await propio.list([balanz]);
+    expect(r.filter((s) => s.done)).toHaveLength(RECENT_MAX_PER_PROJECT);
+    expect(r.filter((s) => !s.done).map((s) => s.id)).toEqual([uuid(30)]);
+  });
+
   it('las archivadas no gastan la cuota de las demás: archivar deja aparecer las siguientes', async () => {
     for (let i = 1; i <= 20; i++) transcript(balanz, '', uuid(i), mensajes, i * MIN);
     const sin = await idx.list([balanz]);

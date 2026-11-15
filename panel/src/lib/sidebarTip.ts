@@ -35,9 +35,9 @@ export type TipView = {
   /** Lugar en una línea: «main», «wt ts7 · feat/ts7». */
   place: string;
   agent: string;
-  /** Datos de la sesión viva; null en «Anteriores» y sin statusline. */
+  /** Datos de la sesión viva; null en las conversaciones fuera del panel y sin statusline. */
   live: TipLive | null;
-  /** «Actividad hace 2 min» (solo en «Anteriores»). */
+  /** «Actividad hace 2 min» (solo en las conversaciones fuera del panel). */
   activity: string | null;
   /** Conversación hecha: «Hecha el 5 nov a las 15:20 · por ti» y su nota, si la tiene; null si está abierta. */
   done: { line: string; note: string | null } | null;
@@ -83,7 +83,7 @@ export function sessionTip(session: SessionInfo, project: Pick<ProjectInfo, 'nam
   };
 }
 
-/** Tooltip de una conversación de «Anteriores» (siempre de Claude). */
+/** Tooltip de una conversación fuera del panel (siempre de Claude). */
 export function recentTip(r: RecentSession, project: Pick<ProjectInfo, 'name' | 'color' | 'branch' | 'worktrees'>, ahora: number): TipView {
   const lugar: Place = r.worktree
     ? { worktree: r.worktree, branch: project.worktrees.find((w) => w.name === r.worktree)?.branch ?? null }
