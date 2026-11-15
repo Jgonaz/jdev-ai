@@ -26,7 +26,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { teclas: 'Ctrl+Tab', accion: 'Terminal siguiente' },
       { teclas: 'Ctrl+Mayús+Tab', accion: 'Terminal anterior' },
       { teclas: 'Ctrl+W', accion: 'Cerrar la pestaña activa (la sesión sigue viva; una sesión hecha pregunta antes)' },
-      { teclas: 'Ctrl+N', accion: 'Nueva sesión (abre el diálogo)' },
+      { teclas: 'Ctrl+N', accion: 'Nueva sesión (abre el diálogo con «Abrir terminal» enfocado: Ctrl+N y Enter)' },
+      { teclas: 'Ctrl+Mayús+N', accion: 'Nueva sesión sin diálogo: último proyecto y agente por defecto de Ajustes, en el checkout principal' },
       {
         teclas: 'Ctrl+T',
         accion: 'Nueva sesión sin diálogo: último proyecto y último agente, en el checkout principal y sin prompt',

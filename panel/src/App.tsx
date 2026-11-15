@@ -62,15 +62,18 @@ function Shell() {
   }, [avisoRapido]);
 
   // Ctrl+T: sesión nueva sin diálogo, en el checkout principal, con el último proyecto y agente.
-  const sesionRapida = async () => {
+  // Ctrl+Mayús+N (`agentePorDefecto`): igual, pero con el agente por defecto de Ajustes.
+  const sesionRapida = async (agentePorDefecto = false) => {
     if (creandoRapido.current) return;
     const activa = sessions.find((x) => x.name === ownerSession(workspace.active));
-    const { project, agent } = suggestSession({
+    const sugerida = suggestSession({
       projects,
       last: loadLastSession(),
       activeProject: activa?.project,
       settingsAgent: settings.newSession.agent,
     });
+    const project = sugerida.project;
+    const agent = agentePorDefecto ? settings.newSession.agent : sugerida.agent;
     navegar('terminales');
     if (!project) {
       openDialog();
@@ -118,6 +121,7 @@ function Shell() {
         if (ruta === 'terminales' && workspace.active) requestClose(workspace.active);
       },
       quickSession: () => void sesionRapida(),
+      quickDefaultSession: () => void sesionRapida(true),
       lastBackground: reabrirSegundoPlano,
     },
     !dialogOpen,

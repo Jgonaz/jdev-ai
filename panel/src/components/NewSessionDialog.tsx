@@ -116,6 +116,9 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
   }, [peticion]);
 
   const puedeAbrir = peticion !== null && preview.estado === 'ok' && !enviando;
+  // Enter sobre «Abrir terminal» mientras se calcula la vista previa (recién abierto el diálogo):
+  // se recuerda y se abre en cuanto esté lista. Así Ctrl+N y Enter abren una terminal.
+  const [enCola, setEnCola] = useState(false);
 
   const abrir = async () => {
     if (!peticion || !puedeAbrir) return;
@@ -136,11 +139,25 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
     }
   };
 
+  useEffect(() => {
+    if (preview.estado === 'incompleto' || preview.estado === 'error') setEnCola(false);
+    else if (enCola && puedeAbrir) {
+      setEnCola(false);
+      void abrir();
+    }
+    // abrir() lee el estado del render actual; basta con reaccionar a la vista previa.
+  }, [enCola, puedeAbrir, preview.estado]);
+
+  const pulsarAbrir = () => {
+    if (puedeAbrir) void abrir();
+    else if (preview.estado === 'pendiente' && !enviando) setEnCola(true);
+  };
+
   return (
     <Modal
       title="Nueva sesión"
       onClose={closeDialog}
-      initialFocus="select"
+      initialFocus="[data-cta]"
       footer={
         <>
           <label className="check check--footer">
@@ -150,9 +167,10 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
           <button type="button" className="btn btn--ghost btn--lg footer-push" onClick={closeDialog}>
             Cancelar
           </button>
-          <button type="button" className="btn btn--accent btn--lg" disabled={!puedeAbrir} onClick={() => void abrir()}>
+          {/* aria-disabled en lugar de disabled: el botón debe poder tener el foco al abrir el diálogo. */}
+          <button type="button" data-cta className="btn btn--accent btn--lg" aria-disabled={!puedeAbrir} onClick={pulsarAbrir}>
             <IconTerminal size={14} />
-            {enviando ? 'Abriendo…' : 'Abrir terminal'}
+            {enviando || enCola ? 'Abriendo…' : 'Abrir terminal'}
           </button>
         </>
       }

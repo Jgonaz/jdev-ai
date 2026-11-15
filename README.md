@@ -636,10 +636,13 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   solo existen los `Ctrl+Alt`. **En la app de escritorio** (`bin/panel-desktop`) el
   panel se queda además con `Ctrl+Tab` / `Ctrl+Mayús+Tab` (terminal siguiente y
   anterior), `Ctrl+W` (cierra la pestaña activa, como la «x»), `Ctrl+N` (abre el
-  diálogo de nueva sesión) y `Ctrl+T` (crea una sesión sin diálogo, en el checkout
+  diálogo de nueva sesión), `Ctrl+T` (crea una sesión sin diálogo, en el checkout
   principal y sin prompt, con el último proyecto y agente; si falla, lo avisa en un
-  banner), también con el foco en la terminal: la shell y Claude Code dejan de
-  recibirlas. El diálogo de nueva sesión propone por defecto el último proyecto y
+  banner) y `Ctrl+Mayús+N` (como `Ctrl+T`, pero con el agente por defecto de
+  Ajustes), también con el foco en la terminal: la shell y Claude Code dejan de
+  recibirlas. El diálogo de nueva sesión se abre con el foco en «Abrir terminal»,
+  así que `Ctrl+N` (o `Ctrl+Alt+N`) y Enter abren una terminal; si la vista previa
+  del comando aún se está calculando, se abre en cuanto está lista. Propone por defecto el último proyecto y
   agente con los que creaste una (se recuerdan en el navegador); lo que traiga ya
   decidido, como «Trabajar en esto» del backlog, manda sobre eso. Dentro de la
   terminal, `Ctrl+Retroceso` borra la palabra anterior (envía `Ctrl+W`), `Ctrl+Supr`
