@@ -2205,12 +2205,39 @@ td.no {
   color: var(--fg);
 }
 
-.pn-ascii {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.3;
-  text-align: left;
+.pn-sleepy {
+  flex: none;
+  color: var(--fg-faint);
+}
+
+.pn-sleepy__z {
+  stroke: var(--pn-accent, var(--accent));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pn-sleepy__z {
+    animation: pn-sleepy-z 3.2s ease-in-out infinite;
+  }
+
+  .pn-sleepy__z--big {
+    animation-delay: 0.9s;
+  }
+}
+
+/* Las zetas suben y se desvanecen por turnos. */
+@keyframes pn-sleepy-z {
+  0% {
+    opacity: 0;
+    transform: translate(-2px, 3px);
+  }
+  35%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(2px, -4px);
+  }
 }
 
 .pn-place {
@@ -4331,5 +4358,102 @@ td.no {
   .at-fade-out,
   .at-fade-in {
     animation: none !important;
+  }
+}
+
+/* ---------- Intro: pantalla de arranque del panel (scripts/splash.ts) ---------- */
+.splash {
+  display: none;
+}
+
+.intro .splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.intro body {
+  overflow: hidden;
+}
+
+.intro--out .splash {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 16px;
+}
+
+.splash__logo {
+  margin: 0;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: clamp(28px, 8vw, 36px);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.splash__logo span {
+  color: var(--fg-muted);
+}
+
+.splash__bar {
+  position: relative;
+  width: 176px;
+  height: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.splash__bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: var(--fg-muted);
+}
+
+.splash__status {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--fg-muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .intro .splash {
+    transition: opacity 0.45s ease;
+  }
+
+  .splash__box {
+    animation: splash-in 0.4s ease-out both;
+  }
+
+  /* La barra se llena una vez durante lo que dura la intro (1,4 s). */
+  .splash__bar::after {
+    transform-origin: left;
+    animation: splash-fill 1.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes splash-fill {
+  from {
+    transform: scaleX(0);
   }
 }

@@ -86,7 +86,7 @@ function InicioFields() {
 const TOGGLES = [
   { key: 'cursor', label: 'Cursor parpadeante en el logo', hint: 'El ▌ de ~/Jdev-ai. Se para si el sistema pide menos movimiento.' },
   { key: 'lights', label: 'Luces piloto animadas', hint: 'El punto ámbar late y el anillo de «trabajando» gira.' },
-  { key: 'ascii', label: 'Arte ASCII en los estados vacíos', hint: 'Por ejemplo ( -_-) zZ cuando no hay nada en curso.' },
+  { key: 'ascii', label: 'Ilustraciones en los estados vacíos', hint: 'Por ejemplo, una terminal dormida cuando no hay nada en curso.' },
   { key: 'greeting', label: 'Saludo según la hora', hint: '«Buenos días» en Inicio y en los estados vacíos. Desactivado, Inicio se titula «Inicio».' },
   { key: 'grid', label: 'Retícula de puntos de fondo', hint: 'Textura sutil en Inicio y en los estados vacíos, como papel de libreta.' },
 ] as const;

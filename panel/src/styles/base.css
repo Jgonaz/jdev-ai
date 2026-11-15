@@ -108,6 +108,33 @@ kbd {
   }
 }
 
+/* Zetas de la terminal dormida (SleepyTerminal): suben y se desvanecen por turnos. */
+@keyframes sleepy-z {
+  0% {
+    opacity: 0;
+    transform: translate(-2px, 3px);
+  }
+  35%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(2px, -4px);
+  }
+}
+.sleepy {
+  flex: none;
+  color: var(--fg-faint);
+}
+.sleepy__z {
+  stroke: var(--accent);
+  animation: sleepy-z 3.2s ease-in-out infinite;
+}
+.sleepy__z--big {
+  animation-delay: 0.9s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

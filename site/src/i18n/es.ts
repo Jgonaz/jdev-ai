@@ -9,6 +9,7 @@ export const es = {
     description:
       'Reglas y flujos en Markdown para trabajar con Claude Code, Codex, Copilot y OpenCode en varios proyectos independientes, con un panel local para sus terminales.',
   },
+  splash: 'Arrancando el panel…',
   header: { language: 'Idioma' },
   open: {
     title: 'Un harness, todos tus agentes.',

@@ -327,7 +327,7 @@ pantalla de Ajustes con estos apartados:
   de seguir el del sistema), color de
   acento, pantalla al abrir, tu nombre para el saludo, mostrar u ocultar «tu
   actividad» y cinco detalles que se pueden desactivar por separado: cursor
-  parpadeante del logo, luces piloto animadas, arte ASCII en los estados
+  parpadeante del logo, luces piloto animadas, ilustraciones en los estados
   vacíos, saludo según la hora y retícula de puntos de fondo.
 - **Tipografía**: fuente y tamaño de la interfaz, los títulos y la terminal.
 - **Terminal**: cursor, distribución inicial, historial, copiar al seleccionar,

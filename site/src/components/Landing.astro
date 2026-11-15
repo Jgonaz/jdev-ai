@@ -45,8 +45,22 @@ const canonical = new URL(home[lang], Astro.site);
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@600&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Martian+Mono:wght@600;800&display=swap"
     />
+    <!-- Intro: la pantalla de arranque del panel, una vez por sesión. Se decide antes de pintar para que no
+         parpadee; sin JavaScript no aparece. -->
+    <script is:inline>
+      try {
+        if (!sessionStorage.getItem('jdev-intro')) document.documentElement.classList.add('intro');
+      } catch {}
+    </script>
   </head>
   <body>
+    <div class="splash" aria-hidden="true">
+      <div class="splash__box">
+        <p class="splash__logo"><span>~/</span>Jdev-ai<i class="caret"></i></p>
+        <div class="splash__bar"></div>
+        <p class="splash__status">{t.splash}</p>
+      </div>
+    </div>
     <div class="wrap">
       <header class="masthead">
         <a class="masthead__brand" href={home[lang]}>Jdev-ai<i class="caret" aria-hidden="true"></i></a>
@@ -234,6 +248,7 @@ const canonical = new URL(home[lang], Astro.site);
     </div>
     <script>
       import '../scripts/langSwitch';
+      import '../scripts/splash';
     </script>
   </body>
 </html>

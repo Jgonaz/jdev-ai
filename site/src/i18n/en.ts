@@ -7,6 +7,7 @@ export const en: Dictionary = {
     description:
       'Rules and workflows in Markdown for working with Claude Code, Codex, Copilot and OpenCode across several independent projects, with a local panel for their terminals.',
   },
+  splash: 'Starting the panel…',
   header: { language: 'Language' },
   open: {
     title: 'One harness, all your agents.',

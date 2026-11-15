@@ -59,7 +59,7 @@ export const settingsScreen: Record<'es' | 'en', SettingsScreen> = {
       ],
       details: 'Detalles con personalidad',
       toggles: [
-        { id: 'ascii', label: 'Arte ASCII en los estados vacíos', hint: 'Por ejemplo ( -_-) zZ cuando no hay nada en curso.', on: true },
+        { id: 'ascii', label: 'Ilustraciones en los estados vacíos', hint: 'Por ejemplo, una terminal dormida cuando no hay nada en curso.', on: true },
         { id: 'greeting', label: 'Saludo según la hora', hint: 'Desactivado, la pantalla de inicio se titula «Inicio».', on: true },
         { id: 'grid', label: 'Retícula de puntos de fondo', hint: 'Textura sutil en Inicio, como papel de libreta.', on: true },
       ],
@@ -172,7 +172,7 @@ export const settingsScreen: Record<'es' | 'en', SettingsScreen> = {
       ],
       details: 'Details with personality',
       toggles: [
-        { id: 'ascii', label: 'ASCII art in empty states', hint: 'For example ( -_-) zZ when nothing is in progress.', on: true },
+        { id: 'ascii', label: 'Illustrations in empty states', hint: 'For example, a sleeping terminal when nothing is in progress.', on: true },
         { id: 'greeting', label: 'Greeting by time of day', hint: 'When off, the home screen is titled “Home”.', on: true },
         { id: 'grid', label: 'Dotted background grid', hint: 'A subtle texture on Home, like notebook paper.', on: true },
       ],

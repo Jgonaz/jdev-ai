@@ -2,6 +2,7 @@
 // Pantalla Proyectos del panel simulado: Backlog, Cambios y Guías de cada proyecto.
 // En el panel real son tres pantallas de un menú desplegable; aquí son pestañas.
 import { projectsScreen } from '../data/projects';
+import PanelSleepy from './PanelSleepy.astro';
 
 interface Props {
   lang: 'es' | 'en';
@@ -98,7 +99,7 @@ const firstPlace = (i: number) => (t.projects[i].places.find((p) => p.files.leng
                         {data.backlog[c].length === 0 &&
                           (column.key === 'doing' ? (
                             <div class="pn-quiet">
-                              <pre class="pn-ascii" aria-hidden="true">{'( -_-)  zZ\n/|___|\\'}</pre>
+                              <PanelSleepy />
                               <span class="pn-quiet__title">{L.quiet}</span>
                               <span>{L.quietHint}</span>
                             </div>

@@ -3,12 +3,10 @@ import { greeting } from '../../lib/time.ts';
 import { useSettings } from '../../state/SettingsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import { IconPlus } from '../Icons.tsx';
+import { SleepyTerminal } from '../SleepyTerminal.tsx';
 import { LiveList } from './LiveSessions.tsx';
 import { useSessionMenu } from './SessionMenu.tsx';
 import { useLiveUnopened } from './useLiveUnopened.ts';
-
-// Arte ASCII del diseño (estado vacío).
-const ASCII = '  ( -_-)  zZ\n  /|___|\\';
 
 /** Vacío de la zona de terminales: sin sesiones o sin terminales abiertas. */
 export function EmptyState({ haySesiones }: { haySesiones: boolean }) {
@@ -20,11 +18,7 @@ export function EmptyState({ haySesiones }: { haySesiones: boolean }) {
 
   return (
     <div className="empty" data-grid={settings.personality.grid ? 'on' : 'off'}>
-      {ascii && (
-        <pre className="empty__ascii" aria-hidden="true">
-          {ASCII}
-        </pre>
-      )}
+      {ascii && <SleepyTerminal size={84} />}
       {saludo && <p className="empty__greeting">{greeting(new Date())}.</p>}
       <h2 className="empty__title">{haySesiones ? 'No hay ninguna terminal abierta' : 'Todavía no hay sesiones'}</h2>
       <p className="empty__text">

@@ -3,10 +3,9 @@ import { STATE_HINTS, STATE_LABELS, emptyColumnText, priorityRank, shortDate } f
 import type { Grouped } from '../../lib/backlog.ts';
 import { projectHref } from '../../lib/route.ts';
 import { useSettings } from '../../state/SettingsContext.tsx';
+import { SleepyTerminal } from '../SleepyTerminal.tsx';
 import type { BacklogItem, BacklogState } from '../../types.ts';
 
-// Arte ASCII del diseño (columna en curso vacía).
-const ASCII = '  ( -_-)  zZ\n  /|___|\\';
 /** Elementos hechos que se ven con la columna plegada. */
 const DONE_PREVIEW = 5;
 
@@ -126,11 +125,7 @@ function OpenColumn(props: {
         <p className="bcol__none">Sin coincidencias con los filtros.</p>
       ) : props.state === 'in-progress' ? (
         <div className="bcol__empty">
-          {settings.personality.ascii && (
-            <pre className="bcol__ascii" aria-hidden="true">
-              {ASCII}
-            </pre>
-          )}
+          {settings.personality.ascii && <SleepyTerminal />}
           <span className="bcol__empty-title">El taller está tranquilo</span>
           <span className="bcol__empty-text">Elige algo de «por hacer» y pulsa «Trabajar en esto».</span>
         </div>
