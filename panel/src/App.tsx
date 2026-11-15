@@ -1,8 +1,13 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from './api.ts';
 import { Header } from './components/Header.tsx';
 import { NewSessionDialog } from './components/NewSessionDialog.tsx';
 import { ResumeDialog } from './components/ResumeDialog.tsx';
+import { CloseDoneDialog } from './components/terminales/CloseDoneDialog.tsx';
 import { focusActiveTab } from './lib/focus.ts';
+import { ownerSession } from './lib/follow.ts';
+import { loadLastSession, saveLastSession, suggestSession } from './lib/lastSession.ts';
+import { liveUnopened, pickBackgroundSession } from './lib/liveUnopened.ts';
 import { useAlerts } from './lib/useAlerts.ts';
 import { useRoute } from './lib/route.ts';
 import { useShortcuts } from './lib/useShortcuts.ts';
@@ -14,14 +19,33 @@ import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { TerminalesScreen } from './screens/TerminalesScreen.tsx';
 import { CambiosScreen } from './screens/CambiosScreen.tsx';
 import { ImagesProvider } from './state/ImagesContext.tsx';
-import { SessionsProvider } from './state/SessionsContext.tsx';
+import { SessionsProvider, useSessions } from './state/SessionsContext.tsx';
 import { SettingsProvider, useSettings } from './state/SettingsContext.tsx';
 import { WorkspaceProvider, useWorkspace } from './state/WorkspaceContext.tsx';
+
+const AVISO_MS = 8000;
 
 function Shell() {
   const { settings, loaded: ajustesListos, loadError } = useSettings();
   const { ruta, proyecto, elemento, implicita, navegar, reemplazar } = useRoute(settings.startScreen);
-  const { dialogOpen, newSessionOpen, resumeTarget, openDialog, move, cycleLayout, requestTerminalFocus } = useWorkspace();
+  const { sessions, projects, upsert } = useSessions();
+  const {
+    workspace,
+    dialogOpen,
+    newSessionOpen,
+    resumeTarget,
+    openDialog,
+    openSession,
+    startLaunch,
+    requestClose,
+    closedOrder,
+    move,
+    cycleLayout,
+    requestTerminalFocus,
+  } = useWorkspace();
+  // Aviso de un fallo al crear la sesión con Ctrl+T, que no tiene diálogo donde mostrarlo.
+  const [avisoRapido, setAvisoRapido] = useState<string | null>(null);
+  const creandoRapido = useRef(false);
   // Sin ruta, la pantalla depende de un ajuste: hasta tenerlo no se muestra ninguna.
   const pendiente = implicita && !ajustesListos;
   const irATerminales = useCallback(() => navegar('terminales'), [navegar]);
@@ -30,6 +54,51 @@ function Shell() {
   useEffect(() => {
     if (ruta === 'terminales') requestTerminalFocus();
   }, [ruta, requestTerminalFocus]);
+
+  useEffect(() => {
+    if (avisoRapido === null) return;
+    const t = window.setTimeout(() => setAvisoRapido(null), AVISO_MS);
+    return () => window.clearTimeout(t);
+  }, [avisoRapido]);
+
+  // Ctrl+T: sesión nueva sin diálogo, en el checkout principal, con el último proyecto y agente.
+  const sesionRapida = async () => {
+    if (creandoRapido.current) return;
+    const activa = sessions.find((x) => x.name === ownerSession(workspace.active));
+    const { project, agent } = suggestSession({
+      projects,
+      last: loadLastSession(),
+      activeProject: activa?.project,
+      settingsAgent: settings.newSession.agent,
+    });
+    navegar('terminales');
+    if (!project) {
+      openDialog();
+      return;
+    }
+    creandoRapido.current = true;
+    setAvisoRapido(null);
+    try {
+      const r = await api.createSession({ project, agent, location: 'main' });
+      upsert(r.session);
+      openSession(r.session.name);
+      startLaunch(r.session.name);
+      saveLastSession({ project, agent });
+    } catch (e) {
+      setAvisoRapido(`No se pudo crear la sesión: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      creandoRapido.current = false;
+    }
+  };
+
+  // Ctrl+Alt+T: vuelve a la sesión que más recientemente se mandó a segundo plano.
+  const reabrirSegundoPlano = () => {
+    const elegida = pickBackgroundSession(liveUnopened(sessions, projects, workspace.tabs), closedOrder());
+    if (!elegida) return;
+    navegar('terminales');
+    openSession(elegida.session.name);
+    requestTerminalFocus();
+  };
 
   useAlerts(irATerminales);
   useShortcuts(
@@ -45,6 +114,11 @@ function Shell() {
         navegar('terminales');
         focusActiveTab();
       },
+      closeTab: () => {
+        if (ruta === 'terminales' && workspace.active) requestClose(workspace.active);
+      },
+      quickSession: () => void sesionRapida(),
+      lastBackground: reabrirSegundoPlano,
     },
     !dialogOpen,
   );
@@ -57,6 +131,11 @@ function Shell() {
           No se pudieron cargar los ajustes: {loadError}
         </div>
       )}
+      {avisoRapido && (
+        <div className="banner banner--error" role="alert">
+          {avisoRapido}
+        </div>
+      )}
       <TerminalesScreen hidden={pendiente || ruta !== 'terminales'} />
       {!pendiente && ruta === 'inicio' && <InicioScreen onGoToTerminal={irATerminales} />}
       {ruta === 'backlog' && <BacklogScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
@@ -66,6 +145,7 @@ function Shell() {
       {ruta === 'ajustes' && <SettingsScreen />}
       {newSessionOpen && <NewSessionDialog onCreated={irATerminales} />}
       {resumeTarget && <ResumeDialog recent={resumeTarget} onCreated={irATerminales} />}
+      <CloseDoneDialog />
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { forgetBtw } from '../lib/btw.ts';
 import { forgetPrompts } from '../lib/prompts.ts';
 import { forgetConversation } from '../lib/useConversation.ts';
 import { forgetFollow } from '../lib/useFollow.ts';
-import { visualState } from '../lib/sessions.ts';
+import { asksOnClose, visualState } from '../lib/sessions.ts';
 import {
   EMPTY_WORKSPACE,
   loadUiPrefs,
@@ -33,12 +33,23 @@ type WorkspaceValue = {
   /** Cambia una pestaña entre la vista de terminal y la de chat (se recuerda por pestaña). */
   setView: (name: string, view: PaneView) => void;
   closeTab: (name: string) => void;
+  /**
+   * Cierra la pestaña desde la «×», el clic central, el menú o Ctrl+W: una sesión
+   * hecha que sigue viva pregunta antes si terminarla o dejarla en segundo plano
+   * (devuelve true y abre ese diálogo); el resto se cierra al momento.
+   */
+  requestClose: (name: string) => boolean;
+  /** Cierre pendiente de confirmar (diálogo «Cerrar sesión hecha» abierto). */
+  closeRequest: CloseRequest | null;
+  clearCloseRequest: () => void;
+  /** Cuándo (orden de cierre) cada sesión cerró su pestaña por última vez; solo en esta carga de la página. */
+  closedOrder: () => ReadonlyMap<string, number>;
   move: (delta: number) => void;
   /** Lleva una pestaña a otra posición (arrastrándola en la barra). */
   reorder: (name: string, to: number) => void;
   setLayout: (layout: Layout) => void;
   cycleLayout: () => void;
-  /** Algún diálogo modal (nueva sesión o retomar) está abierto. */
+  /** Algún diálogo modal (nueva sesión, retomar o cerrar una sesión hecha) está abierto. */
   dialogOpen: boolean;
   newSessionOpen: boolean;
   /** Valores con los que se abrió Nueva sesión (p. ej. desde Proyectos); null con los de siempre. */
@@ -70,6 +81,13 @@ type WorkspaceValue = {
   endLaunch: (name: string) => void;
 };
 
+/** Cierre de pestaña a la espera de la respuesta del diálogo. */
+export type CloseRequest = {
+  name: string;
+  /** El foco estaba en una terminal al pedirlo (p. ej. Ctrl+W): al acabar vuelve a ella. */
+  fromTerminal: boolean;
+};
+
 /** Valores iniciales de Nueva sesión. */
 export type NewSessionInit = {
   project?: string;
@@ -97,6 +115,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [newSessionOpen, setDialogOpen] = useState(false);
   const [newSessionInit, setNewSessionInit] = useState<NewSessionInit | null>(null);
   const [resumeTarget, setResumeTarget] = useState<RecentSession | null>(null);
+  const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
+  const closedAt = useRef(new Map<string, number>());
+  const closeSeq = useRef(0);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
   const narrow = useMediaQuery(CONTEXT_NARROW_QUERY);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
@@ -147,12 +170,28 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const closeTab = useCallback((name: string) => {
     if (isFollowKey(name)) forgetFollow(name);
     else {
+      closedAt.current.set(name, ++closeSeq.current);
       forgetConversation(name);
       forgetBtw(name);
       forgetPrompts(name);
     }
     dispatch({ type: 'close', name });
   }, []);
+  const requestClose = useCallback(
+    (name: string) => {
+      const s = isFollowKey(name) ? undefined : sessionsRef.current.find((x) => x.name === name);
+      if (!s || !asksOnClose(s)) {
+        closeTab(name);
+        return false;
+      }
+      const foco = document.activeElement;
+      setCloseRequest({ name, fromTerminal: foco instanceof Element && foco.closest('.termbody') !== null });
+      return true;
+    },
+    [closeTab],
+  );
+  const clearCloseRequest = useCallback(() => setCloseRequest(null), []);
+  const closedOrder = useCallback(() => closedAt.current, []);
   const move = useCallback((delta: number) => dispatch({ type: 'move', delta }), []);
   const reorder = useCallback((name: string, to: number) => dispatch({ type: 'reorder', name, to }), []);
   const setLayout = useCallback((layout: Layout) => dispatch({ type: 'layout', layout }), []);
@@ -164,7 +203,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const closeDialog = useCallback(() => setDialogOpen(false), []);
   const openResume = useCallback((r: RecentSession) => setResumeTarget(r), []);
   const closeResume = useCallback(() => setResumeTarget(null), []);
-  const dialogOpen = newSessionOpen || resumeTarget !== null;
+  const dialogOpen = newSessionOpen || resumeTarget !== null || closeRequest !== null;
   const setPrefs = useCallback((parche: Partial<UiPrefs>) => {
     setPrefsState((p) => {
       const siguiente = { ...p, ...parche };
@@ -206,6 +245,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activate,
       setView,
       closeTab,
+      requestClose,
+      closeRequest,
+      clearCloseRequest,
+      closedOrder,
       move,
       reorder,
       setLayout,
@@ -239,6 +282,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activate,
       setView,
       closeTab,
+      requestClose,
+      closeRequest,
+      clearCloseRequest,
+      closedOrder,
       move,
       reorder,
       setLayout,

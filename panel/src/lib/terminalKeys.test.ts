@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DELETE_WORD_BACK, DELETE_WORD_FORWARD, translateTerminalKey } from './terminalKeys.ts';
+import { DELETE_WORD_BACK, DELETE_WORD_FORWARD, NEWLINE_NO_SUBMIT, translateTerminalKey } from './terminalKeys.ts';
 
 const tecla = (key: string, m: Record<string, unknown> = {}) => ({
   type: 'keydown',
@@ -25,6 +25,24 @@ describe('translateTerminalKey', () => {
   it('Mayús+RePág y Mayús+AvPág llegan a tmux como S-PPage y S-NPage', () => {
     expect(translateTerminalKey(tecla('PageUp', { shiftKey: true }))).toEqual({ send: '\x1b[5;2~', scroll: true });
     expect(translateTerminalKey(tecla('PageDown', { shiftKey: true }))).toEqual({ send: '\x1b[6;2~', scroll: true });
+  });
+
+  it('Mayús+Enter con agente inserta un salto de línea (Ctrl+J) sin enviar el prompt', () => {
+    expect(translateTerminalKey(tecla('Enter', { shiftKey: true }))).toEqual({ send: '\n' });
+    expect(translateTerminalKey(tecla('Enter', { shiftKey: true }), { shell: false })).toEqual({ send: NEWLINE_NO_SUBMIT });
+  });
+
+  it('Mayús+Enter en una terminal sin agente es Enter (xterm lo resuelve)', () => {
+    expect(translateTerminalKey(tecla('Enter', { shiftKey: true }), { shell: true })).toBeNull();
+  });
+
+  it('Enter sin Mayús, y Mayús+Enter con Ctrl, Alt o Meta, no se tocan', () => {
+    expect(translateTerminalKey(tecla('Enter'))).toBeNull();
+    expect(translateTerminalKey(tecla('Enter', { shiftKey: true, ctrlKey: true }))).toBeNull();
+    expect(translateTerminalKey(tecla('Enter', { shiftKey: true, altKey: true }))).toBeNull();
+    expect(translateTerminalKey(tecla('Enter', { shiftKey: true, metaKey: true }))).toBeNull();
+    expect(translateTerminalKey(tecla('Enter', { shiftKey: true, type: 'keyup' }))).toBeNull();
+    expect(translateTerminalKey(tecla('Enter', { shiftKey: true, isComposing: true }))).toBeNull();
   });
 
   it('no toca Retroceso, Supr ni RePág/AvPág sin modificadores', () => {

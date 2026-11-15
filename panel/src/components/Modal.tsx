@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useFocusTrap } from '../lib/useFocusTrap.ts';
 import { IconClose } from './Icons.tsx';
@@ -15,6 +15,19 @@ type Props = {
   /** Selector CSS del elemento que recibe el foco al abrir. */
   initialFocus?: string;
 };
+
+/**
+ * Con ← y → se pasa de un botón del pie al siguiente (en un diálogo de confirmación, que solo
+ * tiene botones ahí): la elección entre «Cancelar» y las acciones no obliga a tabular.
+ */
+function moverEnPie(e: KeyboardEvent<HTMLElement>): void {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const botones = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+  const i = botones.findIndex((b) => b === document.activeElement);
+  if (i < 0 || botones.length < 2) return;
+  e.preventDefault();
+  botones[(i + (e.key === 'ArrowRight' ? 1 : botones.length - 1)) % botones.length]!.focus();
+}
 
 /** Diálogo modal accesible: role, aria-modal, foco atrapado y cierre con Escape. */
 export function Modal({ title, onClose, children, footer, width = 640, role = 'dialog', initialFocus }: Props) {
@@ -40,12 +53,17 @@ export function Modal({ title, onClose, children, footer, width = 640, role = 'd
           <h1 id={idTitulo} className="modal__title">
             {title}
           </h1>
-          <button type="button" className="icon-btn modal__close" aria-label="Cerrar" onClick={onClose}>
+          {/* En una confirmación, Cancelar y Escape ya cierran: la «×» queda fuera del orden de Tab para que recorra solo las opciones. */}
+          <button type="button" className="icon-btn modal__close" aria-label="Cerrar" tabIndex={role === 'alertdialog' ? -1 : undefined} onClick={onClose}>
             <IconClose />
           </button>
         </div>
         <div className="modal__body">{children}</div>
-        {footer && <div className="modal__foot">{footer}</div>}
+        {footer && (
+          <div className="modal__foot" onKeyDown={role === 'alertdialog' ? moverEnPie : undefined}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,

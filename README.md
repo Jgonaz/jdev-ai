@@ -628,12 +628,25 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   `JDEV_PANEL_PORT`, el de Ajustes > Servidor local o el 4317.
   Los ajustes se guardan en `~/.config/jdev-ai/panel.json`.
 - **Atajos.** `Ctrl+Alt+←/→` cambia de terminal, `Ctrl+Alt+N` abre una sesión
-  nueva, `Ctrl+Alt+L` cambia la distribución y `Ctrl+Alt+Esc` saca el foco de
-  la terminal a su pestaña (dentro de la terminal, Tab va a la shell). Para que el navegador no se
-  quede `Ctrl+T`, úsalo como aplicación (`bin/panel --app` o la PWA
-  instalada); `Ctrl+W` sigue cerrando la ventana. Dentro de la terminal,
-  `Ctrl+Retroceso` borra la palabra anterior (envía `Ctrl+W`) y `Ctrl+Supr` la
-  siguiente (envía `Alt+D`), como en bash y Claude Code. El botón del teclado
+  nueva, `Ctrl+Alt+L` cambia la distribución, `Ctrl+Alt+T` vuelve a la sesión que
+  más recientemente dejaste en segundo plano (la que cerró su pestaña la última;
+  sin registro, la primera de «En segundo plano») y `Ctrl+Alt+Esc` saca el foco de
+  la terminal a su pestaña (dentro de la terminal, Tab va a la shell). En el
+  navegador no se pueden capturar `Ctrl+T`, `Ctrl+W` ni `Ctrl+Tab`, así que allí
+  solo existen los `Ctrl+Alt`. **En la app de escritorio** (`bin/panel-desktop`) el
+  panel se queda además con `Ctrl+Tab` / `Ctrl+Mayús+Tab` (terminal siguiente y
+  anterior), `Ctrl+W` (cierra la pestaña activa, como la «x»), `Ctrl+N` (abre el
+  diálogo de nueva sesión) y `Ctrl+T` (crea una sesión sin diálogo, en el checkout
+  principal y sin prompt, con el último proyecto y agente; si falla, lo avisa en un
+  banner), también con el foco en la terminal: la shell y Claude Code dejan de
+  recibirlas. El diálogo de nueva sesión propone por defecto el último proyecto y
+  agente con los que creaste una (se recuerdan en el navegador); lo que traiga ya
+  decidido, como «Trabajar en esto» del backlog, manda sobre eso. Dentro de la
+  terminal, `Ctrl+Retroceso` borra la palabra anterior (envía `Ctrl+W`), `Ctrl+Supr`
+  la siguiente (envía `Alt+D`), como en bash y Claude Code, y `Mayús+Enter`, en una
+  sesión con agente, inserta un salto de línea sin enviar el prompt (envía `Ctrl+J`);
+  en una terminal sin agente es un Enter normal. En los diálogos de confirmación,
+  Tab y las flechas ←/→ pasan de un botón a otro. El botón del teclado
   de la cabecera, a la izquierda de «Nueva sesión», abre una chuleta con todos
   los atajos (la misma lista que Ajustes › Atajos de teclado).
 - **Historial de las terminales.** El historial lo tiene tmux, no el navegador:
@@ -659,8 +672,10 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
 - **Pestañas.** Cada pestaña de terminal lleva una «x» (siempre en la activa;
   en las demás, al pasar el ratón o al enfocarlas) y el clic central también la
   cierra: solo quita la terminal del panel, la sesión sigue viva en tmux y en la
-  barra lateral. La siguiente pestaña pasa a ser la activa. Para reordenarlas,
-  arrastra una pestaña con el ratón a izquierda o derecha (pasa a ser la activa);
+  barra lateral. Si la sesión está marcada como hecha, la «x», el clic central,
+  «Cerrar pestaña» y `Ctrl+W` (app de escritorio) preguntan antes si terminarla
+  o dejarla en segundo plano. La siguiente pestaña pasa a ser la activa. Para
+  reordenarlas, arrastra una pestaña con el ratón a izquierda o derecha (pasa a ser la activa);
   el orden se guarda en el navegador.
 - **Menú contextual y renombrar.** El clic derecho (o la tecla Menú / Mayús+F10)
   sobre una sesión de la barra lateral o sobre una pestaña abre un menú con

@@ -54,6 +54,11 @@
 .footer-push {
   margin-left: auto;
 }
+/* En una confirmación el foco inicial cae en un botón al abrir con el ratón y :focus-visible no lo pinta: así siempre se ve cuál está activo. */
+.modal[role='alertdialog'] .modal__foot .btn:focus {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
 
 .form {
   display: flex;

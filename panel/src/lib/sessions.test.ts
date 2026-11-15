@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectInfo, SessionInfo } from '../types.ts';
 import {
+  asksOnClose,
   attachCommand,
   effectiveProject,
   groupSessions,
@@ -229,5 +230,17 @@ describe('comando de arranque', () => {
     expect(runSessionOf([sesion({ project: 'app', agent: 'shell' })], 'app')).toBeUndefined();
     expect(runSessionOf([{ ...arranque, alive: false }], 'app')).toBeUndefined();
     expect(runSessionOf([{ ...arranque, state: 'ended' }], 'app')).toBeUndefined();
+  });
+});
+
+describe('asksOnClose', () => {
+  const hecha = { at: null, by: 'user' as const, note: null };
+  it('pregunta al cerrar una sesión hecha que sigue viva', () => {
+    expect(asksOnClose(sesion({ done: hecha, alive: true }))).toBe(true);
+  });
+  it('no pregunta si está abierta, si ya no vive o si es una terminal sin agente', () => {
+    expect(asksOnClose(sesion({ done: null, alive: true }))).toBe(false);
+    expect(asksOnClose(sesion({ done: hecha, alive: false }))).toBe(false);
+    expect(asksOnClose(sesion({ done: hecha, alive: true, agent: 'shell' }))).toBe(false);
   });
 });

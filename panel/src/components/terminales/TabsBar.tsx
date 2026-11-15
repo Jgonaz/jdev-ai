@@ -85,7 +85,7 @@ function FollowTab({ clave, activa, enPantalla, onClose }: { clave: string; acti
 
 export function TabsBar() {
   const { sessions, projects } = useSessions();
-  const { workspace, visible, activate, move, reorder, closeTab, setLayout, contextVisible, toggleContext, requestTerminalFocus } = useWorkspace();
+  const { workspace, visible, activate, move, reorder, requestClose, setLayout, contextVisible, toggleContext, requestTerminalFocus } = useWorkspace();
   const { viewer, closeViewer } = useImages();
   const lista = useRef<HTMLDivElement>(null);
   const { menu, onContextMenu, onKeyDown } = useSessionMenu({ onTabClosed: focusActiveTabSoon });
@@ -150,9 +150,9 @@ export function TabsBar() {
   };
 
   // Cierra la pestaña en el panel (la sesión sigue viva en tmux) y deja el foco en la pestaña activa.
+  // Una sesión hecha que sigue viva pregunta antes (el diálogo es común, ver CloseDoneDialog).
   const cerrar = (name: string) => {
-    closeTab(name);
-    focusActiveTabSoon();
+    if (!requestClose(name)) focusActiveTabSoon();
   };
 
   return (

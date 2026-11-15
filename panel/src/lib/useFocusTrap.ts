@@ -4,6 +4,11 @@ import type { RefObject } from 'react';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Trampas activas, de la más antigua a la más reciente. Solo la última atiende el teclado: si dos
+// escuchan a la vez (un detalle superpuesto debajo de un diálogo), cada una devuelve el foco a su
+// contenedor al ver Tab desde el del otro y el foco no sale del primer elemento del diálogo.
+const activas: object[] = [];
+
 export type FocusTrapOptions = {
   /** La trampa solo actúa mientras es true (por defecto, siempre). */
   active?: boolean;
@@ -26,7 +31,11 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, onClose: () => 
     const contenedor = ref.current;
     if (!contenedor || !active) return;
     const previo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const enfocables = () => [...contenedor.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((e) => e.offsetParent !== null || e === document.activeElement);
+    const yo = {};
+    activas.push(yo);
+    // Los de tabindex -1 (radios sin marcar, botones fuera del orden) no los alcanza Tab: no cuentan como primero ni último.
+    const enfocables = () =>
+      [...contenedor.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((e) => e.tabIndex >= 0 && (e.offsetParent !== null || e === document.activeElement));
 
     if (moveFocus || !contenedor.contains(document.activeElement)) {
       const destino = (inicial ? contenedor.querySelector<HTMLElement>(inicial) : null) ?? enfocables()[0] ?? contenedor;
@@ -34,6 +43,7 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, onClose: () => 
     }
 
     const alPulsar = (e: KeyboardEvent) => {
+      if (activas[activas.length - 1] !== yo) return;
       if (e.key === 'Escape' && closeOnEscape) {
         e.preventDefault();
         e.stopPropagation();
@@ -59,6 +69,7 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, onClose: () => 
     document.addEventListener('keydown', alPulsar, true);
     return () => {
       document.removeEventListener('keydown', alPulsar, true);
+      activas.splice(activas.indexOf(yo), 1);
       if (restoreFocus) previo?.focus?.();
     };
     // onClose se lee en el momento del evento; no debe reiniciar la trampa.

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { AGENT_PRODUCTS, SHELL_AGENT, fallbackProject, visualState } from '../../lib/sessions.ts';
+import { AGENT_PRODUCTS, SHELL_AGENT, fallbackProject, isShell, visualState } from '../../lib/sessions.ts';
 import { viewOf } from '../../lib/workspace.ts';
 import type { PaneView } from '../../lib/workspace.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
@@ -68,6 +68,7 @@ export function Pane({ session, suspended }: { session: SessionInfo; suspended: 
       <TerminalBody
         name={session.name}
         active={activa && vista === 'terminal'}
+        shell={isShell(session)}
         suspended={suspended || vista === 'chat'}
         hidden={vista === 'chat'}
         onFocus={() => !activa && activate(session.name)}

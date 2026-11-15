@@ -191,3 +191,6 @@ export function stateChip(s: SessionInfo, relativo: string): string {
 export function attachCommand(sesion: string, socket: string): string {
   return `tmux -L ${socket} attach -t ${sesion}`;
 }
+
+/** Al cerrar su pestaña, se pregunta si terminarla o dejarla en segundo plano: está hecha y sigue viva. */
+export const asksOnClose = (s: SessionInfo): boolean => Boolean(s.done) && s.alive && !isShell(s);

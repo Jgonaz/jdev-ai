@@ -50,6 +50,16 @@
   background: var(--bg-raised);
   color: var(--fg);
 }
+/* Contorno en el acento: acción principal que no es destructiva junto a una que sí lo es. */
+.btn--outline {
+  border-color: var(--accent-line);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.btn--outline:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
 .btn--danger {
   background: var(--danger);
   color: var(--danger-ink);

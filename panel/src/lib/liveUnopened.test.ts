@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectInfo, SessionInfo } from '../types.ts';
-import { LIVE_COLLAPSED_KEY, isLive, liveCountLabel, liveUnopened, loadLiveCollapsed, saveLiveCollapsed } from './liveUnopened.ts';
+import { LIVE_COLLAPSED_KEY, isLive, liveCountLabel, liveUnopened, loadLiveCollapsed, pickBackgroundSession, saveLiveCollapsed } from './liveUnopened.ts';
 
 const proyecto = (id: string, visible = true): ProjectInfo => ({
   id,
@@ -184,5 +184,36 @@ describe('liveUnopened con terminales de arranque', () => {
       [],
     );
     expect(nombres(lista)).toEqual(['dev', 'espera', 'trabaja']);
+  });
+});
+
+describe('pickBackgroundSession', () => {
+  const item = (name: string) => ({ session: sesion(name), project: proyecto('a'), state: 'idle' as const, hiddenProject: false });
+  const lista = [item('s1'), item('s2'), item('s3')];
+
+  it('elige la que cerró su pestaña más recientemente', () => {
+    const cierres = new Map([
+      ['s1', 5],
+      ['s2', 2],
+      ['s3', 9],
+    ]);
+    expect(pickBackgroundSession(lista, cierres)?.session.name).toBe('s3');
+  });
+
+  it('ignora el registro de sesiones que ya no están en segundo plano', () => {
+    const cierres = new Map([
+      ['s2', 3],
+      ['otra', 99],
+    ]);
+    expect(pickBackgroundSession(lista, cierres)?.session.name).toBe('s2');
+  });
+
+  it('sin registro, la primera de la lista', () => {
+    expect(pickBackgroundSession(lista, new Map())?.session.name).toBe('s1');
+    expect(pickBackgroundSession(lista, new Map([['otra', 1]]))?.session.name).toBe('s1');
+  });
+
+  it('sin sesiones en segundo plano no hay nada que abrir', () => {
+    expect(pickBackgroundSession([], new Map([['s1', 1]]))).toBeNull();
   });
 });

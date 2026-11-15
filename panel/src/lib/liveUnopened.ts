@@ -50,6 +50,24 @@ export function liveUnopened(
   );
 }
 
+/**
+ * Sesión en segundo plano que se recupera con Ctrl+Alt+T: la que cerró su pestaña
+ * más recientemente (`closedAt`: nombre de sesión → cuándo se cerró) y, si ninguna
+ * tiene registro, la primera de la lista. null si no hay ninguna.
+ */
+export function pickBackgroundSession(items: readonly LiveItem[], closedAt: ReadonlyMap<string, number>): LiveItem | null {
+  let elegida: LiveItem | null = null;
+  let cuando = -Infinity;
+  for (const i of items) {
+    const t = closedAt.get(i.session.name);
+    if (t !== undefined && t > cuando) {
+      elegida = i;
+      cuando = t;
+    }
+  }
+  return elegida ?? items[0] ?? null;
+}
+
 export function liveCountLabel(n: number): string {
   return n === 1 ? 'Tienes 1 terminal viva: ábrela aquí o en la barra lateral.' : `Tienes ${n} terminales vivas: ábrelas aquí o en la barra lateral.`;
 }

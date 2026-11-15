@@ -1,10 +1,11 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { ApiError, api } from '../api.ts';
+import { loadLastSession, saveLastSession, suggestSession } from '../lib/lastSession.ts';
 import { AGENT_CHOICES, SHELL_AGENT } from '../lib/sessions.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import { useSettings } from '../state/SettingsContext.tsx';
 import { useWorkspace } from '../state/WorkspaceContext.tsx';
-import type { AgentId, LocationId, ProjectInfo, SessionRequest } from '../types.ts';
+import type { AgentId, LocationId, SessionRequest } from '../types.ts';
 import { ownerSession } from '../lib/follow.ts';
 import { IconTerminal } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
@@ -19,12 +20,6 @@ type Preview =
   | { estado: 'ok'; comando: string }
   | { estado: 'error'; mensaje: string };
 
-/** Proyecto que se propone al abrir: el de la terminal activa o el primero que no sea el harness. */
-function proyectoInicial(projects: readonly ProjectInfo[], activo: string | undefined): string {
-  if (activo && projects.some((p) => p.id === activo)) return activo;
-  return (projects.find((p) => !p.harness) ?? projects[0])?.id ?? '';
-}
-
 export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
   const { settings } = useSettings();
   const { projects, sessions, upsert } = useSessions();
@@ -35,15 +30,21 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
   const idLugar = useId();
 
   const activa = sessions.find((s) => s.name === ownerSession(workspace.active));
-  // Los valores iniciales (desde Proyectos) mandan sobre la terminal activa y los ajustes.
-  const sugerido = init?.project ?? activa?.project;
-  const [proyecto, setProyecto] = useState(() => proyectoInicial(projects, sugerido));
+  // Lo último usado, leído una vez al abrir; los valores iniciales (desde Proyectos) mandan sobre eso,
+  // y a falta de ambos, la terminal activa y los ajustes.
+  const [ultimo] = useState(() => loadLastSession());
+  const sugerido = suggestSession({
+    projects,
+    last: ultimo,
+    explicit: { project: init?.project, agent: init?.agent },
+    activeProject: activa?.project,
+    settingsAgent: settings.newSession.agent,
+  });
+  const [proyecto, setProyecto] = useState(sugerido.project);
   // Si los proyectos llegan después de abrir el diálogo, se propone el que corresponde.
-  const proyectoId = projects.some((p) => p.id === proyecto) ? proyecto : proyectoInicial(projects, sugerido);
+  const proyectoId = projects.some((p) => p.id === proyecto) ? proyecto : sugerido.project;
   // Con un prompt de partida (p. ej. «Trabajar en esto» del backlog) se necesita un agente: una terminal no lo admite.
-  const [agente, setAgente] = useState<AgentId>(
-    init?.agent ?? (settings.newSession.agent === SHELL_AGENT && init?.prompt ? 'claude' : settings.newSession.agent),
-  );
+  const [agente, setAgente] = useState<AgentId>(init?.agent ?? (sugerido.agent === SHELL_AGENT && init?.prompt ? 'claude' : sugerido.agent));
   const [lugar, setLugar] = useState<LocationId>(
     init?.location ?? (settings.newSession.location === 'worktree-nuevo' ? 'new-worktree' : 'main'),
   );
@@ -123,6 +124,7 @@ export function NewSessionDialog({ onCreated }: { onCreated: () => void }) {
     try {
       const r = await api.createSession(peticion);
       upsert(r.session);
+      saveLastSession({ project: peticion.project, agent: peticion.agent });
       const junta = junto && workspace.active !== null;
       openSession(r.session.name, junta ? { nextToActive: true, minLayout: 2 } : undefined);
       startLaunch(r.session.name);

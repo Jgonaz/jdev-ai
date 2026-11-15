@@ -38,6 +38,8 @@ type Props = {
   name: string;
   /** Esta terminal es la activa: recibe el foco del teclado. */
   active: boolean;
+  /** Terminal sin agente: Mayús+Enter envía el prompt como Enter, no inserta un salto de línea. */
+  shell?: boolean;
   /** El diálogo u otra capa está encima: no se roba el foco. */
   suspended: boolean;
   /** La pestaña se ve como chat: la terminal sigue conectada pero oculta (no se reajusta mientras mide 0). */
@@ -49,7 +51,7 @@ type Props = {
 };
 
 /** Una terminal xterm.js conectada por WebSocket a una sesión de tmux del servidor. */
-export function TerminalBody({ name, active, suspended, hidden = false, onFocus, launch = null, onLaunched }: Props) {
+export function TerminalBody({ name, active, shell = false, suspended, hidden = false, onFocus, launch = null, onLaunched }: Props) {
   const { settings, appearanceKey } = useSettings();
   const { focusTick, takeFocusRequest } = useWorkspace();
   const { home } = useSessions();
@@ -63,6 +65,8 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus,
   ajustes.current = settings;
   const alFoco = useRef(onFocus);
   alFoco.current = onFocus;
+  const esShell = useRef(shell);
+  esShell.current = shell;
   const [conexion, setConexion] = useState<Conexion>('conectando');
   const { notices, dismiss, dragging, dropProps } = useImageAttach(host, term, active && !suspended);
   // Los enlaces de imagen se crean una vez por terminal y leen siempre lo último.
@@ -250,10 +254,11 @@ export function TerminalBody({ name, active, suspended, hidden = false, onFocus,
     const dScroll = t.onScroll(ocultarHover);
     // La salida de la terminal puede alargar el historial: se avisa (con espera) a la barra.
     const dSalida = t.onWriteParsed(() => avisoScroll.current.noteOutput());
-    // Teclas que xterm.js no traduce como se espera: Ctrl+Retroceso/Supr borran palabras y
-    // Mayús+RePág/AvPág (que xterm se queda para su viewport, vacío con tmux) van al historial de tmux.
+    // Teclas que xterm.js no traduce como se espera: Ctrl+Retroceso/Supr borran palabras,
+    // Mayús+Enter (con agente) inserta un salto de línea y Mayús+RePág/AvPág (que xterm se queda
+    // para su viewport, vacío con tmux) van al historial de tmux.
     t.attachCustomKeyEventHandler((e) => {
-      const tr = translateTerminalKey(e);
+      const tr = translateTerminalKey(e, { shell: esShell.current });
       if (!tr) return true;
       e.preventDefault();
       abridor.noteInput();

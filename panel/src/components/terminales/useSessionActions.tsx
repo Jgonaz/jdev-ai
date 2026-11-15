@@ -36,7 +36,7 @@ export type SessionActions = {
  * sesión y, si está archivada, Eliminar definitivamente.
  */
 export function useSessionActions(session: SessionInfo, opciones: { withOpen?: boolean; onTabClosed?: () => void } = {}): SessionActions {
-  const { closeTab, openSession, workspace } = useWorkspace();
+  const { requestClose, closeRequest, openSession, workspace } = useWorkspace();
   const { tmuxSocket, setArchived, setDone } = useSessions();
   const [dialogo, setDialogo] = useState<Dialogo>(null);
   const [copied, setCopied] = useState(false);
@@ -109,8 +109,8 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
       label: 'Cerrar pestaña',
       icon: <IconClose size={14} />,
       onSelect: () => {
-        closeTab(session.name);
-        opciones.onTabClosed?.();
+        // Una sesión hecha que sigue viva pregunta antes (diálogo común, ver CloseDoneDialog).
+        if (!requestClose(session.name)) opciones.onTabClosed?.();
       },
     });
   }
@@ -141,5 +141,7 @@ export function useSessionActions(session: SessionInfo, opciones: { withOpen?: b
     </>
   );
 
-  return { actions, dialogs, dialogOpen: dialogo !== null, busy, copied, error, clearError: () => setError(null) };
+  // El diálogo de cerrar una sesión hecha lo pinta CloseDoneDialog, pero el menú sigue vivo hasta que se responda.
+  const dialogOpen = dialogo !== null || closeRequest?.name === session.name;
+  return { actions, dialogs, dialogOpen, busy, copied, error, clearError: () => setError(null) };
 }
