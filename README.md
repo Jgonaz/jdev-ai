@@ -623,6 +623,10 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   «En segundo plano». El botón pasa a un ■ rojo: envía `Ctrl+C`, espera hasta 5 s a que
   el proceso termine y termina la sesión en cualquier caso. Hay como mucho una
   terminal de arranque por proyecto; volver a arrancar abre la que ya está viva.
+  Si el proyecto tiene worktrees abiertos, ▶ abre antes un diálogo para elegir
+  dónde arrancarlo: el checkout principal o uno de sus worktrees (Intro o doble
+  clic arranca). Propone el último lugar elegido en ese proyecto (recordado en el
+  navegador) y, en un worktree, el script `dev` se detecta en su carpeta.
   El comando es el que escribas en Ajustes › Proyectos › «Comando de arranque»
   (guardado en `projects.<proyecto>.run` de `panel.json`, una línea de hasta 500
   caracteres, que se ejecuta tal cual en tu shell) o, si no hay, el script `dev`

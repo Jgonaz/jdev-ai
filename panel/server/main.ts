@@ -1050,7 +1050,25 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       }
       try {
         if (metodo === 'POST') {
-          const { session, created } = await arranque.start(proyecto);
+          // Cuerpo opcional { worktree }: sin él (o con ''), el checkout principal.
+          let worktree = '';
+          const texto = await readBody(req);
+          if (texto.trim() !== '') {
+            let cuerpo: unknown;
+            try {
+              cuerpo = JSON.parse(texto);
+            } catch {
+              sendJson(res, 400, { error: 'El cuerpo debe ser JSON.' });
+              return;
+            }
+            const valor = typeof cuerpo === 'object' && cuerpo !== null ? (cuerpo as { worktree?: unknown }).worktree : undefined;
+            if (valor !== undefined && valor !== null && typeof valor !== 'string') {
+              sendJson(res, 400, { error: 'El worktree debe ser un texto.' });
+              return;
+            }
+            worktree = valor ?? '';
+          }
+          const { session, created } = await arranque.start(proyecto, worktree);
           sendJson(res, created ? 201 : 200, { session, created });
         } else {
           sendJson(res, 200, await arranque.stop(proyecto));

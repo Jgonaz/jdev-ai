@@ -45,7 +45,7 @@ export type RunControllerOptions = {
 
 /**
  * Terminal de arranque de cada proyecto: una sesión `shell` en su carpeta
- * principal que ejecuta el comando de arranque. Las peticiones de un mismo
+ * principal o en uno de sus worktrees que ejecuta el comando de arranque. Las peticiones de un mismo
  * proyecto se atienden de una en una, para que dos clics seguidos no creen dos.
  */
 export class RunController {
@@ -67,23 +67,38 @@ export class RunController {
     return actual;
   }
 
-  /** Arranca el proyecto, o devuelve su terminal de arranque si ya está viva. */
-  start(proyecto: Project): Promise<{ session: SessionInfo; created: boolean }> {
+  /**
+   * Arranca el proyecto en su checkout principal o en uno de sus worktrees
+   * (`worktree`, '' para el principal), o devuelve su terminal de arranque si ya
+   * está viva, esté donde esté: hay una por proyecto, porque varias a la vez
+   * competirían por los mismos puertos.
+   */
+  start(proyecto: Project, worktree = ''): Promise<{ session: SessionInfo; created: boolean }> {
     return this.enCola(proyecto.id, async () => {
       const { sessions, tmux } = this.opts;
       const existente = runSessionOf(await sessions.refresh(), proyecto.id);
       if (existente) return { session: existente, created: false };
 
-      const run = await resolveRun(proyecto.path, this.opts.overrides()[proyecto.id]?.run);
-      if (run.command === null) {
-        throw new RunError(409, 'El proyecto no tiene comando de arranque: configúralo en Ajustes › Proyectos.');
-      }
       let plan;
       try {
-        plan = planSession({ project: proyecto.id, agent: 'shell', location: 'main' }, [proyecto], this.opts.harnessRoot);
+        plan = planSession(
+          worktree ? { project: proyecto.id, agent: 'shell', location: 'existing-worktree', feature: worktree } : { project: proyecto.id, agent: 'shell', location: 'main' },
+          [proyecto],
+          this.opts.harnessRoot,
+        );
       } catch (e) {
         if (e instanceof SessionInputError) throw new RunError(400, e.message);
         throw e;
+      }
+      // El script dev se detecta en la carpeta elegida: un worktree puede tener otro package.json.
+      const run = await resolveRun(plan.cwd ?? proyecto.path, this.opts.overrides()[proyecto.id]?.run);
+      if (run.command === null) {
+        throw new RunError(
+          409,
+          worktree
+            ? `El worktree «${worktree}» no tiene comando de arranque: configúralo en Ajustes › Proyectos.`
+            : 'El proyecto no tiene comando de arranque: configúralo en Ajustes › Proyectos.',
+        );
       }
       const sesion = await sessions.create(plan, {
         historyLimit: this.opts.historyLimit(),

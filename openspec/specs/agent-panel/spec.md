@@ -935,7 +935,7 @@ Cada respuesta SHALL contarse una sola vez aunque el transcript la repita. El pa
 
 Cada proyecto de la barra lateral SHALL tener un botón para arrancar su comando de arranque. El botón SHALL:
 
-1. Crear una terminal sin agente en la carpeta principal del proyecto.
+1. Crear una terminal sin agente en la carpeta principal del proyecto o, si la persona lo elige, en uno de sus worktrees.
 2. Ejecutar el comando dentro de la shell.
 3. Abrir la terminal en una pestaña, titulada con el comando de arranque.
 
@@ -946,6 +946,8 @@ La terminal SHALL seguir en marcha en segundo plano al cerrar su pestaña.
 Mientras esa terminal siga viva, el botón SHALL servir para pararla: SHALL enviar `Ctrl+C` y SHALL terminar la sesión, también si el proceso no ha terminado a los pocos segundos.
 
 SHALL haber como mucho una terminal de arranque por proyecto.
+
+Si el proyecto tiene uno o más worktrees abiertos, el botón SHALL abrir antes un diálogo para elegir dónde arrancarlo: el checkout principal o uno de sus worktrees. El diálogo SHALL proponer el último lugar elegido en ese proyecto mientras siga existiendo y, si no, el checkout principal. En un worktree, el script `dev` SHALL detectarse en la carpeta del worktree.
 
 El comando de arranque SHALL ser el comando propio del proyecto configurado en Ajustes. Si no hay ninguno, SHALL ser el script `dev` de su `package.json`, con el gestor que indique el proyecto. Si no hay ninguno de los dos, el botón SHALL estar desactivado y SHALL indicar cómo configurarlo.
 
@@ -973,6 +975,16 @@ El comando de arranque SHALL ser el comando propio del proyecto configurado en A
 
 - **WHEN** el proyecto no tiene script `dev` ni comando propio
 - **THEN** el botón está desactivado y su ayuda lleva a Ajustes › Proyectos
+
+#### Scenario: Elegir worktree
+
+- **WHEN** la persona pulsa ▶ en un proyecto con el worktree `login` abierto y elige «feat/login» en el diálogo
+- **THEN** la terminal de arranque se abre en la carpeta de ese worktree
+
+#### Scenario: Cancelar la elección
+
+- **WHEN** la persona cierra el diálogo de elección sin arrancar
+- **THEN** no se crea ninguna terminal y el botón sigue en ▶
 
 #### Scenario: Pulsar arrancar dos veces
 

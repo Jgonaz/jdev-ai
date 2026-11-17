@@ -37,7 +37,7 @@ describe('API de arranque de proyectos', () => {
     });
   const sesiones = async () => ((await (await api('GET', '/api/sessions')).json()) as { sessions: Sesion[] }).sessions;
   const proyectos = async () => ((await (await api('GET', '/api/projects')).json()) as { projects: Proyecto[] }).projects;
-  const arrancar = (id: string) => api('POST', `/api/projects/${id}/run`);
+  const arrancar = (id: string, cuerpo?: unknown) => api('POST', `/api/projects/${id}/run`, cuerpo);
   const parar = (id: string) => api('DELETE', `/api/projects/${id}/run`);
   const ajustar = (parche: unknown) => api('PUT', '/api/settings', parche);
   const pantalla = (name: string) => tmuxCli('capture-pane', '-p', '-t', `=${name}:`).then((r) => r.stdout);
@@ -61,6 +61,14 @@ describe('API de arranque de proyectos', () => {
     proyecto('sin-dev', {});
     proyecto('rebelde', {});
     proyecto('comillas', {});
+    // Con un worktree que tiene su propio lockfile: allí se detecta pnpm dev.
+    const pkg = JSON.stringify({ scripts: { dev: 'node -e "setInterval(()=>{},1000)"' } });
+    proyecto('con-wt', { 'package.json': pkg });
+    const wt = join(harness, 'projects', 'con-wt.worktrees', 'arreglo');
+    mkdirSync(wt, { recursive: true });
+    execFileSync('git', ['init', '-q', '-b', 'feat/arreglo', wt]);
+    writeFileSync(join(wt, 'package.json'), pkg);
+    writeFileSync(join(wt, 'pnpm-lock.yaml'), '');
     cfg = tmuxConfig(harness, {}, { socket: sock, confFile: join(REAL_HARNESS, 'panel', 'tmux.conf') });
     srv = await startServer({
       harnessRoot: harness,
@@ -240,6 +248,31 @@ describe('API de arranque de proyectos', () => {
     expect(otra.session.name).not.toBe(session.name);
     await parar('rebelde');
     await api('DELETE', `/api/sessions/${session.name}`, undefined, { 'X-Jdev-Confirm': 'yes' });
+  });
+
+  it('arranca en un worktree existente con el comando detectado allí, y sigue habiendo una sola terminal', async () => {
+    const r = await arrancar('con-wt', { worktree: 'arreglo' });
+    expect(r.status).toBe(201);
+    const { session } = (await r.json()) as { session: Sesion & { worktree: string } };
+    expect(session).toMatchObject({ project: 'con-wt', worktree: 'arreglo', run: 'pnpm dev', title: 'pnpm dev' });
+    const cwd = (await tmuxCli('display-message', '-p', '-t', `=${session.name}:`, '#{pane_current_path}')).stdout.trim();
+    expect(cwd.endsWith('/projects/con-wt.worktrees/arreglo')).toBe(true);
+    // Viva en el worktree, pedir el principal devuelve la misma: una por proyecto.
+    const otra = (await (await arrancar('con-wt', { worktree: '' })).json()) as { session: Sesion; created: boolean };
+    expect(otra).toMatchObject({ created: false, session: { name: session.name } });
+    await parar('con-wt');
+    // Sin cuerpo, el checkout principal.
+    const principal = (await (await arrancar('con-wt')).json()) as { session: Sesion & { worktree: string } };
+    expect(principal.session).toMatchObject({ worktree: '', run: 'npm run dev' });
+    await parar('con-wt');
+  });
+
+  it('rechaza un worktree que no existe o un cuerpo no válido', async () => {
+    expect((await arrancar('con-wt', { worktree: 'no-existe' })).status).toBe(400);
+    expect((await arrancar('con-wt', { worktree: 3 })).status).toBe(400);
+    const roto = await fetch(`${base}/api/projects/con-wt/run`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: '{' });
+    expect(roto.status).toBe(400);
+    expect((await sesiones()).filter((s) => s.project === 'con-wt' && s.alive && s.run !== null)).toEqual([]);
   });
 
   it('rechaza guardar un comando de arranque no válido', async () => {

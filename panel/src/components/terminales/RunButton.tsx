@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { api } from '../../api.ts';
+import { saveRunPlace } from '../../lib/runPlace.ts';
 import { runSessionOf } from '../../lib/sessions.ts';
 import { useSessions } from '../../state/SessionsContext.tsx';
 import { useWorkspace } from '../../state/WorkspaceContext.tsx';
 import type { ProjectInfo } from '../../types.ts';
 import { IconPlay, IconStop } from '../Icons.tsx';
+import { RunPlaceDialog } from './RunPlaceDialog.tsx';
 
 /** Cuánto se queda a la vista el aviso de un fallo. */
 const ERROR_MS = 6000;
@@ -20,17 +22,22 @@ function irAProyectos() {
 /**
  * ▶ / ■ de cada proyecto, junto al «+»: arranca su comando de arranque en una
  * terminal sin agente y la abre, o la para (Ctrl+C y terminar la sesión) mientras
- * siga viva. Sin comando es un enlace desactivado que lleva a Ajustes › Proyectos.
+ * siga viva. Con worktrees abiertos pregunta antes si arranca en el checkout
+ * principal o en uno de ellos. Sin comando es un enlace desactivado que lleva a
+ * Ajustes › Proyectos.
  */
 export function RunButton({ project }: { project: ProjectInfo }) {
   const { sessions, upsert } = useSessions();
   const { openSession, requestTerminalFocus } = useWorkspace();
   const [ocupado, setOcupado] = useState<'arrancando' | 'parando' | null>(null);
   const [error, setError] = useState<{ texto: string; x: number; y: number } | null>(null);
+  const [eligiendo, setEligiendo] = useState(false);
   const boton = useRef<HTMLButtonElement>(null);
   const viva = runSessionOf(sessions, project.id);
   // `?? null`: un servidor anterior al botón no manda estos campos.
   const comando = viva?.run ?? project.runCommand ?? null;
+  // `?? []`: ídem. El harness no tiene worktrees.
+  const conWorktrees = (project.worktrees ?? []).length > 0;
 
   useEffect(() => {
     if (!error) return;
@@ -53,30 +60,47 @@ export function RunButton({ project }: { project: ProjectInfo }) {
     );
   }
 
-  const alPulsar = async (e: MouseEvent) => {
-    e.stopPropagation();
-    if (ocupado) return;
-    setError(null);
-    setOcupado(viva ? 'parando' : 'arrancando');
+  const mostrarError = (err: unknown) => {
+    const r = boton.current?.getBoundingClientRect();
+    setError({ texto: err instanceof Error ? err.message : 'No se pudo completar la acción.', x: r?.left ?? 0, y: (r?.bottom ?? 0) + 4 });
+  };
+
+  const arrancar = async (worktree: string) => {
+    setOcupado('arrancando');
     try {
-      if (viva) {
-        await api.stopProject(project.id);
-      } else {
-        const r = await api.startProject(project.id);
-        upsert(r.session);
-        openSession(r.session.name);
-        // El foco sigue en el botón (no se desactiva): lo pasamos a la terminal recién abierta.
-        requestTerminalFocus();
-      }
+      const r = await api.startProject(project.id, worktree);
+      if (conWorktrees) saveRunPlace(project.id, worktree);
+      upsert(r.session);
+      openSession(r.session.name);
+      // El foco sigue en el botón (no se desactiva): lo pasamos a la terminal recién abierta.
+      requestTerminalFocus();
     } catch (err) {
-      const r = boton.current?.getBoundingClientRect();
-      setError({ texto: err instanceof Error ? err.message : 'No se pudo completar la acción.', x: r?.left ?? 0, y: (r?.bottom ?? 0) + 4 });
+      mostrarError(err);
     } finally {
       setOcupado(null);
     }
   };
 
-  const etiqueta = ocupado === 'arrancando' ? `Arrancando ${project.name}…` : ocupado === 'parando' ? `Parando ${project.name}…` : viva ? `Parar ${comando} en ${project.name}` : `Arrancar ${comando} en ${project.name}`;
+  const alPulsar = async (e: MouseEvent) => {
+    e.stopPropagation();
+    if (ocupado) return;
+    setError(null);
+    if (!viva) {
+      if (conWorktrees) setEligiendo(true);
+      else await arrancar('');
+      return;
+    }
+    setOcupado('parando');
+    try {
+      await api.stopProject(project.id);
+    } catch (err) {
+      mostrarError(err);
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const etiqueta = ocupado === 'arrancando' ? `Arrancando ${project.name}…` : ocupado === 'parando' ? `Parando ${project.name}…` : viva ? `Parar ${comando} en ${project.name}` : `Arrancar ${comando} en ${project.name}${conWorktrees ? '…' : ''}`;
   return (
     <>
       <button
@@ -85,6 +109,7 @@ export function RunButton({ project }: { project: ProjectInfo }) {
         className={`group__add group__run${viva ? ' group__run--on' : ''}${ocupado ? ' group__run--busy' : ''}`}
         aria-label={etiqueta}
         aria-busy={ocupado ? true : undefined}
+        aria-haspopup={!viva && conWorktrees ? 'dialog' : undefined}
         // aria-disabled y no disabled: un botón desactivado pierde el foco y se lo
         // quedaría la terminal activa; las pulsaciones durante la espera se ignoran en alPulsar.
         aria-disabled={ocupado ? true : undefined}
@@ -93,6 +118,17 @@ export function RunButton({ project }: { project: ProjectInfo }) {
       >
         {ocupado ? <span className="group__spin" aria-hidden="true" /> : viva ? <IconStop size={11} /> : <IconPlay size={12} />}
       </button>
+      {eligiendo && comando !== null && (
+        <RunPlaceDialog
+          project={project}
+          command={comando}
+          onClose={() => setEligiendo(false)}
+          onStart={(worktree) => {
+            setEligiendo(false);
+            void arrancar(worktree);
+          }}
+        />
+      )}
       {error && (
         <div className="ctxmenu__error" role="alert" style={{ left: error.x, top: error.y }}>
           {error.texto}

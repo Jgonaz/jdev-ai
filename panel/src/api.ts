@@ -98,9 +98,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(entrada),
     }),
-  /** Arranca el comando de arranque del proyecto en una terminal sin agente, o devuelve la que ya está viva. */
-  startProject: (proyecto: string) =>
-    request<{ session: SessionInfo; created: boolean }>(`${projectBase(proyecto)}/run`, { method: 'POST' }),
+  /**
+   * Arranca el comando de arranque del proyecto en una terminal sin agente, en el
+   * checkout principal o en un worktree (`worktree`, '' para el principal), o
+   * devuelve la que ya está viva.
+   */
+  startProject: (proyecto: string, worktree = '') =>
+    request<{ session: SessionInfo; created: boolean }>(`${projectBase(proyecto)}/run`, {
+      method: 'POST',
+      ...(worktree ? { body: JSON.stringify({ worktree }) } : {}),
+    }),
   /** Para el proyecto: Ctrl+C y termina su terminal de arranque. */
   stopProject: (proyecto: string) =>
     request<{ stopped: boolean; graceful: boolean }>(`${projectBase(proyecto)}/run`, { method: 'DELETE' }),
