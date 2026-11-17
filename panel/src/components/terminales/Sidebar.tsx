@@ -1,10 +1,10 @@
 import { Fragment, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { archivedEntries, notArchived } from '../../lib/archive.ts';
-import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, splitDone, visibleRecent } from '../../lib/recent.ts';
-import type { RecentGroup } from '../../lib/recent.ts';
+import { RECENT_COLLAPSED, agoLabel, groupRecent, recentPlace, visibleRecent } from '../../lib/recent.ts';
 import { groupSessions, isRunning, sessionMeta, visualState } from '../../lib/sessions.ts';
-import type { ProjectGroup } from '../../lib/sessions.ts';
+import { mergeGroups } from '../../lib/sidebarGroups.ts';
+import type { SidebarGroup } from '../../lib/sidebarGroups.ts';
 import { recentTip, sessionTip } from '../../lib/sidebarTip.ts';
 import { formatRelative } from '../../lib/time.ts';
 import { useNow } from '../../lib/useNow.ts';
@@ -164,20 +164,6 @@ function Finished({ project, items, ahora, menu }: { project: ProjectInfo; items
   );
 }
 
-type SidebarGroup = { project: ProjectInfo; sessions: SessionInfo[]; pending: RecentSession[]; done: RecentSession[] };
-
-/** Une las sesiones vivas y las conversaciones que no están en el panel por proyecto: primero los que tienen sesiones vivas. */
-function mergeGroups(vivas: ProjectGroup[], recientes: RecentGroup[]): SidebarGroup[] {
-  const porId = new Map<string, SidebarGroup>();
-  for (const g of vivas) porId.set(g.project.id, { project: g.project, sessions: g.sessions, pending: [], done: [] });
-  for (const g of recientes) {
-    const partes = splitDone(g.items);
-    const existente = porId.get(g.project.id);
-    if (existente) Object.assign(existente, partes);
-    else porId.set(g.project.id, { project: g.project, sessions: [], ...partes });
-  }
-  return [...porId.values()];
-}
 
 /** «+» de cada proyecto: abre «Nueva sesión» con ese proyecto y el agente por defecto (Claude salvo que se cambie). */
 function NewTerminalButton({ project }: { project: ProjectInfo }) {
@@ -228,7 +214,7 @@ export function Sidebar({ style }: { style?: CSSProperties }) {
   // Lo archivado sale de su proyecto, de «Terminadas» y de «En segundo plano»: tiene su propia sección.
   const activas = notArchived(sessions);
   const vivas = groupSessions(activas, projects, { hideDone: prefs.hideDone });
-  const grupos = mergeGroups(vivas, groupRecent(notArchived(recent), projects, { hideDone: prefs.hideDone }));
+  const grupos = mergeGroups(vivas, groupRecent(notArchived(recent), projects, { hideDone: prefs.hideDone }), projects);
   const oculta = activas.length - vivas.reduce((n, g) => n + g.sessions.length, 0);
   const archivadas = archivedEntries(sessions, recent, projects, { hideDone: prefs.hideDone });
 

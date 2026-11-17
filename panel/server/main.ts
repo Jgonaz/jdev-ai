@@ -35,6 +35,7 @@ import { buildOverview, readGitName } from './overview.ts';
 import type { Overview } from './overview.ts';
 import { RunController, RunError } from './runner.ts';
 import { listProjects } from './projects.ts';
+import { ProjectsWatcher } from './projects-watch.ts';
 import type { Project } from './projects.ts';
 import { POSSIBLY_OPEN_MS, RecentIndex, SESSION_ID } from './recent.ts';
 import { deleteTranscript } from './purge.ts';
@@ -152,6 +153,8 @@ export type ServerOptions = {
   backlogFallbackMs?: number;
   /** Relectura de respaldo del historial (ms); por defecto 15 s. */
   historyFallbackMs?: number;
+  /** Relectura de respaldo de projects/ (ms); por defecto 15 s. */
+  projectsFallbackMs?: number;
 };
 
 export type RunningServer = {
@@ -302,6 +305,18 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     projects: async () => (await sesiones.projectList()).map((p) => ({ id: p.id, path: p.path })),
     onChange: (project) => broadcast({ type: 'backlog', project }),
     fallbackMs: opts.backlogFallbackMs,
+  });
+
+  // Un proyecto nuevo en projects/ llega a la interfaz sin recargar: lista sin caché y aviso.
+  const vigilanteProyectos = new ProjectsWatcher({
+    dir: join(opts.harnessRoot, 'projects'),
+    onChange: () => {
+      void sesiones
+        .projectList(true)
+        .catch(() => undefined)
+        .then(() => broadcast({ type: 'projects' }));
+    },
+    fallbackMs: opts.projectsFallbackMs,
   });
 
   const historial = new HistoryStore();
@@ -1844,6 +1859,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   void sesiones.start();
   void vigilanteBacklog.start();
   void vigilanteHistorial.start();
+  vigilanteProyectos.start();
   if (opts.indexActivityAtStart && readSettings(opts.configDir).inicio.activity) actividad.start();
 
   return new Promise((ok, ko) => {
@@ -1861,6 +1877,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
             sesiones.stop();
             vigilanteBacklog.stop();
             vigilanteHistorial.stop();
+            vigilanteProyectos.stop();
             detenerLimpieza();
             actividad.stop();
             for (const c of clientes) c.terminate();

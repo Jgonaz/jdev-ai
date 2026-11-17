@@ -57,9 +57,14 @@ El diálogo Nueva sesión SHALL permitir elegir proyecto (incluido el propio har
 
 ### Requirement: La barra lateral muestra sesiones con título y estado
 
-La barra lateral SHALL agrupar las sesiones por proyecto y SHALL mostrar de cada una su título, agente, rama o worktree, tiempo desde el último cambio y estado. Los estados SHALL ser: te espera (el agente necesita una respuesta o un permiso), trabajando, en reposo y hecha (la conversación está marcada como hecha en su estado de conversación o, por compatibilidad, su título lleva la marca antigua `[Closed]`). Los estados SHALL distinguirse por forma y texto además de por color; una conversación hecha SHALL mostrarse con un check y el texto «Hecha», sin tachar el título. Para agentes que no informan del estado, el panel SHALL mostrar solo si la sesión está viva.
+La barra lateral SHALL agrupar las sesiones por proyecto y SHALL listar todos los proyectos visibles (los de `projects/` y el harness, salvo los ocultos en Ajustes) en su orden fijo, tengan o no sesiones o conversaciones: un proyecto sin ninguna SHALL mostrarse solo con su cabecera, desde la que se puede abrir una sesión nueva o arrancarlo. Un proyecto creado, clonado o borrado en `projects/` SHALL aparecer o desaparecer sin recargar el panel. De cada sesión SHALL mostrar su título, agente, rama o worktree, tiempo desde el último cambio y estado. Los estados SHALL ser: te espera (el agente necesita una respuesta o un permiso), trabajando, en reposo y hecha (la conversación está marcada como hecha en su estado de conversación o, por compatibilidad, su título lleva la marca antigua `[Closed]`). Los estados SHALL distinguirse por forma y texto además de por color; una conversación hecha SHALL mostrarse con un check y el texto «Hecha», sin tachar el título. Para agentes que no informan del estado, el panel SHALL mostrar solo si la sesión está viva.
 
 Una sesión de Claude cuyo turno ha terminado SHALL seguir «trabajando» mientras el último Stop registre subagentes o shells en segundo plano en marcha, salvo las shells que parezcan procesos de larga vida (servidor de desarrollo, `start`, `serve`, `preview`, `watch`, `tail -f` y similares), que no hacen esperar a la persona. Pasará a «en reposo», con su aviso de turno terminado, cuando un Stop posterior ya no registre ninguna.
+
+#### Scenario: Proyecto nuevo sin conversaciones
+
+- **WHEN** la persona crea o clona un repositorio en `projects/` con el panel abierto
+- **THEN** el proyecto aparece en la barra lateral en su sitio, solo con su cabecera, sin recargar y sin abrir antes una conversación
 
 #### Scenario: Agente pide permiso
 

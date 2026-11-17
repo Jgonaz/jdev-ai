@@ -153,6 +153,9 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
           } else if (msg.type === 'conversations') {
             // Cambió el estado de alguna conversación (otra ventana, el agente...): las sesiones llegan solas.
             reloadRecent();
+          } else if (msg.type === 'projects') {
+            // Se creó, clonó o borró un proyecto en projects/: aparece sin recargar.
+            reloadProjects();
           } else if (msg.type === 'account') {
             setAccount(parseAccount(msg.account));
           } else if (msg.type === 'backlog' && typeof msg.project === 'string') {
@@ -188,7 +191,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       if (reintento !== null) window.clearTimeout(reintento);
       ws?.close();
     };
-  }, [reloadRecent]);
+  }, [reloadRecent, reloadProjects]);
 
   // Al recuperar la conexión se refrescan también los proyectos (pueden haber cambiado)
   // y los límites de la cuenta, que no se envían al conectar.

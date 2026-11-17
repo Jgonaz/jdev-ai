@@ -316,8 +316,8 @@ completa está en [`rules/worktrees.md`](rules/worktrees.md).
 
 `bin/panel` abre en el navegador (o, en Windows, como programa propio hecho
 con [Tauri](https://tauri.app)) un panel local que reúne las terminales de
-agente de todos los proyectos: barra lateral con las sesiones agrupadas por
-proyecto, su título y su estado (te espera, trabajando, en reposo o hecha;
+agente de todos los proyectos: barra lateral con todos los proyectos (también
+los recién creados, sin recargar) y sus sesiones, su título y su estado (te espera, trabajando, en reposo o hecha;
 sigue «trabajando» mientras Claude espera a tests, subagentes u otras tareas
 en segundo plano, pero no a un servidor de desarrollo),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
