@@ -39,6 +39,7 @@ function Shell() {
     startLaunch,
     requestClose,
     closedOrder,
+    reopenClosed,
     move,
     cycleLayout,
     requestTerminalFocus,
@@ -123,6 +124,12 @@ function Shell() {
       quickSession: () => void sesionRapida(),
       quickDefaultSession: () => void sesionRapida(true),
       lastBackground: reabrirSegundoPlano,
+      reopenClosed: () => {
+        const hecho = reopenClosed();
+        if (hecho === 'none') return;
+        navegar('terminales');
+        if (hecho === 'open') requestTerminalFocus();
+      },
     },
     !dialogOpen,
   );

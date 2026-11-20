@@ -53,9 +53,11 @@ describe('matchShortcut en la app de escritorio', () => {
     expect(matchShortcut(ctrl('t'), true)).toBe('quickSession');
   });
 
-  it('Ctrl+Mayús+N crea la sesión rápida con el agente por defecto; Ctrl+Mayús+T y W no hacen nada', () => {
+  it('Ctrl+Mayús+N crea la sesión rápida con el agente por defecto, Ctrl+Mayús+T reabre la última cerrada y Ctrl+Mayús+W no hace nada', () => {
     expect(matchShortcut(ctrl('N', { shiftKey: true }), true)).toBe('quickDefaultSession');
-    expect(matchShortcut(ctrl('T', { shiftKey: true }), true)).toBeNull();
+    expect(matchShortcut(ctrl('T', { shiftKey: true }), true)).toBe('reopenClosed');
+    expect(matchShortcut(ctrl('t', { shiftKey: true }), true)).toBe('reopenClosed');
+    expect(matchShortcut(ctrl('T', { shiftKey: true }), false)).toBeNull();
     expect(matchShortcut(ctrl('W', { shiftKey: true }), true)).toBeNull();
     expect(matchShortcut(ctrl('N', { shiftKey: true }), false)).toBeNull();
   });
@@ -71,8 +73,8 @@ describe('matchShortcut en la app de escritorio', () => {
     expect(matchShortcut(tecla('w'), true)).toBeNull();
   });
 
-  it('no toca Ctrl+Mayús+T/W, ni con Meta, ni sin Ctrl', () => {
-    for (const k of ['w', 't']) expect(matchShortcut(ctrl(k, { shiftKey: true }), true)).toBeNull();
+  it('no toca Ctrl+Mayús+W, ni con Meta, ni sin Ctrl', () => {
+    expect(matchShortcut(ctrl('w', { shiftKey: true }), true)).toBeNull();
     for (const k of ['w', 'n', 't']) {
       expect(matchShortcut(ctrl(k, { metaKey: true }), true)).toBeNull();
       expect(matchShortcut(ctrl(k, { ctrlKey: false }), true)).toBeNull();

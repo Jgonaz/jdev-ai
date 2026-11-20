@@ -160,6 +160,20 @@ El panel SHALL permitir ver una terminal, dos en columnas o cuatro en cuadrícul
 - **WHEN** la persona pasa de una a dos columnas
 - **THEN** se muestran dos terminales y cada sesión se redimensiona a su nuevo tamaño
 
+### Requirement: Reabrir la última pestaña cerrada
+
+En el programa de escritorio, `Ctrl+Mayús+T` SHALL reabrir la última pestaña de sesión que la persona cerró. Si la sesión sigue viva en segundo plano, SHALL abrir su pestaña sin preguntar. Si la sesión se terminó y era una conversación de Claude, SHALL mostrar un diálogo que avisa de que se retomará antes de crear la sesión nueva. Las pestañas que ya vuelven a estar abiertas o que no se pueden recuperar (una terminal sin agente o un agente sin conversación terminados) SHALL saltarse. El panel SHALL recordar las 20 últimas pestañas cerradas también al recargar.
+
+#### Scenario: Sesión en segundo plano
+
+- **WHEN** la persona cierra la pestaña de una sesión viva y pulsa `Ctrl+Mayús+T`
+- **THEN** la pestaña se vuelve a abrir y la terminal recibe el foco
+
+#### Scenario: Sesión terminada
+
+- **WHEN** la persona termina una sesión de Claude desde su pestaña y pulsa `Ctrl+Mayús+T`
+- **THEN** aparece el diálogo «Reabrir sesión terminada» y, al confirmarlo, se retoma la conversación en una sesión nueva
+
 ### Requirement: Avisos de sesiones que esperan
 
 Cuando una sesión pase a «te espera», el panel SHALL actualizar el contador del título de la pestaña del navegador o, en el programa de escritorio, de la ventana. Si la persona lo ha activado en Ajustes y ha concedido el permiso, SHALL mostrar una notificación del sistema: la del navegador cuando el panel se usa en un navegador y una notificación nativa cuando se usa en el programa de escritorio.

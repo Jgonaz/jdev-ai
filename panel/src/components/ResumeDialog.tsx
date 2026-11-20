@@ -16,18 +16,20 @@ type Preview =
 /**
  * Confirmación de «Retomar en el panel». Avisa de que la sesión debe cerrarse en
  * su ventana original (dos procesos sobre la misma conversación se pisarían) y
- * destaca las que tienen actividad muy reciente.
+ * destaca las que tienen actividad muy reciente. Desde Ctrl+Mayús+T (`resumeReopen`)
+ * avisa en su lugar de que la sesión de la pestaña se terminó y se retomará.
  */
 export function ResumeDialog({ recent, onCreated }: { recent: RecentSession; onCreated: () => void }) {
   const { upsert, reloadRecent, projects } = useSessions();
-  const { closeResume, openSession, startLaunch } = useWorkspace();
+  const { closeResume, openSession, startLaunch, resumeReopen } = useWorkspace();
   const ahora = useNow(15_000);
   const [preview, setPreview] = useState<Preview>({ estado: 'pendiente' });
   const [enviando, setEnviando] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
 
   const peticion = resumeRequest(recent);
-  const aviso = openElsewhereNotice(recent, ahora);
+  // Desde Ctrl+Mayús+T la sesión se terminó en el panel: no hay otra ventana de la que avisar.
+  const aviso = resumeReopen ? null : openElsewhereNotice(recent, ahora);
   const proyecto = projects.find((p) => p.id === recent.project);
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export function ResumeDialog({ recent, onCreated }: { recent: RecentSession; onC
 
   return (
     <Modal
-      title="Retomar en el panel"
+      title={resumeReopen ? 'Reabrir sesión terminada' : 'Retomar en el panel'}
       role="alertdialog"
       width={560}
       initialFocus="[data-cancel]"
@@ -92,10 +94,17 @@ export function ResumeDialog({ recent, onCreated }: { recent: RecentSession; onC
             <strong>{aviso}</strong>
           </p>
         )}
-        <p className="confirm-text">
-          Cierra la sesión en su ventana original antes de retomarla. Si queda abierta, habrá dos procesos sobre la misma conversación y
-          pueden pisarse el historial.
-        </p>
+        {resumeReopen ? (
+          <p className="confirm-text">
+            La pestaña que cerraste era de una sesión que ya se terminó. Se retomará su conversación en una sesión nueva, con el
+            historial de antes.
+          </p>
+        ) : (
+          <p className="confirm-text">
+            Cierra la sesión en su ventana original antes de retomarla. Si queda abierta, habrá dos procesos sobre la misma conversación y
+            pueden pisarse el historial.
+          </p>
+        )}
         <div className="field">
           <span className="field__note">Se ejecutará en una sesión de tmux</span>
           <div className={`command command--${preview.estado}`} aria-live="polite">

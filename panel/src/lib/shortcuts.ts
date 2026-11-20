@@ -32,6 +32,10 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
         teclas: 'Ctrl+T',
         accion: 'Nueva sesión sin diálogo: último proyecto y último agente, en el checkout principal y sin prompt',
       },
+      {
+        teclas: 'Ctrl+Mayús+T',
+        accion: 'Reabrir la última pestaña cerrada: si la sesión sigue en segundo plano se abre; si se terminó, pregunta antes de retomarla',
+      },
     ],
   },
   {

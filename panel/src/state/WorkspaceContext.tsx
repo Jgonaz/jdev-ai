@@ -9,6 +9,7 @@ import { forgetPrompts } from '../lib/prompts.ts';
 import { forgetConversation } from '../lib/useConversation.ts';
 import { forgetFollow } from '../lib/useFollow.ts';
 import { asksOnClose, visualState } from '../lib/sessions.ts';
+import { closedTabOf, loadClosedTabs, planReopen, pushClosed, saveClosedTabs } from '../lib/closedTabs.ts';
 import {
   EMPTY_WORKSPACE,
   loadUiPrefs,
@@ -44,6 +45,12 @@ type WorkspaceValue = {
   clearCloseRequest: () => void;
   /** Cuándo (orden de cierre) cada sesión cerró su pestaña por última vez; solo en esta carga de la página. */
   closedOrder: () => ReadonlyMap<string, number>;
+  /**
+   * Ctrl+Mayús+T: reabre la última pestaña de sesión cerrada. Si la sesión sigue viva
+   * (en segundo plano) abre su pestaña; si se terminó, abre «Retomar» avisando de que
+   * se retomará. Devuelve lo que ha hecho.
+   */
+  reopenClosed: () => 'open' | 'resume' | 'none';
   move: (delta: number) => void;
   /** Lleva una pestaña a otra posición (arrastrándola en la barra). */
   reorder: (name: string, to: number) => void;
@@ -58,7 +65,9 @@ type WorkspaceValue = {
   closeDialog: () => void;
   /** Sesión reciente cuyo diálogo «Retomar en el panel» está abierto. */
   resumeTarget: RecentSession | null;
-  openResume: (r: RecentSession) => void;
+  /** El diálogo «Retomar» viene de Ctrl+Mayús+T: la sesión se terminó desde una pestaña del panel. */
+  resumeReopen: boolean;
+  openResume: (r: RecentSession, opciones?: { reopen?: boolean }) => void;
   closeResume: () => void;
   prefs: UiPrefs;
   setPrefs: (parche: Partial<UiPrefs>) => void;
@@ -109,12 +118,17 @@ const Ctx = createContext<WorkspaceValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { settings, loaded: ajustesListos } = useSettings();
-  const { sessions, loaded: sesionesListas } = useSessions();
+  const { sessions, recent, loaded: sesionesListas } = useSessions();
   const guardado = useRef(loadWorkspace());
   const [workspace, dispatch] = useReducer(workspaceReducer, guardado.current ?? EMPTY_WORKSPACE);
   const [newSessionOpen, setDialogOpen] = useState(false);
   const [newSessionInit, setNewSessionInit] = useState<NewSessionInit | null>(null);
   const [resumeTarget, setResumeTarget] = useState<RecentSession | null>(null);
+  const [resumeReopen, setResumeReopen] = useState(false);
+  // Pestañas de sesión cerradas, de la más antigua a la más reciente (se recuerdan entre cargas).
+  const cerradas = useRef(loadClosedTabs());
+  const recentRef = useRef(recent);
+  recentRef.current = recent;
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
   const closedAt = useRef(new Map<string, number>());
   const closeSeq = useRef(0);
@@ -167,9 +181,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const activate = useCallback((name: string) => dispatch({ type: 'activate', name }), []);
   const openFollow = useCallback<WorkspaceValue['openFollow']>((session, kind, id) => dispatch({ type: 'openFollow', key: followKey(session, kind, id) }), []);
   const setView = useCallback((name: string, view: PaneView) => dispatch({ type: 'view', name, view }), []);
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
   const closeTab = useCallback((name: string) => {
     if (isFollowKey(name)) forgetFollow(name);
     else {
+      // Solo cuenta para Ctrl+Mayús+T si de verdad tenía pestaña (terminar desde la barra lateral también llama aquí).
+      const s = sessionsRef.current.find((x) => x.name === name);
+      if (s && workspaceRef.current.tabs.includes(name)) {
+        cerradas.current = pushClosed(cerradas.current, closedTabOf(s));
+        saveClosedTabs(cerradas.current);
+      }
       closedAt.current.set(name, ++closeSeq.current);
       forgetConversation(name);
       forgetBtw(name);
@@ -192,6 +214,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   );
   const clearCloseRequest = useCallback(() => setCloseRequest(null), []);
   const closedOrder = useCallback(() => closedAt.current, []);
+  const reopenClosed = useCallback(() => {
+    const { plan, rest } = planReopen(cerradas.current, sessionsRef.current, workspaceRef.current.tabs, recentRef.current, Date.now());
+    cerradas.current = rest;
+    saveClosedTabs(rest);
+    if (plan.kind === 'open') dispatch({ type: 'open', name: plan.name });
+    else if (plan.kind === 'resume') {
+      setResumeReopen(true);
+      setResumeTarget(plan.recent);
+    }
+    return plan.kind;
+  }, []);
   const move = useCallback((delta: number) => dispatch({ type: 'move', delta }), []);
   const reorder = useCallback((name: string, to: number) => dispatch({ type: 'reorder', name, to }), []);
   const setLayout = useCallback((layout: Layout) => dispatch({ type: 'layout', layout }), []);
@@ -201,7 +234,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setDialogOpen(true);
   }, []);
   const closeDialog = useCallback(() => setDialogOpen(false), []);
-  const openResume = useCallback((r: RecentSession) => setResumeTarget(r), []);
+  const openResume = useCallback((r: RecentSession, opciones?: { reopen?: boolean }) => {
+    setResumeReopen(opciones?.reopen ?? false);
+    setResumeTarget(r);
+  }, []);
   const closeResume = useCallback(() => setResumeTarget(null), []);
   const dialogOpen = newSessionOpen || resumeTarget !== null || closeRequest !== null;
   const setPrefs = useCallback((parche: Partial<UiPrefs>) => {
@@ -249,6 +285,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       closeRequest,
       clearCloseRequest,
       closedOrder,
+      reopenClosed,
       move,
       reorder,
       setLayout,
@@ -259,6 +296,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       openDialog,
       closeDialog,
       resumeTarget,
+      resumeReopen,
       openResume,
       closeResume,
       prefs,
@@ -286,6 +324,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       closeRequest,
       clearCloseRequest,
       closedOrder,
+      reopenClosed,
       move,
       reorder,
       setLayout,
@@ -296,6 +335,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       openDialog,
       closeDialog,
       resumeTarget,
+      resumeReopen,
       openResume,
       closeResume,
       prefs,

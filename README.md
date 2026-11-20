@@ -657,8 +657,11 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   anterior), `Ctrl+W` (cierra la pestaña activa, como la «x»), `Ctrl+N` (abre el
   diálogo de nueva sesión), `Ctrl+T` (crea una sesión sin diálogo, en el checkout
   principal y sin prompt, con el último proyecto y agente; si falla, lo avisa en un
-  banner) y `Ctrl+Mayús+N` (como `Ctrl+T`, pero con el agente por defecto de
-  Ajustes), también con el foco en la terminal: la shell y Claude Code dejan de
+  banner), `Ctrl+Mayús+N` (como `Ctrl+T`, pero con el agente por defecto de
+  Ajustes) y `Ctrl+Mayús+T` (reabre la última pestaña de sesión que cerraste: si
+  la sesión sigue en segundo plano se abre al momento; si se terminó, un diálogo
+  avisa de que se retomará su conversación de Claude en una sesión nueva; se
+  recuerdan las 20 últimas, también al recargar), también con el foco en la terminal: la shell y Claude Code dejan de
   recibirlas. El diálogo de nueva sesión se abre con el foco en «Abrir terminal»,
   así que `Ctrl+N` (o `Ctrl+Alt+N`) y Enter abren una terminal; si la vista previa
   del comando aún se está calculando, se abre en cuanto está lista. Propone por defecto el último proyecto y

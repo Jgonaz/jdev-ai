@@ -16,6 +16,8 @@ export type ShortcutHandlers = {
   quickDefaultSession: () => void;
   /** Reabre la sesión que más recientemente se mandó a segundo plano. */
   lastBackground: () => void;
+  /** Reabre la última pestaña cerrada (o propone retomarla si se terminó). Solo en la app de escritorio. */
+  reopenClosed: () => void;
 };
 
 type KeyLike = Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey' | 'key'>;
@@ -30,7 +32,7 @@ type KeyLike = Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'
  *   |, @, ~), así que no hay atajos con dígitos. Ctrl+Alt+T no escribe nada con
  *   AltGr en ese teclado.
  * - Solo en la app de escritorio (Tauri), donde no hay pestañas del navegador y
- *   sí se pueden capturar: Ctrl+Tab / Ctrl+Mayús+Tab, Ctrl+W, Ctrl+N, Ctrl+Mayús+N y Ctrl+T.
+ *   sí se pueden capturar: Ctrl+Tab / Ctrl+Mayús+Tab, Ctrl+W, Ctrl+N, Ctrl+Mayús+N, Ctrl+T y Ctrl+Mayús+T.
  *   Se quedan con ellas el panel aunque la terminal tenga el foco (como VS Code):
  *   la shell y Claude Code dejan de recibirlas. En el navegador no se activan:
  *   Chrome no deja capturarlas.
@@ -61,7 +63,11 @@ export function matchShortcut(e: KeyLike, desktop = false): keyof ShortcutHandle
   }
   if (!desktop || !e.ctrlKey || e.altKey) return null;
   if (e.key === 'Tab') return e.shiftKey ? 'prev' : 'next';
-  if (e.shiftKey) return e.key === 'n' || e.key === 'N' ? 'quickDefaultSession' : null;
+  if (e.shiftKey) {
+    if (e.key === 'n' || e.key === 'N') return 'quickDefaultSession';
+    if (e.key === 't' || e.key === 'T') return 'reopenClosed';
+    return null;
+  }
   switch (e.key) {
     case 'w':
     case 'W':
