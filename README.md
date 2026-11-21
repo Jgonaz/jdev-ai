@@ -319,7 +319,8 @@ con [Tauri](https://tauri.app)) un panel local que reúne las terminales de
 agente de todos los proyectos: barra lateral con todos los proyectos (también
 los recién creados, sin recargar) y sus sesiones, su título y su estado (te espera, trabajando, en reposo o hecha;
 sigue «trabajando» mientras Claude espera a tests, subagentes u otras tareas
-en segundo plano, pero no a un servidor de desarrollo),
+en segundo plano, pero no a un servidor de desarrollo ni al monitor que
+Claude Code arma al publicar un artifact),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
 con `bin/agent`, las pantallas Inicio, Backlog, Cambios, Guías e Historial y una
 pantalla de Ajustes con estos apartados:

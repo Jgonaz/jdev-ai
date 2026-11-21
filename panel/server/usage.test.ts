@@ -341,10 +341,10 @@ describe('lectura segura de archivos de estado', () => {
 
 describe('looksLikeServer / waitsOnBackground', () => {
   it('reconoce los procesos de larga vida y no confunde las rutas ni otras palabras', () => {
-    for (const l of ['pnpm dev', 'npm run dev:web', 'npm start', 'vite preview', 'vitest --watch', 'tail -f /tmp/x.log', 'tail -n 50 -f log', 'python3 -m http.server 8000', 'docker compose up', 'Start dev server', 'bin/panel start']) {
+    for (const l of ['pnpm dev', 'npm run dev:web', 'npm start', 'vite preview', 'vitest --watch', 'tail -f /tmp/x.log', 'tail -n 50 -f log', 'python3 -m http.server 8000', 'docker compose up', 'Start dev server', 'bin/panel start', 'live updates for artifact https://claude.ai/artifact/AeCKxT9QJqYPc22aXJndAz (auto-armed on publish)']) {
       expect(looksLikeServer(l), l).toBe(true);
     }
-    for (const l of ['pnpm test', 'pnpm test:e2e > /dev/null 2>&1', 'bin/worktree merge feature', 'bin/check', 'pnpm build', 'devrun.test.ts', 'git restart-x', 'npx playwright test', 'Suite e2e completa']) {
+    for (const l of ['pnpm test', 'pnpm test:e2e > /dev/null 2>&1', 'bin/worktree merge feature', 'bin/check', 'pnpm build', 'devrun.test.ts', 'git restart-x', 'npx playwright test', 'Suite e2e completa', 'Espera a que el artifact se publique']) {
       expect(looksLikeServer(l), l).toBe(false);
     }
   });

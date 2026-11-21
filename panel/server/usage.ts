@@ -363,10 +363,11 @@ export function deriveActivity(eventos: readonly ActivityEvent[], notBefore = 0)
   return resultado.subagents.length + resultado.shells.length + resultado.artifacts.length === 0 ? null : resultado;
 }
 
-// Palabras de un proceso que no termina solo: servidores, watchers y seguimientos de logs. «dev» no cuenta dentro de
-// una ruta («/dev/null») ni de otra palabra; sí como script («dev», «dev:web»).
+// Palabras de un proceso que no termina solo: servidores, watchers, seguimientos de logs y el monitor que Claude Code
+// arma al publicar un artifact («live updates for artifact … (auto-armed on publish)»), que dura lo que la sesión.
+// «dev» no cuenta dentro de una ruta («/dev/null») ni de otra palabra; sí como script («dev», «dev:web»).
 const SERVIDOR =
-  /(?<![\w/.-])(?:dev|serve|server|start|watch|preview|storybook|nodemon|runserver|uvicorn|gunicorn)(?![\w/.-])|--watch\b|\btail\b[^|;&]*\s-[a-z]*f|\bhttp\.server\b|\bcompose\s+up\b/i;
+  /(?<![\w/.-])(?:dev|serve|server|start|watch|preview|storybook|nodemon|runserver|uvicorn|gunicorn)(?![\w/.-])|--watch\b|\btail\b[^|;&]*\s-[a-z]*f|\bhttp\.server\b|\bcompose\s+up\b|\bauto-armed on publish\b/i;
 
 /** ¿El texto de la tarea parece un proceso de larga vida (servidor, watch, `tail -f`) en lugar de algo que acaba? */
 export function looksLikeServer(label: string): boolean {
