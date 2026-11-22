@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { USER_PROJECT, cambiosItem, canonicalProjectHref, historyHref, isProjectScreen, isUserSkills, parseCambiosItem, parseRoute, projectHref, resolveRoute, routeHref } from './route.ts';
+import { USER_PROJECT, cambiosItem, canonicalProjectHref, historyHref, isProjectScreen, isUserEntry, parseCambiosItem, parseRoute, projectHref, resolveRoute, routeHref } from './route.ts';
 
 const base = { project: null, item: null, implicit: false, normalize: false, redirect: null };
 
@@ -75,6 +75,16 @@ describe('resolveRoute', () => {
     }
   });
 
+  it('reconoce MCPs con proyecto y nombre opcionales (el nombre es un solo segmento) y la entrada de usuario', () => {
+    expect(resolveRoute('#/mcps')).toEqual({ ...base, route: 'mcps' });
+    expect(resolveRoute('#/mcps/balanz.io')).toEqual({ ...base, route: 'mcps', project: 'balanz.io' });
+    expect(resolveRoute('#/mcps/balanz.io/playwright')).toEqual({ ...base, route: 'mcps', project: 'balanz.io', item: 'playwright' });
+    expect(resolveRoute('#/mcps/balanz.io/a%2Fb%20c')).toEqual({ ...base, route: 'mcps', project: 'balanz.io', item: 'a/b c' });
+    expect(resolveRoute('#/mcps/~usuario/vercel')).toEqual({ ...base, route: 'mcps', project: USER_PROJECT, item: 'vercel' });
+    expect(resolveRoute('#/mcps/balanz.io/%E0%A4%A')).toEqual({ ...base, route: 'mcps', project: 'balanz.io', redirect: '#/mcps/balanz.io' });
+    expect(resolveRoute('#/mcps/a/b/c')).toEqual({ ...base, route: 'inicio', implicit: true, normalize: true });
+  });
+
   it('reconoce Skills con proyecto y nombre de skill opcionales (el nombre es un solo segmento)', () => {
     expect(resolveRoute('#/skills')).toEqual({ ...base, route: 'skills' });
     expect(resolveRoute('#/skills/balanz.io')).toEqual({ ...base, route: 'skills', project: 'balanz.io' });
@@ -123,6 +133,7 @@ describe('resolveRoute', () => {
     expect(parseRoute('#/worktrees/x')).toBe('cambios');
     expect(parseRoute('#/guias/x')).toBe('guias');
     expect(parseRoute('#/skills/x')).toBe('skills');
+    expect(parseRoute('#/mcps/x')).toBe('mcps');
   });
 
   it('traduce las rutas antiguas de Proyectos a las de cada pantalla', () => {
@@ -144,23 +155,23 @@ describe('resolveRoute', () => {
   });
 
   it('las rutas nuevas no se redirigen', () => {
-    for (const h of ['#/backlog/x/BL-20261024-1145-typescript-7', '#/cambios/x', '#/cambios/x/wt/y/a.ts', '#/guias/x/a.md', '#/skills/x/pdf', '#/skills/~usuario', '#/historial/x/y.md', '#/inicio', '']) {
+    for (const h of ['#/backlog/x/BL-20261024-1145-typescript-7', '#/cambios/x', '#/cambios/x/wt/y/a.ts', '#/guias/x/a.md', '#/skills/x/pdf', '#/skills/~usuario', '#/mcps/x/vercel', '#/mcps/~usuario', '#/historial/x/y.md', '#/inicio', '']) {
       expect(resolveRoute(h).redirect).toBeNull();
     }
   });
 
   it('isProjectScreen distingue las pantallas de proyecto', () => {
-    expect(['backlog', 'cambios', 'guias', 'skills'].every(isProjectScreen)).toBe(true);
+    expect(['backlog', 'cambios', 'guias', 'skills', 'mcps'].every(isProjectScreen)).toBe(true);
     expect(['inicio', 'terminales', 'historial', 'ajustes', 'proyectos', null].some(isProjectScreen)).toBe(false);
     expect(routeHref('cambios')).toBe('#/cambios');
     expect(isProjectScreen('worktrees')).toBe(false);
   });
 
   it('isUserSkills solo reconoce la entrada «Usuario» en la pantalla Skills', () => {
-    expect(isUserSkills('skills', USER_PROJECT)).toBe(true);
-    expect(isUserSkills('guias', USER_PROJECT)).toBe(false);
-    expect(isUserSkills('skills', 'balanz.io')).toBe(false);
-    expect(isUserSkills('skills', null)).toBe(false);
+    expect(isUserEntry('skills', USER_PROJECT)).toBe(true);
+    expect(isUserEntry('guias', USER_PROJECT)).toBe(false);
+    expect(isUserEntry('skills', 'balanz.io')).toBe(false);
+    expect(isUserEntry('skills', null)).toBe(false);
   });
 
   it('canonicalProjectHref corrige el proyecto y quita el elemento que no se muestra', () => {
@@ -172,6 +183,8 @@ describe('resolveRoute', () => {
     // La entrada «Usuario» de Skills es un destino válido y no se sustituye por un proyecto.
     expect(canonicalProjectHref('skills', { project: USER_PROJECT, item: 'pdf' }, USER_PROJECT)).toBeNull();
     expect(canonicalProjectHref('skills', { project: USER_PROJECT, item: 'pdf' }, USER_PROJECT, false)).toBe('#/skills/~usuario');
+    expect(canonicalProjectHref('mcps', { project: USER_PROJECT, item: 'vercel' }, USER_PROJECT)).toBeNull();
+    expect(canonicalProjectHref('mcps', { project: 'oculto', item: 'vercel' }, 'a')).toBe('#/mcps/a');
     // Sin proyecto, o con uno oculto o inexistente: el mostrado, sin elemento.
     expect(canonicalProjectHref('backlog', { project: null, item: null }, 'a')).toBe('#/backlog/a');
     expect(canonicalProjectHref('cambios', { project: null, item: null }, 'a')).toBe('#/cambios/a');
@@ -200,6 +213,9 @@ describe('resolveRoute', () => {
     expect(projectHref('skills', null, 'x')).toBe('#/skills');
     expect(projectHref('skills', USER_PROJECT)).toBe('#/skills/~usuario');
     expect(projectHref('skills', 'a b', 'una/skill #1')).toBe('#/skills/a%20b/una%2Fskill%20%231');
+    expect(projectHref('mcps', null, 'x')).toBe('#/mcps');
+    expect(projectHref('mcps', USER_PROJECT)).toBe('#/mcps/~usuario');
+    expect(projectHref('mcps', 'a b', 'un/mcp #1')).toBe('#/mcps/a%20b/un%2Fmcp%20%231');
     // La guía conserva las barras y codifica cada tramo.
     expect(projectHref('guias', 'a', 'sub carpeta/guía.md')).toBe('#/guias/a/sub%20carpeta/gu%C3%ADa.md');
   });
@@ -209,6 +225,8 @@ describe('resolveRoute', () => {
     expect([g.route, g.project, g.item]).toEqual(['guias', 'a b', 'x y/z #1.md']);
     const k = resolveRoute(projectHref('skills', USER_PROJECT, 'una/skill #1'));
     expect([k.route, k.project, k.item]).toEqual(['skills', USER_PROJECT, 'una/skill #1']);
+    const m = resolveRoute(projectHref('mcps', USER_PROJECT, 'un/mcp #1'));
+    expect([m.route, m.project, m.item]).toEqual(['mcps', USER_PROJECT, 'un/mcp #1']);
     const b = resolveRoute(projectHref('backlog', 'a b', 'BL-20261024-1145-typescript-7'));
     expect([b.route, b.project, b.item]).toEqual(['backlog', 'a b', 'BL-20261024-1145-typescript-7']);
   });

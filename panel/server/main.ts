@@ -22,6 +22,8 @@ import { BacklogError, BacklogStore, BacklogWatcher, ITEM_ID_RE, pendingChanges,
 import { commitBacklog, commitPreview, validateCommitRequest } from './backlog-commit.ts';
 import { checkNote, isConversationId, isConversationKey, resolveDone } from './conversations.ts';
 import { GuideError, listGuides, readGuide } from './guides.ts';
+import { McpError, discoverMcps, mcpFile, resolveMcp, summarizeMcps } from './mcps.ts';
+import type { McpScope } from './mcps.ts';
 import { SkillError, discoverSkills, launchVSCode, readSkillCopy, resolveSkill, skillFolder, summarize } from './skills.ts';
 import type { SkillScope } from './skills.ts';
 import { PlaceError, changesOverview, changesSummary, placeChanges, placeFileDiff } from './worktree-diff.ts';
@@ -139,9 +141,9 @@ export type ServerOptions = {
   indexActivityAtStart?: boolean;
   /** Carpeta de los sonidos de Windows para los avisos; por defecto, /mnt/c/Windows/Media (WSL). */
   windowsMediaDir?: string;
-  /** Home del que se leen las skills de usuario (`.claude`, `.agents`, `.codex`, plugins); por defecto, el del usuario. Para pruebas. */
+  /** Home del que se leen las skills y los MCP de usuario (`.claude`, `.agents`, `.codex`, `.claude.json`, plugins); por defecto, el del usuario. Para pruebas. */
   homeDir?: string;
-  /** Abre una carpeta de skill en el editor; por defecto, `code <carpeta>`. Para pruebas. */
+  /** Abre una carpeta de skill o un archivo de configuración de MCP en el editor; por defecto, `code <ruta>`. Para pruebas. */
   openEditor?: (carpeta: string) => Promise<void>;
   /** Carpeta de las imágenes adjuntadas; por defecto, ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel/uploads. */
   uploadsDir?: string;
@@ -1061,8 +1063,48 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     }
   }
 
-  // /api/projects/:id/{backlog,guides,skills,changes}[/...]: lectura del backlog, las
-  // guías, las skills y los cambios (checkout principal y worktrees) del proyecto, y cambio de
+  // MCPs de un proyecto (`/api/projects/:id/mcps[/open]`) o de usuario
+  // (`/api/user-mcps[/open]`): lista ya normalizada y sin secretos (el detalle no
+  // necesita otra petición) y apertura en el editor del archivo donde está definido.
+  // El MCP se pide por nombre y número de copia, nunca por ruta. Los POST pasan por la
+  // comprobación de origen de `api()`.
+  async function mcpsApi(
+    req: IncomingMessage,
+    res: ServerResponse,
+    ambito: McpScope,
+    resto: string,
+    metodo: string,
+  ): Promise<void> {
+    const permitido = resto === 'open' ? 'POST' : 'GET';
+    if (resto !== '' && resto !== 'open') {
+      sendJson(res, 404, { error: 'no encontrado' });
+      return;
+    }
+    if (metodo !== permitido && !(permitido === 'GET' && metodo === 'HEAD')) {
+      res.setHeader('Allow', permitido);
+      sendJson(res, 405, { error: 'método no permitido' });
+      return;
+    }
+    try {
+      const grupos = await discoverMcps(ambito);
+      if (resto === '') {
+        sendJson(res, 200, { mcps: summarizeMcps(grupos) });
+        return;
+      }
+      const cuerpo = await parseJsonBody(req, res);
+      if (!cuerpo) return;
+      const { found } = resolveMcp(grupos, cuerpo.mcp, cuerpo.copy === undefined ? 0 : cuerpo.copy);
+      await (opts.openEditor ?? launchVSCode)(await mcpFile(found));
+      sendJson(res, 200, { opened: true });
+    } catch (err) {
+      if (!(err instanceof McpError) && !(err instanceof SkillError)) throw err;
+      if (err.status >= 500) console.error('Error con los MCPs:', err.message);
+      sendJson(res, err.status, { error: err.message });
+    }
+  }
+
+  // /api/projects/:id/{backlog,guides,skills,mcps,changes}[/...]: lectura del backlog, las
+  // guías, las skills, los MCP y los cambios (checkout principal y worktrees) del proyecto, y cambio de
   // estado de un elemento.
   // /api/projects/:id/run (POST, DELETE): arrancar y parar su servidor de desarrollo.
   async function projectApi(
@@ -1072,7 +1114,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     url: URL,
     metodo: string,
   ): Promise<void> {
-    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|skills|changes|run)(?:\/(.*))?$/.exec(pathname);
+    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|skills|mcps|changes|run)(?:\/(.*))?$/.exec(pathname);
     if (!m) {
       sendJson(res, 404, { error: 'no encontrado' });
       return;
@@ -1233,6 +1275,11 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
 
     if (recurso === 'skills') {
       await skillsApi(req, res, { kind: 'project', path: proyecto.path, id: proyecto.id }, resto, url, metodo);
+      return;
+    }
+
+    if (recurso === 'mcps') {
+      await mcpsApi(req, res, { kind: 'project', path: proyecto.path, home: opts.homeDir ?? homedir(), harness: proyecto.harness }, resto, metodo);
       return;
     }
 
@@ -1622,6 +1669,11 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     if (skillsUsuario) {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
       await skillsApi(req, res, { kind: 'user', home: opts.homeDir ?? homedir() }, skillsUsuario[1] ?? '', url, metodo);
+      return;
+    }
+    const mcpsUsuario = /^\/api\/user-mcps(?:\/(.*))?$/.exec(pathname);
+    if (mcpsUsuario) {
+      await mcpsApi(req, res, { kind: 'user', home: opts.homeDir ?? homedir() }, mcpsUsuario[1] ?? '', metodo);
       return;
     }
     if (pathname.startsWith('/api/projects/')) {

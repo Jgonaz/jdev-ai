@@ -29,3 +29,21 @@ export async function openRegularFile(ruta: string): Promise<{ fh: FileHandle; s
     return null;
   }
 }
+
+/**
+ * Lee `ruta` como texto UTF-8 si es un archivo regular (ver `openRegularFile`) y no
+ * pasa de `maxBytes`. Devuelve null si no existe, no es regular, es demasiado grande
+ * o no se puede leer.
+ */
+export async function readRegularText(ruta: string, maxBytes: number): Promise<string | null> {
+  const abierto = await openRegularFile(ruta);
+  if (!abierto) return null;
+  try {
+    if (abierto.stat.size > maxBytes) return null;
+    return (await abierto.fh.readFile()).toString('utf8');
+  } catch {
+    return null;
+  } finally {
+    await abierto.fh.close().catch(() => {});
+  }
+}

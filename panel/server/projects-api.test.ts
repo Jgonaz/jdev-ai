@@ -69,6 +69,16 @@ describe('API de proyectos: backlog, guías y cambios', () => {
     writeFileSync(join(proy, '.claude', 'skills', 'uno', 'extra.md'), 'x');
     mkdirSync(join(tmp, 'home', '.claude', 'skills', 'synced', 'b', 'mia'), { recursive: true });
     writeFileSync(join(tmp, 'home', '.claude', 'skills', 'synced', 'b', 'mia', 'SKILL.md'), skillMd('mia'));
+    // MCPs: uno con secretos en el proyecto y en Codex, uno privado del proyecto en ~/.claude.json, el del subagente del harness y un conector.
+    writeFileSync(join(proy, '.mcp.json'), JSON.stringify({ mcpServers: { web: { type: 'http', url: 'https://x.dev/mcp?key=SEKRET_QUERY_VALUE', headers: { Authorization: 'Bearer SEKRET_HEADER_VALUE' } }, db: { command: 'npx', args: ['-y', 'db-mcp', '--api-key', 'SEKRET_ARG'], env: { GITHUB_TOKEN: 'SEKRET_ENV_VALUE' } } } }));
+    mkdirSync(join(proy, '.codex'), { recursive: true });
+    writeFileSync(join(proy, '.codex', 'config.toml'), '[mcp_servers.web]\nurl = "https://x.dev/mcp?key=SEKRET_QUERY_VALUE"\n');
+    writeFileSync(
+      join(tmp, 'home', '.claude.json'),
+      JSON.stringify({ claudeAiMcpEverConnected: ['claude.ai Google Drive'], mcpServers: { usuario: { command: 'u', env: { K: 'SEKRET_ENV_VALUE' } } }, projects: { [proy]: { mcpServers: { privado: { command: 'p' } } } } }),
+    );
+    mkdirSync(join(harness, 'adapters', 'claude'), { recursive: true });
+    writeFileSync(join(harness, 'adapters', 'claude', 'agents.json'), JSON.stringify({ qa: { mcpServers: [{ playwright: { type: 'stdio', command: 'npx', args: ['-y', '@playwright/mcp@0.0.83'] } }] } }));
     commit(proy, 'inicio');
 
     // Worktrees reales: «uno» con 2 commits propios y cambios sin commit; «dos» limpio.
@@ -137,6 +147,10 @@ describe('API de proyectos: backlog, guías y cambios', () => {
       ['GET', '/api/user-skills'],
       ['GET', '/api/user-skills/content?skill=mia'],
       ['POST', '/api/user-skills/open'],
+      ['GET', '/api/projects/foo/mcps'],
+      ['POST', '/api/projects/foo/mcps/open'],
+      ['GET', '/api/user-mcps'],
+      ['POST', '/api/user-mcps/open'],
       ['GET', '/api/projects/foo/changes'],
       ['GET', '/api/projects/foo/changes/main'],
       ['GET', '/api/projects/foo/changes/wt/uno'],
@@ -343,6 +357,86 @@ describe('API de proyectos: backlog, guías y cambios', () => {
     expect((await api('POST', '/api/user-skills/open', { skill: 'mia', copy: 0 })).status).toBe(200);
     expect(abiertas).toEqual([join(tmp, 'home', '.claude', 'skills', 'synced', 'b', 'mia')]);
     expect((await api('GET', '/api/user-skills/otro')).status).toBe(404);
+  });
+
+  it('lista los MCPs de un proyecto y del harness, sin ningún valor secreto en la respuesta', async () => {
+    const respuesta = await api('GET', '/api/projects/foo/mcps');
+    expect(respuesta.status).toBe(200);
+    const texto = await respuesta.text();
+    for (const s of ['SEKRET_QUERY_VALUE', 'SEKRET_HEADER_VALUE', 'SEKRET_ARG', 'SEKRET_ENV_VALUE']) expect(texto, s).not.toContain(s);
+    const lista = JSON.parse(texto) as { mcps: Json[] };
+    expect(lista.mcps.map((m) => [m.name, m.diverges, m.copies.map((c: Json) => c.label)])).toEqual([
+      ['db', false, ['Claude']],
+      ['privado', false, ['Claude (local)']],
+      ['web', true, ['Claude', 'Codex']],
+    ]);
+    const web = lista.mcps[2]!.copies[0];
+    expect(web).toMatchObject({ transport: 'http', url: 'https://x.dev/mcp?key=•••', headerNames: ['Authorization'], path: '.mcp.json', openable: true });
+    expect(lista.mcps[0]!.copies[0]).toMatchObject({ command: 'npx', args: ['-y', 'db-mcp', '--api-key', '•••'], envNames: ['GITHUB_TOKEN'] });
+    // La respuesta no lleva rutas absolutas.
+    expect(texto).not.toContain(tmp);
+    // El harness trae los de sus subagentes (y no los privados del proyecto foo).
+    const harness = await json(await api('GET', '/api/projects/harness/mcps'));
+    expect(harness.mcps.map((m: Json) => [m.name, m.copies[0].label])).toEqual([['playwright', 'Claude (subagente qa)']]);
+    expect((await api('GET', '/api/projects/nada/mcps')).status).toBe(404);
+  });
+
+  it('MCPs: métodos y rutas no válidos', async () => {
+    expect((await api('POST', '/api/projects/foo/mcps')).status).toBe(405);
+    expect((await api('GET', '/api/projects/foo/mcps/open')).status).toBe(405);
+    expect((await api('GET', '/api/projects/foo/mcps/content')).status).toBe(404);
+    expect((await api('POST', '/api/user-mcps')).status).toBe(405);
+    expect((await api('GET', '/api/user-mcps/otro')).status).toBe(404);
+  });
+
+  it('abre en el editor solo el archivo de un MCP descubierto, con protección de origen', async () => {
+    abiertas.length = 0;
+    const ok = await api('POST', '/api/projects/foo/mcps/open', { mcp: 'web', copy: 1 });
+    expect(ok.status).toBe(200);
+    expect(await json(ok)).toEqual({ opened: true });
+    expect(abiertas).toEqual([join(proy, '.codex', 'config.toml')]);
+    expect((await api('POST', '/api/projects/foo/mcps/open', { mcp: 'web' })).status).toBe(200);
+    expect(abiertas[1]).toBe(join(proy, '.mcp.json'));
+    // Un MCP privado se abre en ~/.claude.json; un subagente, en agents.json del harness.
+    expect((await api('POST', '/api/projects/foo/mcps/open', { mcp: 'privado' })).status).toBe(200);
+    expect((await api('POST', '/api/projects/harness/mcps/open', { mcp: 'playwright' })).status).toBe(200);
+    expect(abiertas.slice(2)).toEqual([join(tmp, 'home', '.claude.json'), join(tmp, 'harness', 'adapters', 'claude', 'agents.json')]);
+    // Una ruta enviada por el cliente no abre nada.
+    for (const cuerpo of [{ mcp: join(proy, '.mcp.json') }, { mcp: 'falta' }, { mcp: 'web', copy: 7 }, { mcp: 'web', copy: '1' }, { file: join(proy, '.mcp.json') }, {}]) {
+      expect((await api('POST', '/api/projects/foo/mcps/open', cuerpo)).status, JSON.stringify(cuerpo)).toBeGreaterThanOrEqual(400);
+    }
+    expect(abiertas).toHaveLength(4);
+    // Un origen ajeno se rechaza antes de tocar nada.
+    const ajeno = await api('POST', '/api/projects/foo/mcps/open', { mcp: 'web' }, { Origin: 'http://evil.example' });
+    expect(ajeno.status).toBe(403);
+    expect(abiertas).toHaveLength(4);
+    // Sin `code` instalado, el panel lo explica.
+    editorSinCode = true;
+    try {
+      const sin = await api('POST', '/api/projects/foo/mcps/open', { mcp: 'web' });
+      expect(sin.status).toBe(501);
+      expect((await json(sin)).error).toMatch(/code/);
+    } finally {
+      editorSinCode = false;
+    }
+  });
+
+  it('lista y abre los MCPs de usuario del home inyectado; un conector no tiene archivo', async () => {
+    const respuesta = await api('GET', '/api/user-mcps');
+    const texto = await respuesta.text();
+    expect(texto).not.toContain('SEKRET_ENV_VALUE');
+    const lista = JSON.parse(texto) as { mcps: Json[] };
+    expect(lista.mcps.map((m) => [m.name, m.copies[0].label, m.copies[0].transport, m.copies[0].path])).toEqual([
+      ['Google Drive', 'claude.ai', 'connector', null],
+      ['usuario', 'Claude', 'stdio', '~/.claude.json'],
+    ]);
+    expect(lista.mcps[1]!.copies[0].envNames).toEqual(['K']);
+    abiertas.length = 0;
+    expect((await api('POST', '/api/user-mcps/open', { mcp: 'usuario', copy: 0 })).status).toBe(200);
+    expect(abiertas).toEqual([join(tmp, 'home', '.claude.json')]);
+    const conector = await api('POST', '/api/user-mcps/open', { mcp: 'Google Drive' });
+    expect(conector.status).toBe(400);
+    expect(abiertas).toHaveLength(1);
   });
 
   it('lugares con ahead, behind, dirty, cambios y sesiones del panel', async () => {

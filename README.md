@@ -729,14 +729,14 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   el área central nunca baja de 360 px. En anchos estrechos, donde el contexto y
   el detalle se superponen, no hay tirador.
 - **Menú Proyectos.** «Proyectos» en la cabecera es un desplegable con Backlog,
-  Cambios, Guías y Skills, cuatro pantallas independientes: Backlog, Guías y Skills abren
+  Cambios, Guías, Skills y MCPs, cinco pantallas independientes: Backlog, Guías, Skills y MCPs abren
   el último proyecto usado (o el primero visible) y Cambios, el primero visible
   con cambios (o, si ninguno tiene, el último usado en Cambios o el primero); la pantalla actual
   queda marcada en el menú. Se abre con el clic, con Enter, Espacio o las flechas y, con un ratón,
-  al detenerse sobre el botón (se cierra al salir; en táctil, solo con clic). Las cuatro comparten la barra lateral de
+  al detenerse sobre el botón (se cierra al salir; en táctil, solo con clic). Las cinco comparten la barra lateral de
   proyectos (con su ancho; al elegir otro proyecto se queda en la misma pantalla)
   y cada una tiene su propia cabecera y ruta: `#/backlog/<id>[/<elemento>]`,
-  `#/cambios/<id>[/main[/<archivo>]|/wt/<worktree>[/<archivo>]]`, `#/guias/<id>[/<guía>]` y `#/skills/<id>[/<skill>]`. Los enlaces antiguos
+  `#/cambios/<id>[/main[/<archivo>]|/wt/<worktree>[/<archivo>]]`, `#/guias/<id>[/<guía>]`, `#/skills/<id>[/<skill>]` y `#/mcps/<id>[/<mcp>]`. Los enlaces antiguos
   `#/proyectos/…` y `#/worktrees/…` se redirigen a las nuevas.
 - **Seleccionar y copiar texto.** Arrastra, o haz doble o triple clic: al soltar,
   la selección se queda marcada y se copia al portapapeles (tmux la envía por
@@ -816,8 +816,32 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   frontmatter como datos, el `SKILL.md` con el visor de Markdown, la copia que se
   lee (con selector si hay varias) y los archivos de la carpeta, y «Abrir en VS Code»
   abre la carpeta con `code` (solo las que el panel ha listado, sin shell; si `code`
-  no está instalado lo explica). Es de solo lectura. En la barra lateral, cada
-  pantalla cuenta lo suyo (elementos abiertos, archivos cambiados, guías o skills).
+  no está instalado lo explica). Es de solo lectura. MCPs muestra los servidores MCP
+  de cada proyecto (también del harness): los de `.mcp.json` (Claude), los privados del
+  proyecto en `~/.claude.json` (Claude, «local»), `.vscode/mcp.json` (Copilot),
+  `.codex/config.toml` (Codex) y `opencode.json` u `opencode.jsonc` (OpenCode) de la raíz
+  del checkout principal y, en el harness, los de los subagentes de
+  `adapters/claude/agents.json` (hoy, Playwright del `qa`). Un MCP repetido en varios
+  agentes es una sola entrada, con una etiqueta por agente u origen y un aviso si lo que
+  ejecutan o a lo que se conectan difiere (no cuentan las notas ni `enabled`). «Usuario»
+  (`#/mcps/~usuario`) lista los de `~/.claude.json`, `~/.codex/config.toml`,
+  `~/.config/opencode/opencode.json`, el `.mcp.json` de cada plugin de Claude Code
+  instalado (origen «plugin <nombre>») y los conectores de claude.ai de
+  `claudeAiMcpEverConnected`, de los que solo se sabe el nombre (pueden estar
+  desconectados). La lista se divide en «Locales» (un comando que se ejecuta en la
+  máquina) y «Remotos» (una URL o un conector). El detalle da, por copia, el archivo, el
+  transporte, el comando con sus argumentos o la URL y los **nombres** de las variables
+  de entorno y las cabeceras. Los secretos no salen del servidor del panel: no se envían
+  los valores de `env`, `environment` ni las cabeceras, ni los de la query de la URL
+  (`?key=•••`), ni sus credenciales, ni los argumentos que siguen a opciones como
+  `--api-key` o `--token`, ni los campos con nombre de secreto. Los formatos son internos
+  de cada agente: lo que no se entienda se ignora, y el `config.toml` de Codex se lee con
+  un lector mínimo propio (solo las tablas `mcp_servers`; si un MCP trae líneas que no
+  entiende, se marca como «no se pudo leer entero»). «Abrir en VS Code» abre el archivo
+  donde está definido el MCP (no para los conectores) con `code`, solo los que el panel
+  ha listado y sin shell. Es de solo lectura: no añade, edita, activa ni borra MCPs. En
+  la barra lateral, cada pantalla cuenta lo suyo (elementos abiertos, archivos
+  cambiados, guías, skills o MCPs).
 - **Historial.** Reúne las entradas de `.agent/history/` del checkout
   principal de cada proyecto y del harness (sin subcarpetas como `archive/`),
   agrupadas por día, con filtros por proyecto y estado y «Solo con «Pendiente

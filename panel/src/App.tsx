@@ -13,6 +13,7 @@ import { useRoute } from './lib/route.ts';
 import { useShortcuts } from './lib/useShortcuts.ts';
 import { BacklogScreen } from './screens/BacklogScreen.tsx';
 import { GuiasScreen } from './screens/GuiasScreen.tsx';
+import { McpsScreen } from './screens/McpsScreen.tsx';
 import { SkillsScreen } from './screens/SkillsScreen.tsx';
 import { HistorialScreen } from './screens/HistorialScreen.tsx';
 import { InicioScreen } from './screens/InicioScreen.tsx';
@@ -153,6 +154,7 @@ function Shell() {
       {ruta === 'backlog' && <BacklogScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
       {ruta === 'cambios' && <CambiosScreen project={proyecto} item={elemento} onGoToTerminal={irATerminales} onReplaceHash={reemplazar} />}
       {ruta === 'guias' && <GuiasScreen project={proyecto} item={elemento} onReplaceHash={reemplazar} />}
+      {ruta === 'mcps' && <McpsScreen project={proyecto} item={elemento} onReplaceHash={reemplazar} />}
       {ruta === 'skills' && <SkillsScreen project={proyecto} item={elemento} onReplaceHash={reemplazar} />}
       {ruta === 'historial' && <HistorialScreen project={proyecto} file={elemento} onReplaceHash={reemplazar} />}
       {ruta === 'ajustes' && <SettingsScreen />}

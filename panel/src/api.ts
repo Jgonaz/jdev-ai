@@ -13,6 +13,7 @@ import type {
   HistoryDetail,
   HistoryEntry,
   MarkOldResult,
+  McpSummary,
   Overview,
   ProjectInfo,
   RecentSession,
@@ -179,6 +180,11 @@ export const api = {
   /** Abre la carpeta de una copia de la skill en VS Code (501 si `code` no existe). */
   openSkill: (proyecto: string, nombre: string, copia: number) =>
     request<{ opened: boolean }>(`${skillsBase(proyecto)}/open`, { method: 'POST', body: JSON.stringify({ skill: nombre, copy: copia }) }),
+  /** MCPs del proyecto, o los de usuario con `USER_PROJECT`; ya normalizados y sin secretos. */
+  mcps: (proyecto: string, signal?: AbortSignal) => request<{ mcps: McpSummary[] }>(mcpsBase(proyecto), { signal }).then((r) => r.mcps),
+  /** Abre en VS Code el archivo donde está definida una copia del MCP (400 con los conectores de claude.ai, 501 si `code` no existe). */
+  openMcp: (proyecto: string, nombre: string, copia: number) =>
+    request<{ opened: boolean }>(`${mcpsBase(proyecto)}/open`, { method: 'POST', body: JSON.stringify({ mcp: nombre, copy: copia }) }),
   /** Lugares del proyecto (checkout principal y worktrees) con sus datos. */
   changes: (proyecto: string, signal?: AbortSignal) => request<ChangesOverview>(`${projectBase(proyecto)}/changes`, { signal }),
   placeChanges: (proyecto: string, lugar: PlaceRef, signal?: AbortSignal) =>
@@ -242,6 +248,7 @@ export const markOldPending = (proyecto: string | null) =>
 
 const projectBase = (proyecto: string) => `/api/projects/${encodeURIComponent(proyecto)}`;
 const skillsBase = (proyecto: string) => (proyecto === USER_PROJECT ? '/api/user-skills' : `${projectBase(proyecto)}/skills`);
+const mcpsBase = (proyecto: string) => (proyecto === USER_PROJECT ? '/api/user-mcps' : `${projectBase(proyecto)}/mcps`);
 
 /** Resultado de mover un elemento: el 409 trae la versión actual del elemento. */
 export type MoveResult =

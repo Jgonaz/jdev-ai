@@ -1240,6 +1240,47 @@
   color: var(--fg-soft);
 }
 
+/* MCPs: reutiliza la lista y el lector de Skills; el detalle es una tarjeta por copia. */
+.mcps__line {
+  font-family: var(--font-term);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+.mcps__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.mcps__copy .skills__headrow {
+  justify-content: flex-start;
+}
+.mcps__path {
+  min-width: 0;
+  font-family: var(--font-term);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+.mcps__open {
+  margin-left: auto;
+}
+.mcps__copy .skills__fm {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.mcps__copy code {
+  font-family: var(--font-term);
+}
+.mcps__names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
 /* Fondo del detalle superpuesto: solo existe por debajo de 1100 px. */
 .ddet-backdrop {
   display: none;

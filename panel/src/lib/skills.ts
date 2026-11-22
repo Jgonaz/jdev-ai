@@ -1,7 +1,7 @@
 import type { SkillAgent, SkillSummary } from '../types.ts';
 
-/** Etiquetas de una skill: una por agente u origen distinto, en el orden de sus copias. */
-export function skillTags(skill: Pick<SkillSummary, 'copies'>): { label: string; agent: SkillAgent }[] {
+/** Etiquetas de una skill o un MCP: una por agente u origen distinto, en el orden de sus copias. */
+export function skillTags(skill: { copies: readonly { label: string; agent: SkillAgent }[] }): { label: string; agent: SkillAgent }[] {
   const vistas = new Set<string>();
   const etiquetas: { label: string; agent: SkillAgent }[] = [];
   for (const c of skill.copies) {

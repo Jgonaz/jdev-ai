@@ -26,11 +26,11 @@ export function useSidebarWidth(): { panel: PanelWidth; compact: boolean; width:
   return { panel, compact, width: compact ? COMPACT_SIDEBAR_W : panel.width };
 }
 
-/** Entrada que no es un proyecto (la de «Usuario» de Skills): va al final, separada de los proyectos. */
+/** Entrada que no es un proyecto (la de «Usuario» de Skills y MCPs): va al final, separada de los proyectos. */
 export type SidebarExtra = { id: string; name: string; mono: string; color: string };
 
 /**
- * Barra lateral común a Backlog, Cambios, Guías y Skills. Cada enlace lleva al otro
+ * Barra lateral común a Backlog, Cambios, Guías, Skills y MCPs. Cada enlace lleva al otro
  * proyecto en la misma pantalla, y el recuento (si lo hay) es el de la pantalla:
  * `counts[id]` es null mientras no se conoce o no aplica, y entonces no se pinta.
  */
@@ -38,7 +38,7 @@ export function ProjectSidebar(props: {
   screen: ProjectScreen;
   projects: readonly ProjectInfo[];
   currentId: string;
-  /** Entrada extra al final, separada (su recuento está en `counts[extra.id]`). Solo Skills la usa. */
+  /** Entrada extra al final, separada (su recuento está en `counts[extra.id]`). Solo Skills y MCPs la usan. */
   extra?: SidebarExtra;
   sidebar: ReturnType<typeof useSidebarWidth>;
   counts: Readonly<Record<string, number | null | undefined>>;

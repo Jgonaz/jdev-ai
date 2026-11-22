@@ -215,6 +215,27 @@ export type SkillContent = {
   body: string;
   files: string[];
 };
+export type McpTransport = 'stdio' | 'http' | 'sse' | 'connector';
+/** Una copia de un MCP: en qué agente u origen está, dónde y su configuración ya normalizada y sin secretos (solo nombres de variables y cabeceras). */
+export type McpCopy = {
+  agent: SkillAgent;
+  label: string;
+  /** Archivo donde está definido (para mostrar); null en los conectores de claude.ai. */
+  path: string | null;
+  transport: McpTransport;
+  command: string | null;
+  args: string[];
+  url: string | null;
+  envNames: string[];
+  headerNames: string[];
+  extra: Record<string, string | number | boolean>;
+  /** El archivo tenía líneas de este MCP que no se entendieron. */
+  incomplete: boolean;
+  /** Tiene archivo que abrir en VS Code. */
+  openable: boolean;
+};
+/** Un MCP (varias copias con el mismo nombre); la primera copia es la de por defecto. */
+export type McpSummary = { name: string; diverges: boolean; copies: McpCopy[] };
 export type GuideContent = { path: string; title: string; source: string };
 
 /** Datos de un lugar (checkout principal o worktree) para sus pestañas y su barra. */

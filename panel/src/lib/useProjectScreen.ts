@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { loadLastCambios, loadLastProject, pickCambiosProject, pickProject, rememberDecision, saveLastCambios, saveLastProject } from './backlog.ts';
-import { USER_PROJECT, canonicalProjectHref, isUserSkills } from './route.ts';
+import { USER_PROJECT, canonicalProjectHref, isUserEntry } from './route.ts';
 import type { ProjectScreen } from './route.ts';
 import { useSessions } from '../state/SessionsContext.tsx';
 import type { ProjectInfo } from '../types.ts';
 
 /**
- * Lo común a las pantallas de proyecto (Backlog, Cambios, Guías y Skills): el
+ * Lo común a las pantallas de proyecto (Backlog, Cambios, Guías, Skills y MCPs): el
  * proyecto mostrado, el recuerdo del último y la corrección de la URL al proyecto
  * mostrado. Solo se recuerda el proyecto que la persona elige. Sin proyecto en la
  * ruta, Backlog y Guías muestran el último usado —compartido entre ellas— o el
@@ -14,7 +14,7 @@ import type { ProjectInfo } from '../types.ts';
  * resumen del servidor), si ninguno tiene, el último usado en Cambios o, si no, el
  * primero. Mientras `conCambios` es null y la ruta no trae proyecto, Cambios no
  * escoge ninguno (`actual` es null y `loaded` falso): así no cambia de proyecto al llegar el resumen.
- * Solo en Skills, la ruta puede pedir la entrada «Usuario» (`USER_PROJECT`): no es un
+ * Solo en Skills y MCPs, la ruta puede pedir la entrada «Usuario» (`USER_PROJECT`): no es un
  * proyecto, así que `actual` es null y `usuario` verdadero, y no se recuerda como
  * último proyecto (los demás proyectos lo comparten).
  */
@@ -30,7 +30,7 @@ export function useProjectScreen(
   const { projects, loaded } = useSessions();
   const visibles = useMemo(() => projects.filter((p) => p.visible), [projects]);
   const ids = useMemo(() => visibles.map((p) => p.id), [visibles]);
-  const usuario = isUserSkills(pantalla, pedido.project);
+  const usuario = isUserEntry(pantalla, pedido.project);
   const actualId = usuario
     ? USER_PROJECT
     : pantalla === 'cambios'

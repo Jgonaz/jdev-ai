@@ -4,7 +4,7 @@ import { lstat, readdir } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { parse } from 'yaml';
-import { openRegularFile } from './safefile.ts';
+import { openRegularFile, readRegularText } from './safefile.ts';
 
 // Skills de agentes (pantalla Skills): las de un proyecto (carpetas de agente de
 // la raíz de su checkout principal) y las de usuario (en el home y en plugins de
@@ -163,7 +163,7 @@ const esDirectorio = async (ruta: string): Promise<boolean> => {
 };
 
 // Cada tramo de `ruta` bajo `base` es una carpeta real (no un enlace simbólico).
-async function sinEnlaces(base: string, ruta: string): Promise<boolean> {
+export async function sinEnlaces(base: string, ruta: string): Promise<boolean> {
   let actual = base;
   for (const tramo of ruta.split('/')) {
     actual = join(actual, tramo);
@@ -228,7 +228,7 @@ export function isOwnCopy(frontmatter: Record<string, unknown>, proyecto: string
   return typeof author === 'string' && normalizar(author) !== '' && normalizar(author) === normalizar(proyecto);
 }
 
-const aHome = (ruta: string, home: string): string => {
+export const aHome = (ruta: string, home: string): string => {
   const rel = relative(home, ruta);
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) ? `~/${rel.split(sep).join('/')}` : ruta;
 };
@@ -269,23 +269,23 @@ async function syncedSources(bucket: string): Promise<Map<string, string>> {
   return fuentes;
 }
 
-// Plugins de Claude Code instalados: carpetas `<installPath>/skills`. El formato del
-// JSON es interno de Claude Code: si algo no cuadra, se ignora sin romper la pantalla.
-async function pluginSkillRoots(home: string): Promise<{ plugin: string; dir: string }[]> {
-  const abierto = await openRegularFile(join(home, PLUGINS_FILE));
-  if (!abierto) return [];
+/**
+ * Plugins de Claude Code instalados, con su carpeta de instalación (sin repetir). El
+ * formato del JSON es interno de Claude Code: si algo no cuadra, se ignora sin romper
+ * la pantalla. Lo comparten las pantallas Skills y MCPs.
+ */
+export async function installedPlugins(home: string): Promise<{ plugin: string; installPath: string }[]> {
+  const texto = await readRegularText(join(home, PLUGINS_FILE), MAX_PLUGINS_BYTES);
+  if (texto === null) return [];
   let datos: unknown;
   try {
-    if (abierto.stat.size > MAX_PLUGINS_BYTES) return [];
-    datos = JSON.parse((await abierto.fh.readFile()).toString('utf8'));
+    datos = JSON.parse(texto);
   } catch {
     return [];
-  } finally {
-    await abierto.fh.close().catch(() => {});
   }
   const plugins = typeof datos === 'object' && datos !== null ? (datos as { plugins?: unknown }).plugins : undefined;
   if (typeof plugins !== 'object' || plugins === null || Array.isArray(plugins)) return [];
-  const raices: { plugin: string; dir: string }[] = [];
+  const instalados: { plugin: string; installPath: string }[] = [];
   const vistas = new Set<string>();
   for (const [clave, instalaciones] of Object.entries(plugins)) {
     if (!Array.isArray(instalaciones)) continue;
@@ -294,11 +294,15 @@ async function pluginSkillRoots(home: string): Promise<{ plugin: string; dir: st
       const ruta = typeof inst === 'object' && inst !== null ? (inst as { installPath?: unknown }).installPath : undefined;
       if (typeof ruta !== 'string' || !isAbsolute(ruta) || ruta.includes('\0') || vistas.has(ruta)) continue;
       vistas.add(ruta);
-      raices.push({ plugin, dir: join(ruta, 'skills') });
+      instalados.push({ plugin, installPath: ruta });
     }
   }
-  return raices;
+  return instalados;
 }
+
+// Carpetas `<installPath>/skills` de los plugins instalados.
+const pluginSkillRoots = async (home: string): Promise<{ plugin: string; dir: string }[]> =>
+  (await installedPlugins(home)).map(({ plugin, installPath }) => ({ plugin, dir: join(installPath, 'skills') }));
 
 async function discover(scope: SkillScope): Promise<Found[]> {
   const encontradas: Found[] = [];
