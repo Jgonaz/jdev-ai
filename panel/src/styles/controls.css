@@ -126,6 +126,22 @@
   color: var(--fg);
   font-size: var(--text-base);
 }
+/* Desplegables: la flecha nativa va pegada al borde y no respeta el padding;
+   se sustituye por un chevron de trazo, dibujado con dos diagonales en degradado
+   para que siga el color del tema, con su hueco a la derecha. */
+select.input {
+  appearance: none;
+  padding-right: 36px;
+  background-image:
+    linear-gradient(45deg, transparent calc(50% - 0.75px), var(--fg-soft) calc(50% - 0.75px), var(--fg-soft) calc(50% + 0.75px), transparent calc(50% + 0.75px)),
+    linear-gradient(135deg, transparent calc(50% - 0.75px), var(--fg-soft) calc(50% - 0.75px), var(--fg-soft) calc(50% + 0.75px), transparent calc(50% + 0.75px));
+  background-position:
+    calc(100% - 20px) 50%,
+    calc(100% - 15px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
 .input--mono {
   font-family: var(--font-term);
   font-size: var(--text-md);
