@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export type Route = 'inicio' | 'terminales' | 'backlog' | 'cambios' | 'guias' | 'historial' | 'ajustes';
+export type Route = 'inicio' | 'terminales' | 'backlog' | 'cambios' | 'guias' | 'skills' | 'historial' | 'ajustes';
 
 /** Pantalla que se muestra con la URL sin ruta (ajuste «Pantalla al abrir»). */
 export type StartScreen = 'inicio' | 'terminales';
 
 /** Pantallas de un proyecto, a las que se llega desde el menú «Proyectos». */
-export type ProjectScreen = 'backlog' | 'cambios' | 'guias';
-export const PROJECT_SCREENS: readonly ProjectScreen[] = ['backlog', 'cambios', 'guias'];
+export type ProjectScreen = 'backlog' | 'cambios' | 'guias' | 'skills';
+export const PROJECT_SCREENS: readonly ProjectScreen[] = ['backlog', 'cambios', 'guias', 'skills'];
+
+/**
+ * Identificador reservado de la entrada «Usuario» de la pantalla Skills
+ * (`#/skills/~usuario`): las skills de usuario se muestran como si fueran un
+ * proyecto más. Los identificadores de proyecto son nombres de carpeta, así que
+ * en teoría podría chocar con uno que empiece por `~`; en Skills gana el de usuario.
+ */
+export const USER_PROJECT = '~usuario';
+
+/** ¿La ruta pide la entrada «Usuario» (que solo existe en Skills)? */
+export const isUserSkills = (pantalla: ProjectScreen, proyecto: string | null): boolean => pantalla === 'skills' && proyecto === USER_PROJECT;
 
 export const isProjectScreen = (r: Route | string | null | undefined): r is ProjectScreen => PROJECT_SCREENS.some((p) => p === r);
 
@@ -15,11 +26,12 @@ export type ResolvedRoute = {
   route: Route;
   /**
    * Proyecto de las rutas por proyecto (`#/backlog/<id>`, `#/cambios/<id>`,
-   * `#/guias/<id>`) y del historial (`#/historial/<id>/<archivo>`).
+   * `#/guias/<id>`, `#/skills/<id>`) y del historial (`#/historial/<id>/<archivo>`).
    */
   project: string | null;
   /**
-   * Elemento del backlog de `#/backlog/<id>/<itemId>`, ruta de la guía de
+   * Elemento del backlog de `#/backlog/<id>/<itemId>`, nombre de la skill de
+   * `#/skills/<id>/<nombre>`, ruta de la guía de
    * `#/guias/<id>/<ruta>`, lugar de `#/cambios/<id>/(main[/<archivo>]|wt/<worktree>[/<archivo>])`
    * (ver `parseCambiosItem`) o archivo de la entrada de `#/historial/<id>/<archivo>`.
    */
@@ -98,6 +110,15 @@ export function resolveRoute(hash: string, start: StartScreen = 'inicio'): Resol
     }
     return { ...base, route: 'guias', project, item };
   }
+  // Skills: el elemento es el nombre de la skill, un solo segmento.
+  if (partes[0] === 'skills' && partes.length <= 3) {
+    const project = decodificar(partes[1]);
+    const item = decodificar(partes[2]);
+    if (partes[2] !== undefined && item === null) {
+      return { ...base, route: 'skills', project, redirect: projectHref('skills', project, null) };
+    }
+    return { ...base, route: 'skills', project, item };
+  }
   // Ruta antigua `#/proyectos[/<id>[/<elemento o pestaña>]]`: se traduce a la de la pantalla.
   // Los identificadores del backlog empiezan por `BL-`, así que un elemento nunca se confunde con una pestaña.
   if (partes[0] === 'proyectos' && partes.length <= 3) {
@@ -127,16 +148,17 @@ export function routeHref(ruta: Route): string {
 /**
  * Ruta de una pantalla de proyecto: `#/backlog[/<id>[/<itemId>]]`,
  * `#/cambios[/<id>[/<lugar>]]` (el elemento es `cambiosItem(lugar, archivo)`) o
- * `#/guias[/<id>[/<ruta de la guía>]]`. Sin proyecto, la pantalla elige el último
+ * `#/guias[/<id>[/<ruta de la guía>]]` o `#/skills[/<id>[/<nombre>]]`. Sin proyecto, la pantalla elige el último
  * usado, o el primero visible (Cambios, el primero con cambios). El elemento de
- * Cambios y Guías conserva sus `/` y codifica cada tramo.
+ * Cambios y Guías conserva sus `/` y codifica cada tramo; el del Backlog y el de
+ * Skills (un nombre) se codifica entero.
  */
 export function projectHref(pantalla: ProjectScreen, proyecto?: string | null, item?: string | null): string {
   const raiz = `#/${pantalla}`;
   if (!proyecto) return raiz;
   const p = `${raiz}/${encodeURIComponent(proyecto)}`;
   if (!item) return p;
-  return pantalla === 'backlog' ? `${p}/${encodeURIComponent(item)}` : `${p}/${item.split('/').map(encodeURIComponent).join('/')}`;
+  return pantalla === 'backlog' || pantalla === 'skills' ? `${p}/${encodeURIComponent(item)}` : `${p}/${item.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 /** Dónde se miran los cambios: el checkout principal o un worktree por nombre. */

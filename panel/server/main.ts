@@ -22,6 +22,8 @@ import { BacklogError, BacklogStore, BacklogWatcher, ITEM_ID_RE, pendingChanges,
 import { commitBacklog, commitPreview, validateCommitRequest } from './backlog-commit.ts';
 import { checkNote, isConversationId, isConversationKey, resolveDone } from './conversations.ts';
 import { GuideError, listGuides, readGuide } from './guides.ts';
+import { SkillError, discoverSkills, launchVSCode, readSkillCopy, resolveSkill, skillFolder, summarize } from './skills.ts';
+import type { SkillScope } from './skills.ts';
 import { PlaceError, changesOverview, changesSummary, placeChanges, placeFileDiff } from './worktree-diff.ts';
 import type { Place } from './worktree-diff.ts';
 import { HistoryError, HistoryStore, historyDirs, historySignature, isHistoryState, toListEntry } from './history.ts';
@@ -137,6 +139,10 @@ export type ServerOptions = {
   indexActivityAtStart?: boolean;
   /** Carpeta de los sonidos de Windows para los avisos; por defecto, /mnt/c/Windows/Media (WSL). */
   windowsMediaDir?: string;
+  /** Home del que se leen las skills de usuario (`.claude`, `.agents`, `.codex`, plugins); por defecto, el del usuario. Para pruebas. */
+  homeDir?: string;
+  /** Abre una carpeta de skill en el editor; por defecto, `code <carpeta>`. Para pruebas. */
+  openEditor?: (carpeta: string) => Promise<void>;
   /** Carpeta de las imágenes adjuntadas; por defecto, ${XDG_CACHE_HOME:-~/.cache}/jdev-ai/panel/uploads. */
   uploadsDir?: string;
   /** Carpetas de las que /api/image entrega imágenes; por defecto, las de defaultImageDirs. Para pruebas. */
@@ -1000,8 +1006,63 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     return (await sesiones.projectList()).find((p) => p.id === id) ?? (await sesiones.projectList(true)).find((p) => p.id === id);
   }
 
-  // /api/projects/:id/{backlog,guides,changes}[/...]: lectura del backlog, las
-  // guías y los cambios (checkout principal y worktrees) del proyecto, y cambio de
+  // Skills de un proyecto (`/api/projects/:id/skills[/content|/open]`) o de usuario
+  // (`/api/user-skills[/content|/open]`): lista, contenido y apertura en el editor.
+  // La skill se pide por nombre y número de copia, nunca por ruta: se vuelve a
+  // descubrir y el servidor resuelve la carpeta. Los POST pasan por la comprobación
+  // de origen de `api()`.
+  async function skillsApi(
+    req: IncomingMessage,
+    res: ServerResponse,
+    ambito: SkillScope,
+    resto: string,
+    url: URL,
+    metodo: string,
+  ): Promise<void> {
+    const permitido = resto === 'open' ? 'POST' : 'GET';
+    if (resto !== '' && resto !== 'content' && resto !== 'open') {
+      sendJson(res, 404, { error: 'no encontrado' });
+      return;
+    }
+    if (metodo !== permitido && !(permitido === 'GET' && metodo === 'HEAD')) {
+      res.setHeader('Allow', permitido);
+      sendJson(res, 405, { error: 'método no permitido' });
+      return;
+    }
+    try {
+      const grupos = await discoverSkills(ambito);
+      if (resto === '') {
+        sendJson(res, 200, { skills: summarize(grupos) });
+        return;
+      }
+      let nombre: unknown;
+      let copia: unknown;
+      if (resto === 'content') {
+        nombre = url.searchParams.get('skill') ?? '';
+        const c = url.searchParams.get('copy');
+        copia = c === null ? 0 : /^[0-9]{1,4}$/.test(c) ? Number(c) : -1;
+      } else {
+        const cuerpo = await parseJsonBody(req, res);
+        if (!cuerpo) return;
+        nombre = cuerpo.skill;
+        copia = cuerpo.copy === undefined ? 0 : cuerpo.copy;
+      }
+      const { index, found } = resolveSkill(grupos, nombre, copia);
+      if (resto === 'content') {
+        sendJson(res, 200, await readSkillCopy(found, index));
+        return;
+      }
+      await (opts.openEditor ?? launchVSCode)(skillFolder(found));
+      sendJson(res, 200, { opened: true });
+    } catch (err) {
+      if (!(err instanceof SkillError)) throw err;
+      if (err.status >= 500) console.error('Error con las skills:', err.message);
+      sendJson(res, err.status, { error: err.message });
+    }
+  }
+
+  // /api/projects/:id/{backlog,guides,skills,changes}[/...]: lectura del backlog, las
+  // guías, las skills y los cambios (checkout principal y worktrees) del proyecto, y cambio de
   // estado de un elemento.
   // /api/projects/:id/run (POST, DELETE): arrancar y parar su servidor de desarrollo.
   async function projectApi(
@@ -1011,7 +1072,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
     url: URL,
     metodo: string,
   ): Promise<void> {
-    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|changes|run)(?:\/(.*))?$/.exec(pathname);
+    const m = /^\/api\/projects\/([^/]+)\/(backlog|guides|skills|changes|run)(?:\/(.*))?$/.exec(pathname);
     if (!m) {
       sendJson(res, 404, { error: 'no encontrado' });
       return;
@@ -1167,6 +1228,11 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         if (!(err instanceof GuideError)) throw err;
         sendJson(res, err.status, { error: err.message });
       }
+      return;
+    }
+
+    if (recurso === 'skills') {
+      await skillsApi(req, res, { kind: 'project', path: proyecto.path, id: proyecto.id }, resto, url, metodo);
       return;
     }
 
@@ -1550,6 +1616,12 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
       // Resumen para la barra lateral de Cambios: archivos cambiados por proyecto visible.
       const visibles = (await sesiones.projectList(true)).filter((p) => p.visible);
       sendJson(res, 200, { projects: await changesSummary(visibles) });
+      return;
+    }
+    const skillsUsuario = /^\/api\/user-skills(?:\/(.*))?$/.exec(pathname);
+    if (skillsUsuario) {
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+      await skillsApi(req, res, { kind: 'user', home: opts.homeDir ?? homedir() }, skillsUsuario[1] ?? '', url, metodo);
       return;
     }
     if (pathname.startsWith('/api/projects/')) {

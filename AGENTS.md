@@ -27,6 +27,8 @@
   pregunta. Usa una asunción declarada solo si es reversible y de bajo riesgo.
 - No añadas dependencias ni herramientas sin justificarlo. Evita documentación,
   abstracciones y procesos sin un valor claro.
+- Al crear una skill en un proyecto, declara en su frontmatter
+  `metadata.author: <proyecto>`: el panel la distingue así de las de terceros.
 - Explica el porqué de las decisiones y señala los riesgos, efectos secundarios
   y edge cases relevantes. Comenta solo la intención de la lógica no obvia.
 - Antes de terminar, ejecuta únicamente las validaciones definidas por el proyecto afectado.

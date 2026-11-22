@@ -10,6 +10,7 @@ const OPCIONES: { pantalla: ProjectScreen; label: string }[] = [
   { pantalla: 'backlog', label: 'Backlog' },
   { pantalla: 'cambios', label: 'Cambios' },
   { pantalla: 'guias', label: 'Guías' },
+  { pantalla: 'skills', label: 'Skills' },
 ];
 
 // Con ratón, el menú se abre al detenerse sobre el botón y se cierra al salir de él
@@ -19,8 +20,8 @@ const RETARDO_ABRIR_MS = 120;
 const RETARDO_CERRAR_MS = 250;
 
 /**
- * «Proyectos» de la cabecera: un desplegable con las tres pantallas de proyecto
- * (Backlog, Cambios y Guías). Es un solo botón (no uno partido): el menú es la
+ * «Proyectos» de la cabecera: un desplegable con las pantallas de proyecto
+ * (Backlog, Cambios, Guías y Skills). Es un solo botón (no uno partido): el menú es la
  * única forma de llegar a ellas. Cada opción es un enlace a la pantalla del
  * último proyecto usado (o el primero visible), así que también funciona con
  * Ctrl+clic y sirve estando ya en una de ellas. `pantalla` es la pantalla de

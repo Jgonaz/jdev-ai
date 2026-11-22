@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cambiosItem, canonicalProjectHref, historyHref, isProjectScreen, parseCambiosItem, parseRoute, projectHref, resolveRoute, routeHref } from './route.ts';
+import { USER_PROJECT, cambiosItem, canonicalProjectHref, historyHref, isProjectScreen, isUserSkills, parseCambiosItem, parseRoute, projectHref, resolveRoute, routeHref } from './route.ts';
 
 const base = { project: null, item: null, implicit: false, normalize: false, redirect: null };
 
@@ -75,6 +75,21 @@ describe('resolveRoute', () => {
     }
   });
 
+  it('reconoce Skills con proyecto y nombre de skill opcionales (el nombre es un solo segmento)', () => {
+    expect(resolveRoute('#/skills')).toEqual({ ...base, route: 'skills' });
+    expect(resolveRoute('#/skills/balanz.io')).toEqual({ ...base, route: 'skills', project: 'balanz.io' });
+    expect(resolveRoute('#/skills/balanz.io/openspec-propose')).toEqual({ ...base, route: 'skills', project: 'balanz.io', item: 'openspec-propose' });
+    expect(resolveRoute('#/skills/balanz.io/a%2Fb%20c')).toEqual({ ...base, route: 'skills', project: 'balanz.io', item: 'a/b c' });
+    // La entrada de usuario usa el identificador reservado.
+    expect(resolveRoute('#/skills/~usuario/pdf')).toEqual({ ...base, route: 'skills', project: USER_PROJECT, item: 'pdf' });
+    expect(USER_PROJECT).toBe('~usuario');
+    // Una skill con codificación rota se quita de la URL; una ruta más larga no existe.
+    for (const h of ['#/skills/balanz.io/%E0%A4%A', '#/skills/balanz.io/zzz%ZZ']) {
+      expect(resolveRoute(h), h).toEqual({ ...base, route: 'skills', project: 'balanz.io', redirect: '#/skills/balanz.io' });
+    }
+    expect(resolveRoute('#/skills/a/b/c')).toEqual({ ...base, route: 'inicio', implicit: true, normalize: true });
+  });
+
   it('reconoce Historial con una entrada opcional', () => {
     expect(resolveRoute('#/historial')).toEqual({ ...base, route: 'historial' });
     expect(resolveRoute('#/historial/')).toEqual({ ...base, route: 'historial' });
@@ -107,6 +122,7 @@ describe('resolveRoute', () => {
     expect(parseRoute('#/cambios/x')).toBe('cambios');
     expect(parseRoute('#/worktrees/x')).toBe('cambios');
     expect(parseRoute('#/guias/x')).toBe('guias');
+    expect(parseRoute('#/skills/x')).toBe('skills');
   });
 
   it('traduce las rutas antiguas de Proyectos a las de cada pantalla', () => {
@@ -128,16 +144,23 @@ describe('resolveRoute', () => {
   });
 
   it('las rutas nuevas no se redirigen', () => {
-    for (const h of ['#/backlog/x/BL-20261024-1145-typescript-7', '#/cambios/x', '#/cambios/x/wt/y/a.ts', '#/guias/x/a.md', '#/historial/x/y.md', '#/inicio', '']) {
+    for (const h of ['#/backlog/x/BL-20261024-1145-typescript-7', '#/cambios/x', '#/cambios/x/wt/y/a.ts', '#/guias/x/a.md', '#/skills/x/pdf', '#/skills/~usuario', '#/historial/x/y.md', '#/inicio', '']) {
       expect(resolveRoute(h).redirect).toBeNull();
     }
   });
 
-  it('isProjectScreen distingue las tres pantallas de proyecto', () => {
-    expect(['backlog', 'cambios', 'guias'].every(isProjectScreen)).toBe(true);
+  it('isProjectScreen distingue las pantallas de proyecto', () => {
+    expect(['backlog', 'cambios', 'guias', 'skills'].every(isProjectScreen)).toBe(true);
     expect(['inicio', 'terminales', 'historial', 'ajustes', 'proyectos', null].some(isProjectScreen)).toBe(false);
     expect(routeHref('cambios')).toBe('#/cambios');
     expect(isProjectScreen('worktrees')).toBe(false);
+  });
+
+  it('isUserSkills solo reconoce la entrada «Usuario» en la pantalla Skills', () => {
+    expect(isUserSkills('skills', USER_PROJECT)).toBe(true);
+    expect(isUserSkills('guias', USER_PROJECT)).toBe(false);
+    expect(isUserSkills('skills', 'balanz.io')).toBe(false);
+    expect(isUserSkills('skills', null)).toBe(false);
   });
 
   it('canonicalProjectHref corrige el proyecto y quita el elemento que no se muestra', () => {
@@ -146,6 +169,9 @@ describe('resolveRoute', () => {
     expect(canonicalProjectHref('backlog', { project: 'a', item: 'BL-1' }, 'a')).toBeNull();
     expect(canonicalProjectHref('guias', { project: 'a', item: 'x/y.md' }, 'a')).toBeNull();
     expect(canonicalProjectHref('cambios', { project: 'a', item: null }, 'a')).toBeNull();
+    // La entrada «Usuario» de Skills es un destino válido y no se sustituye por un proyecto.
+    expect(canonicalProjectHref('skills', { project: USER_PROJECT, item: 'pdf' }, USER_PROJECT)).toBeNull();
+    expect(canonicalProjectHref('skills', { project: USER_PROJECT, item: 'pdf' }, USER_PROJECT, false)).toBe('#/skills/~usuario');
     // Sin proyecto, o con uno oculto o inexistente: el mostrado, sin elemento.
     expect(canonicalProjectHref('backlog', { project: null, item: null }, 'a')).toBe('#/backlog/a');
     expect(canonicalProjectHref('cambios', { project: null, item: null }, 'a')).toBe('#/cambios/a');
@@ -171,6 +197,9 @@ describe('resolveRoute', () => {
     expect(projectHref('cambios', 'a', 'wt/ts 7')).toBe('#/cambios/a/wt/ts%207');
     expect(projectHref('cambios', 'a', 'wt/ts-7/src/a b/c#.ts')).toBe('#/cambios/a/wt/ts-7/src/a%20b/c%23.ts');
     expect(projectHref('guias', 'a')).toBe('#/guias/a');
+    expect(projectHref('skills', null, 'x')).toBe('#/skills');
+    expect(projectHref('skills', USER_PROJECT)).toBe('#/skills/~usuario');
+    expect(projectHref('skills', 'a b', 'una/skill #1')).toBe('#/skills/a%20b/una%2Fskill%20%231');
     // La guía conserva las barras y codifica cada tramo.
     expect(projectHref('guias', 'a', 'sub carpeta/guía.md')).toBe('#/guias/a/sub%20carpeta/gu%C3%ADa.md');
   });
@@ -178,6 +207,8 @@ describe('resolveRoute', () => {
   it('projectHref y resolveRoute son inversos para la guía y el elemento', () => {
     const g = resolveRoute(projectHref('guias', 'a b', 'x y/z #1.md'));
     expect([g.route, g.project, g.item]).toEqual(['guias', 'a b', 'x y/z #1.md']);
+    const k = resolveRoute(projectHref('skills', USER_PROJECT, 'una/skill #1'));
+    expect([k.route, k.project, k.item]).toEqual(['skills', USER_PROJECT, 'una/skill #1']);
     const b = resolveRoute(projectHref('backlog', 'a b', 'BL-20261024-1145-typescript-7'));
     expect([b.route, b.project, b.item]).toEqual(['backlog', 'a b', 'BL-20261024-1145-typescript-7']);
   });

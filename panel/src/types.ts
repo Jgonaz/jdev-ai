@@ -198,6 +198,23 @@ export type CommitPreview = {
 export type CommitPhase = 'commit' | 'push' | 'done' | 'error';
 
 export type Guide = { path: string; title: string; updated: number };
+
+export type SkillAgent = 'claude' | 'codex' | 'copilot' | 'opencode';
+/** Una copia de una skill: en qué agente u origen está y dónde (ruta para mostrar, nunca para pedir). */
+export type SkillCopy = { agent: SkillAgent; label: string; path: string; hash: string };
+/** Una skill (varias copias con el mismo nombre); la primera copia es la de por defecto. */
+/** `own`: creada por nosotros (frontmatter `metadata.author` del proyecto, o subida a claude.ai por la cuenta); si no, de terceros. */
+export type SkillSummary = { name: string; description: string | null; own: boolean; diverges: boolean; copies: SkillCopy[] };
+export type SkillContent = {
+  name: string;
+  copy: number;
+  agent: SkillAgent;
+  label: string;
+  path: string;
+  frontmatter: Record<string, unknown>;
+  body: string;
+  files: string[];
+};
 export type GuideContent = { path: string; title: string; source: string };
 
 /** Datos de un lugar (checkout principal o worktree) para sus pestañas y su barra. */

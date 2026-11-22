@@ -322,7 +322,7 @@ sigue «trabajando» mientras Claude espera a tests, subagentes u otras tareas
 en segundo plano, pero no a un servidor de desarrollo ni al monitor que
 Claude Code arma al publicar un artifact),
 terminales en una, dos o cuatro columnas, diálogo para abrir una sesión nueva
-con `bin/agent`, las pantallas Inicio, Backlog, Cambios, Guías e Historial y una
+con `bin/agent`, las pantallas Inicio, Backlog, Cambios, Guías, Skills e Historial y una
 pantalla de Ajustes con estos apartados:
 
 - **Apariencia**: tema (Carbón, casi negro y neutro, por defecto; Grafito;
@@ -729,14 +729,14 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   el área central nunca baja de 360 px. En anchos estrechos, donde el contexto y
   el detalle se superponen, no hay tirador.
 - **Menú Proyectos.** «Proyectos» en la cabecera es un desplegable con Backlog,
-  Cambios y Guías, tres pantallas independientes: Backlog y Guías abren
+  Cambios, Guías y Skills, cuatro pantallas independientes: Backlog, Guías y Skills abren
   el último proyecto usado (o el primero visible) y Cambios, el primero visible
   con cambios (o, si ninguno tiene, el último usado en Cambios o el primero); la pantalla actual
   queda marcada en el menú. Se abre con el clic, con Enter, Espacio o las flechas y, con un ratón,
-  al detenerse sobre el botón (se cierra al salir; en táctil, solo con clic). Las tres comparten la barra lateral de
+  al detenerse sobre el botón (se cierra al salir; en táctil, solo con clic). Las cuatro comparten la barra lateral de
   proyectos (con su ancho; al elegir otro proyecto se queda en la misma pantalla)
   y cada una tiene su propia cabecera y ruta: `#/backlog/<id>[/<elemento>]`,
-  `#/cambios/<id>[/main[/<archivo>]|/wt/<worktree>[/<archivo>]]` y `#/guias/<id>[/<guía>]`. Los enlaces antiguos
+  `#/cambios/<id>[/main[/<archivo>]|/wt/<worktree>[/<archivo>]]`, `#/guias/<id>[/<guía>]` y `#/skills/<id>[/<skill>]`. Los enlaces antiguos
   `#/proyectos/…` y `#/worktrees/…` se redirigen a las nuevas.
 - **Seleccionar y copiar texto.** Arrastra, o haz doble o triple clic: al soltar,
   la selección se queda marcada y se copia al portapapeles (tmux la envía por
@@ -774,7 +774,7 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   segundos y se hace en segundo plano; después solo lee lo nuevo. Las horas
   activas y el proyecto (por el directorio de trabajo) son aproximaciones, y no
   hay coste en dinero.
-- **Backlog, Cambios y Guías.** La pantalla Backlog muestra el backlog de cada proyecto (`docs/backlog/` del
+- **Backlog, Cambios, Guías y Skills.** La pantalla Backlog muestra el backlog de cada proyecto (`docs/backlog/` del
   checkout principal) en columnas por estado, con filtros por tipo y prioridad
   y búsqueda. El detalle de un elemento enseña su resumen, su cabecera y el
   documento completo, y permite moverlo de estado («Pasar a por hacer» o
@@ -796,8 +796,28 @@ hay cambios más recientes en `panel/src` o en `panel/index.html`.
   ahí (con acceso a su terminal) y «Nueva sesión aquí». Debajo, un árbol de archivos
   con su estado y líneas y el diff del elegido, lado a lado o unificado (se recuerda
   la elección; en ancho estrecho, siempre unificado), solo de lectura. Guías muestra las de
-  `docs/user-guides/`; en la barra lateral, cada pantalla cuenta lo suyo
-  (elementos abiertos, archivos cambiados o guías).
+  `docs/user-guides/`. Skills muestra las skills de cada proyecto (también las del
+  harness, que hoy no tiene): las subcarpetas con `SKILL.md` de `.claude/skills/`,
+  `.agents/skills/`, `.codex/skills/`, `.github/skills/` y `.opencode/skills/` de la
+  raíz del checkout principal, sin seguir enlaces simbólicos. Una skill repetida en
+  varios agentes es una sola entrada (por el `name` de su frontmatter o el de su
+  carpeta) con su descripción y una etiqueta por agente (Claude, Codex, Copilot,
+  OpenCode); si el contenido de sus copias difiere, lo avisa. Al final de la barra
+  lateral, «Usuario» (`#/skills/~usuario`) lista las skills de usuario de
+  `~/.claude/skills/` (también las sincronizadas desde claude.ai),
+  `~/.agents/skills/`, `~/.codex/skills/` y los plugins de Claude Code instalados
+  (origen «plugin <nombre>»); lo que no exista se ignora. La lista se divide en
+  «Propias» y «De terceros»: en un proyecto, es propia la skill cuyo frontmatter
+  declara `metadata.author` igual al proyecto (sin distinguir mayúsculas ni
+  separadores) y no lleva `metadata.generatedBy`; de usuario, solo las subidas a
+  claude.ai por la cuenta (según el `manifest.json` de la sincronización). Lo que no
+  da ninguna señal cuenta como de terceros. «De terceros» empieza plegada en cada
+  proyecto y se despliega sola si no hay propias o si la skill abierta es suya. El lector enseña el
+  frontmatter como datos, el `SKILL.md` con el visor de Markdown, la copia que se
+  lee (con selector si hay varias) y los archivos de la carpeta, y «Abrir en VS Code»
+  abre la carpeta con `code` (solo las que el panel ha listado, sin shell; si `code`
+  no está instalado lo explica). Es de solo lectura. En la barra lateral, cada
+  pantalla cuenta lo suyo (elementos abiertos, archivos cambiados, guías o skills).
 - **Historial.** Reúne las entradas de `.agent/history/` del checkout
   principal de cada proyecto y del harness (sin subcarpetas como `archive/`),
   agrupadas por día, con filtros por proyecto y estado y «Solo con «Pendiente

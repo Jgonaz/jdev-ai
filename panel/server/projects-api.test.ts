@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { LEGACY, itemSource } from './backlog-fixtures.ts';
 import { startServer } from './main.ts';
+import { SkillError } from './skills.ts';
 import type { RunningServer } from './main.ts';
 import { killServer, tmuxConfig } from './tmux.ts';
 import type { TmuxConfig } from './tmux.ts';
@@ -25,6 +26,9 @@ describe('API de proyectos: backlog, guías y cambios', () => {
   let srv: RunningServer;
   let cfg: TmuxConfig;
   let base: string;
+  // Carpetas que el panel habría abierto en el editor (se inyecta un lanzador falso: no se lanza `code`).
+  const abiertas: string[] = [];
+  let editorSinCode = false;
 
   const git = (dir: string, ...args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
   const commit = (dir: string, msg = 'x') => {
@@ -57,6 +61,14 @@ describe('API de proyectos: backlog, guías y cambios', () => {
     writeFileSync(join(proy, 'docs', 'user-guides', 'sub', 'otra.md'), 'Sin título\n');
     writeFileSync(join(proy, 'docs', 'secreto.md'), '# Secreto\n');
     symlinkSync(join(proy, 'docs', 'secreto.md'), join(proy, 'docs', 'user-guides', 'enlace.md'));
+    const skillMd = (nombre: string, cuerpo = 'Cuerpo.') => `---\nname: ${nombre}\ndescription: Hace ${nombre}\n---\n${cuerpo}\n`;
+    for (const [dir, cuerpo] of [['.claude', 'Uno.'], ['.agents', 'Uno.'], ['.github', 'Otro.']] as const) {
+      mkdirSync(join(proy, dir, 'skills', 'uno'), { recursive: true });
+      writeFileSync(join(proy, dir, 'skills', 'uno', 'SKILL.md'), skillMd('uno', cuerpo));
+    }
+    writeFileSync(join(proy, '.claude', 'skills', 'uno', 'extra.md'), 'x');
+    mkdirSync(join(tmp, 'home', '.claude', 'skills', 'synced', 'b', 'mia'), { recursive: true });
+    writeFileSync(join(tmp, 'home', '.claude', 'skills', 'synced', 'b', 'mia', 'SKILL.md'), skillMd('mia'));
     commit(proy, 'inicio');
 
     // Worktrees reales: «uno» con 2 commits propios y cambios sin commit; «dos» limpio.
@@ -85,6 +97,11 @@ describe('API de proyectos: backlog, guías y cambios', () => {
       stateDir: join(tmp, 'state'),
       claudeConfigDir: join(tmp, 'claude'),
       uploadsDir: join(tmp, 'uploads'),
+      homeDir: join(tmp, 'home'),
+      openEditor: async (carpeta) => {
+        if (editorSinCode) throw new SkillError(501, 'No se encontró el comando «code».');
+        abiertas.push(carpeta);
+      },
       pollMs: 200,
       stateFallbackMs: 200,
       backlogFallbackMs: 200,
@@ -114,6 +131,12 @@ describe('API de proyectos: backlog, guías y cambios', () => {
       ['POST', '/api/projects/foo/backlog/BL-20261024-1145-a/move'],
       ['GET', '/api/projects/foo/guides'],
       ['GET', '/api/projects/foo/guides/content?path=uso.md'],
+      ['GET', '/api/projects/foo/skills'],
+      ['GET', '/api/projects/foo/skills/content?skill=uno'],
+      ['POST', '/api/projects/foo/skills/open'],
+      ['GET', '/api/user-skills'],
+      ['GET', '/api/user-skills/content?skill=mia'],
+      ['POST', '/api/user-skills/open'],
       ['GET', '/api/projects/foo/changes'],
       ['GET', '/api/projects/foo/changes/main'],
       ['GET', '/api/projects/foo/changes/wt/uno'],
@@ -234,6 +257,92 @@ describe('API de proyectos: backlog, guías y cambios', () => {
     expect((await api('GET', '/api/projects/foo/guides/content?path=uso.txt')).status).toBe(400);
     expect((await api('GET', '/api/projects/foo/guides/content')).status).toBe(400);
     expect(await json(await api('GET', '/api/projects/harness/guides'))).toEqual({ guides: [] });
+  });
+
+  it('lista las skills de un proyecto agrupadas por nombre, y el harness sin ninguna', async () => {
+    const lista = await json(await api('GET', '/api/projects/foo/skills'));
+    expect(lista.skills).toHaveLength(1);
+    const [uno] = lista.skills;
+    expect([uno.name, uno.description, uno.diverges]).toEqual(['uno', 'Hace uno', true]);
+    expect(uno.copies.map((c: Json) => [c.agent, c.path])).toEqual([
+      ['claude', '.claude/skills/uno'],
+      ['codex', '.agents/skills/uno'],
+      ['copilot', '.github/skills/uno'],
+    ]);
+    expect(JSON.stringify(lista)).not.toContain(tmp);
+    expect(await json(await api('GET', '/api/projects/harness/skills'))).toEqual({ skills: [] });
+    expect((await api('GET', '/api/projects/nada/skills')).status).toBe(404);
+  });
+
+  it('lee el contenido de una skill por nombre y copia, nunca por ruta', async () => {
+    const c0 = await json(await api('GET', '/api/projects/foo/skills/content?skill=uno'));
+    expect(c0).toMatchObject({
+      name: 'uno',
+      copy: 0,
+      agent: 'claude',
+      frontmatter: { name: 'uno', description: 'Hace uno' },
+      body: 'Uno.\n',
+      files: ['extra.md'],
+    });
+    const c2 = await json(await api('GET', '/api/projects/foo/skills/content?skill=uno&copy=2'));
+    expect([c2.agent, c2.body]).toEqual(['copilot', 'Otro.\n']);
+    for (const [q, estado] of [
+      ['skill=falta', 404],
+      ['skill=uno&copy=9', 404],
+      ['skill=uno&copy=-1', 400],
+      ['skill=uno&copy=x', 400],
+      ['', 400],
+      [`skill=${encodeURIComponent('../../etc/passwd')}`, 404],
+      [`skill=${encodeURIComponent(join(proy, '.claude', 'skills', 'uno'))}`, 404],
+    ] as const) {
+      expect((await api('GET', `/api/projects/foo/skills/content?${q}`)).status, q).toBe(estado);
+    }
+    expect((await api('POST', '/api/projects/foo/skills')).status).toBe(405);
+    expect((await api('GET', '/api/projects/foo/skills/open')).status).toBe(405);
+    expect((await api('GET', '/api/projects/foo/skills/otro')).status).toBe(404);
+  });
+
+  it('abre en el editor solo la carpeta de una skill descubierta, con protección de origen', async () => {
+    abiertas.length = 0;
+    const ok = await api('POST', '/api/projects/foo/skills/open', { skill: 'uno', copy: 1 });
+    expect(ok.status).toBe(200);
+    expect(await json(ok)).toEqual({ opened: true });
+    expect(abiertas).toEqual([join(proy, '.agents', 'skills', 'uno')]);
+    // Sin copia, la de por defecto.
+    expect((await api('POST', '/api/projects/foo/skills/open', { skill: 'uno' })).status).toBe(200);
+    expect(abiertas[1]).toBe(join(proy, '.claude', 'skills', 'uno'));
+    // Una ruta enviada por el cliente no abre nada.
+    for (const cuerpo of [{ skill: join(proy, '.claude', 'skills', 'uno') }, { skill: 'falta' }, { skill: 'uno', copy: 7 }, { skill: 'uno', copy: '1' }, {}]) {
+      expect((await api('POST', '/api/projects/foo/skills/open', cuerpo)).status, JSON.stringify(cuerpo)).toBeGreaterThanOrEqual(400);
+    }
+    expect(abiertas).toHaveLength(2);
+    // Un origen ajeno se rechaza antes de tocar nada.
+    const ajeno = await api('POST', '/api/projects/foo/skills/open', { skill: 'uno' }, { Origin: 'http://evil.example' });
+    expect(ajeno.status).toBe(403);
+    expect(abiertas).toHaveLength(2);
+    // Sin `code` instalado, el panel lo explica.
+    editorSinCode = true;
+    try {
+      const sin = await api('POST', '/api/projects/foo/skills/open', { skill: 'uno' });
+      expect(sin.status).toBe(501);
+      expect((await json(sin)).error).toMatch(/code/);
+    } finally {
+      editorSinCode = false;
+    }
+  });
+
+  it('lista, lee y abre las skills de usuario del home inyectado', async () => {
+    const lista = await json(await api('GET', '/api/user-skills'));
+    expect(lista.skills.map((s: Json) => [s.name, s.copies[0].label, s.copies[0].path])).toEqual([
+      ['mia', 'Claude (claude.ai)', '~/.claude/skills/synced/b/mia'],
+    ]);
+    const c = await json(await api('GET', '/api/user-skills/content?skill=mia'));
+    expect(c).toMatchObject({ name: 'mia', body: 'Cuerpo.\n', files: [] });
+    expect((await api('GET', '/api/user-skills/content?skill=uno')).status).toBe(404);
+    abiertas.length = 0;
+    expect((await api('POST', '/api/user-skills/open', { skill: 'mia', copy: 0 })).status).toBe(200);
+    expect(abiertas).toEqual([join(tmp, 'home', '.claude', 'skills', 'synced', 'b', 'mia')]);
+    expect((await api('GET', '/api/user-skills/otro')).status).toBe(404);
   });
 
   it('lugares con ahead, behind, dirty, cambios y sesiones del panel', async () => {

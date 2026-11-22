@@ -26,8 +26,11 @@ export function useSidebarWidth(): { panel: PanelWidth; compact: boolean; width:
   return { panel, compact, width: compact ? COMPACT_SIDEBAR_W : panel.width };
 }
 
+/** Entrada que no es un proyecto (la de «Usuario» de Skills): va al final, separada de los proyectos. */
+export type SidebarExtra = { id: string; name: string; mono: string; color: string };
+
 /**
- * Barra lateral común a Backlog, Cambios y Guías. Cada enlace lleva al otro
+ * Barra lateral común a Backlog, Cambios, Guías y Skills. Cada enlace lleva al otro
  * proyecto en la misma pantalla, y el recuento (si lo hay) es el de la pantalla:
  * `counts[id]` es null mientras no se conoce o no aplica, y entonces no se pinta.
  */
@@ -35,6 +38,8 @@ export function ProjectSidebar(props: {
   screen: ProjectScreen;
   projects: readonly ProjectInfo[];
   currentId: string;
+  /** Entrada extra al final, separada (su recuento está en `counts[extra.id]`). Solo Skills la usa. */
+  extra?: SidebarExtra;
   sidebar: ReturnType<typeof useSidebarWidth>;
   counts: Readonly<Record<string, number | null | undefined>>;
   /** Texto accesible del recuento: «3 elementos abiertos». */
@@ -50,30 +55,28 @@ export function ProjectSidebar(props: {
       <nav className="psidebar" aria-label="Proyectos" style={sidebar.panel.style('--psidebar-w', !sidebar.compact)}>
         <span className="psidebar__head">Proyectos</span>
         <ul>
-          {props.projects.map((p) => {
-            const n = props.counts[p.id] ?? null;
-            return (
-              <li key={p.id}>
-                <a className="prow" href={projectHref(props.screen, p.id)} onClick={() => saveLastProject(p.id)} aria-current={p.id === props.currentId ? 'page' : undefined}>
-                  <Monogram project={p} />
-                  <span className="prow__name">{p.name}</span>
-                  {n !== null && (
-                    <span className="prow__count" aria-label={props.countLabel(n)}>
-                      {props.countText ? (
-                        <>
-                          <span className="prow__long" aria-hidden="true">{props.countText(n)}</span>
-                          <span className="prow__short" aria-hidden="true">{n > 0 ? n : ''}</span>
-                        </>
-                      ) : (
-                        n
-                      )}
-                    </span>
-                  )}
-                </a>
-              </li>
-            );
-          })}
+          {props.projects.map((p) => (
+            <li key={p.id}>
+              <SidebarRow screen={props.screen} id={p.id} name={p.name} project={p} current={p.id === props.currentId} counts={props.counts} countLabel={props.countLabel} countText={props.countText} remember />
+            </li>
+          ))}
         </ul>
+        {props.extra && (
+          <ul className="psidebar__extra">
+            <li>
+              <SidebarRow
+                screen={props.screen}
+                id={props.extra.id}
+                name={props.extra.name}
+                project={props.extra}
+                current={props.extra.id === props.currentId}
+                counts={props.counts}
+                countLabel={props.countLabel}
+                countText={props.countText}
+              />
+            </li>
+          </ul>
+        )}
       </nav>
       {!sidebar.compact && (
         <ResizeHandle
@@ -88,8 +91,41 @@ export function ProjectSidebar(props: {
   );
 }
 
+function SidebarRow(props: {
+  screen: ProjectScreen;
+  id: string;
+  name: string;
+  project: Pick<ProjectInfo, 'mono' | 'color'>;
+  current: boolean;
+  counts: Readonly<Record<string, number | null | undefined>>;
+  countLabel: (n: number) => string;
+  countText?: (n: number) => string;
+  /** Recordar el proyecto como el último usado al pulsarlo (no la entrada «Usuario»). */
+  remember?: boolean;
+}) {
+  const n = props.counts[props.id] ?? null;
+  return (
+    <a className="prow" href={projectHref(props.screen, props.id)} onClick={props.remember ? () => saveLastProject(props.id) : undefined} aria-current={props.current ? 'page' : undefined}>
+      <Monogram project={props.project} />
+      <span className="prow__name">{props.name}</span>
+      {n !== null && (
+        <span className="prow__count" aria-label={props.countLabel(n)}>
+          {props.countText ? (
+            <>
+              <span className="prow__long" aria-hidden="true">{props.countText(n)}</span>
+              <span className="prow__short" aria-hidden="true">{n > 0 ? n : ''}</span>
+            </>
+          ) : (
+            n
+          )}
+        </span>
+      )}
+    </a>
+  );
+}
+
 /** Cabecera de una pantalla de proyecto: monograma, nombre y la ruta que muestra; `children` es lo propio de cada pantalla. */
-export function ProjectHeader(props: { project: ProjectInfo; path: string; children?: ReactNode }) {
+export function ProjectHeader(props: { project: Pick<ProjectInfo, 'name' | 'mono' | 'color'>; path: string; children?: ReactNode }) {
   const { project } = props;
   return (
     <div className="phead">
