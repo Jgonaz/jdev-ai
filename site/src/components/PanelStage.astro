@@ -59,11 +59,15 @@ const { expand, expandLabel, close } = Astro.props;
       const mini = mobile.matches && !open;
       stage.toggleAttribute('data-mini', mini);
       box.inert = mini;
+      // Cerrado, el marco vuelve a su ancho natural: si conservara el de pantalla completa (el alto del móvil, al
+      // girarlo), seguiría en el flujo con unos 850 px y ensancharía la página con un scroll lateral.
+      if (!open) {
+        frame.style.removeProperty('width');
+        frame.style.removeProperty('height');
+      }
       if (!mini && !open) {
         stage.style.removeProperty('--pn-k');
         size.style.removeProperty('height');
-        frame.style.removeProperty('width');
-        frame.style.removeProperty('height');
         return;
       }
       let k: number;

@@ -476,9 +476,19 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
         pick(rows[0].dataset.pick!);
         if (screen) showScreen(screen);
       }
-      const items = all('.pn-proj__item').filter((item) => !hiddenProject(item.dataset.proj));
+      // «Usuario» no cuenta: nunca es el destino de reserva, que solo puede ser un proyecto.
+      const items = all('.pn-proj__item:not(.pn-proj__item--user)').filter((item) => !hiddenProject(item.dataset.proj));
       const selected = all('.pn-proj__item[aria-pressed="true"]')[0];
       if (items.length && hiddenProject(selected?.dataset.proj)) applySet(items[0].dataset.set!);
+    };
+
+    // «Usuario» solo existe en Skills y MCPs: si se pasa a otra pestaña de Proyectos con él elegido, vuelve al primer
+    // proyecto visible.
+    const syncUser = () => {
+      const tab = panel.getAttribute('data-g-psub');
+      if (panel.getAttribute('data-g-proj') !== 'user' || tab === 'skills' || tab === 'mcps') return;
+      const items = all('.pn-proj__item:not(.pn-proj__item--user)').filter((item) => !hiddenProject(item.dataset.proj));
+      if (items.length) applySet(items[0].dataset.set!);
     };
 
     // Con el filtro activo, la entrada abierta debe estar en la lista; si no queda
@@ -543,6 +553,7 @@ const tmux = (id: string) => live.map((s, i) => `${i}:${s.project}${s.id === id 
       if (d.set) applySet(d.set);
       // data-goto abre una opción de otro grupo sin formar parte de él; admite varias separadas por espacios.
       if (d.goto) for (const pair of d.goto.split(' ')) applySet(pair);
+      if (d.set?.startsWith('psub:') || d.goto) syncUser();
       // Desplegables del panel derecho: «Actividad reciente» y «Sesión» se abren y cierran a la vez en todas las sesiones.
       if (d.collapse) {
         const open = btn.getAttribute('aria-expanded') !== 'true';

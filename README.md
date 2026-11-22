@@ -900,7 +900,7 @@ que verás en todas las sesiones:
 en castellano (`/`) e inglés (`/en/`), con el aspecto del panel y su tema por defecto, Carbón. Incluye
 una simulación del panel con datos inventados (`site/src/components/Panel*.astro`,
 con sus datos en `site/src/data/`): reproduce Inicio, Terminales, Proyectos
-(Backlog, Cambios y Guías), Historial y Ajustes, y en Ajustes el tema, el
+(Backlog, Cambios, Guías, Skills y MCPs), Historial y Ajustes, y en Ajustes el tema, el
 acento y varios interruptores actúan sobre la propia simulación. También
 muestra el mapa de actividad de las sesiones de Claude, en su propia sección y
 en el panel derecho de Terminales (`site/src/scripts/activityMap.ts` dibuja el

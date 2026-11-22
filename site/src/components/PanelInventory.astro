@@ -1,0 +1,209 @@
+---
+// Lista con lector de las pestañas Skills y MCPs del panel simulado (modelo: la pestaña Guías). Se usa una vez por
+// proyecto y otra para «Usuario». Los datos son inventados y, de los MCP, solo se enseñan los nombres de las variables
+// de entorno y de las cabeceras con «•••»: el panel real tampoco envía nunca sus valores.
+import { projectsScreen } from '../data/projects';
+import type { Mcp, Skill, Tag } from '../data/inventory';
+import PanelAgentIcon from './PanelAgentIcon.astro';
+
+type Labels = (typeof projectsScreen)['es']['labels'];
+
+interface Props {
+  kind: 'skills' | 'mcps';
+  lang: 'es' | 'en';
+  // Grupo `data-set` de la lista (uno por proyecto, para que cada lector se elija por separado).
+  group: string;
+  skills: Skill[];
+  mcps: Mcp[];
+  labels: Labels;
+}
+
+const { kind, lang, group, skills, mcps, labels: L } = Astro.props;
+const slug = (id: string) => id.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const items = kind === 'skills' ? skills : mcps;
+
+// Dos secciones: Propias / De terceros (skills) o Locales / Remotos (MCPs). Una sección vacía no se pinta.
+const own = skills.filter((s) => s.own);
+const third = skills.filter((s) => !s.own);
+const local = mcps.filter((m) => !m.remote);
+const remote = mcps.filter((m) => m.remote);
+const first = items[0] && slug(items[0].id);
+// «De terceros» empieza plegada, salvo que no haya propias (como el panel real).
+const foldThird = own.length > 0;
+const thirdId = `pn-inv-${lang}-${group}-third`;
+
+const sections =
+  kind === 'skills'
+    ? [
+        { label: L.own, rows: own },
+        { label: L.third, rows: third },
+      ]
+    : [
+        { label: L.local, rows: local },
+        { label: L.remote, rows: remote },
+      ];
+const listLabel = kind === 'skills' ? L.skillsList : L.mcpsList;
+const empty = kind === 'skills' ? L.noSkills : L.noMcps;
+---
+
+{
+  items.length === 0 ? (
+    <span class="pn-col__hint">{empty}</span>
+  ) : (
+    <div class="pn-inv">
+      <div class="pn-inv__list" role="group" aria-label={listLabel}>
+        {sections.map(
+          (section, n) =>
+            section.rows.length > 0 && (
+              <>
+                {kind === 'skills' && n === 1 && foldThird ? (
+                  <button
+                    type="button"
+                    class="pn-inv__head pn-inv__head--fold"
+                    data-collapse={`${group}-third`}
+                    aria-expanded="false"
+                    aria-controls={thirdId}
+                  >
+                    <svg class="pn-inv__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
+                    {section.label}
+                    <span class="pn-col__count">{section.rows.length}</span>
+                  </button>
+                ) : (
+                  <p class="pn-inv__head">
+                    {section.label}
+                    <span class="pn-col__count">{section.rows.length}</span>
+                  </p>
+                )}
+                <div class="pn-inv__rows" id={kind === 'skills' && n === 1 ? thirdId : undefined} hidden={kind === 'skills' && n === 1 && foldThird}>
+                  {section.rows.map((row) => (
+                    <button type="button" class="pn-inv__item" data-set={`${group}:${slug(row.id)}`} aria-pressed={slug(row.id) === first ? 'true' : 'false'}>
+                      <span class="pn-inv__name">{row.id}</span>
+                      <span class={`pn-inv__desc${kind === 'mcps' ? ' pn-inv__desc--mono' : ''}`}>
+                        {kind === 'skills' ? (row as Skill).description : (row as Mcp).connector ? L.connector : (row as Mcp).summary}
+                      </span>
+                      <span class="pn-inv__tags">
+                        {row.tags.map((t: Tag) => (
+                          <span class="pn-inv__tag">
+                            <PanelAgentIcon agent={t.agent} size={12} />
+                            {t.text}
+                          </span>
+                        ))}
+                        {row.differs && <span class="pn-inv__warn">{L.differs}</span>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ),
+        )}
+      </div>
+
+      {kind === 'skills' &&
+        skills.map((skill) => (
+          <article class="pn-inv__reader" data-when={`${group}:${slug(skill.id)}`} hidden={slug(skill.id) !== first}>
+            <div class="pn-inv__top">
+              <p class="pn-hist__title">{skill.id}</p>
+              <span class={`pn-type${skill.own ? '' : ' pn-type--docs'}`}>{skill.own ? L.ownTag : L.thirdTag}</span>
+              <button type="button" class="pn-inv__vs">{L.openVsCode}</button>
+            </div>
+            <p class="pn-inv__from">
+              {L.readsFrom} <code>{skill.from}</code>
+            </p>
+            {skill.differs && <p class="pn-inv__alert">{L.differs}. {L.differsSkill}</p>}
+            <p class="pn-hist__h">{L.frontmatter}</p>
+            <dl class="pn-inv__fm">
+              <dt>name</dt>
+              <dd>{skill.id}</dd>
+              <dt>description</dt>
+              <dd>{skill.description}</dd>
+              {skill.author && (
+                <>
+                  <dt>metadata</dt>
+                  <dd>author: {skill.author}</dd>
+                </>
+              )}
+            </dl>
+            <p class="pn-hist__h">{L.skillFile}</p>
+            <div class="pn-inv__md">
+              {skill.body.map((block) =>
+                block.h ? (
+                  <p class="pn-hist__h">{block.h}</p>
+                ) : block.ol ? (
+                  <ol class="pn-guide__ol">
+                    {block.ol.map((step) => (
+                      <li>{step}</li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p>{block.p}</p>
+                ),
+              )}
+            </div>
+          </article>
+        ))}
+
+      {kind === 'mcps' &&
+        mcps.map((mcp) => (
+          <article class="pn-inv__reader" data-when={`${group}:${slug(mcp.id)}`} hidden={slug(mcp.id) !== first}>
+            <div class="pn-inv__top">
+              <p class="pn-hist__title">{mcp.id}</p>
+              <span class={`pn-type${mcp.remote ? ' pn-type--docs' : ''}`}>{mcp.remote ? L.remoteTag : L.localTag}</span>
+              {!mcp.connector && <button type="button" class="pn-inv__vs">{L.openVsCode}</button>}
+            </div>
+            {mcp.connector && <p class="pn-inv__alert pn-inv__alert--note">{L.connectorNote}</p>}
+            {mcp.differs && <p class="pn-inv__alert">{L.differs}. {L.differsMcp}</p>}
+            {mcp.copies.map((copy) => (
+              <section class="pn-inv__copy" aria-label={`${L.copy} ${copy.tag.text}`}>
+                <p class="pn-inv__copyhead">
+                  <span class="pn-inv__tag">
+                    <PanelAgentIcon agent={copy.tag.agent} size={12} />
+                    {copy.tag.text}
+                  </span>
+                </p>
+                <dl class="pn-inv__fm">
+                  <dt>{L.file}</dt>
+                  <dd>{copy.file}</dd>
+                  <dt>{L.transport}</dt>
+                  <dd>{copy.transport}</dd>
+                  {copy.command && (
+                    <>
+                      <dt>{L.command}</dt>
+                      <dd>{copy.command}</dd>
+                    </>
+                  )}
+                  {copy.url && (
+                    <>
+                      <dt>{L.url}</dt>
+                      <dd>{copy.url}</dd>
+                    </>
+                  )}
+                  {copy.env.length > 0 && (
+                    <>
+                      <dt>{L.env}</dt>
+                      <dd>
+                        {copy.env.map((name) => (
+                          <span class="pn-inv__secret">{name} •••</span>
+                        ))}
+                      </dd>
+                    </>
+                  )}
+                  {copy.headers.length > 0 && (
+                    <>
+                      <dt>{L.headers}</dt>
+                      <dd>
+                        {copy.headers.map((name) => (
+                          <span class="pn-inv__secret">{name} •••</span>
+                        ))}
+                      </dd>
+                    </>
+                  )}
+                </dl>
+              </section>
+            ))}
+          </article>
+        ))}
+    </div>
+  )
+}

@@ -1,7 +1,10 @@
 ---
-// Pantalla Proyectos del panel simulado: Backlog, Cambios y Guías de cada proyecto.
-// En el panel real son tres pantallas de un menú desplegable; aquí son pestañas.
+// Pantalla Proyectos del panel simulado: Backlog, Cambios, Guías, Skills y MCPs de cada proyecto.
+// En el panel real son cinco pantallas de un menú desplegable; aquí son pestañas. «Usuario» (skills y MCPs de la
+// persona, no de un proyecto) solo se ve en Skills y MCPs, como en el panel real.
 import { projectsScreen } from '../data/projects';
+import { inventory } from '../data/inventory';
+import PanelInventory from './PanelInventory.astro';
 import PanelSleepy from './PanelSleepy.astro';
 
 interface Props {
@@ -14,10 +17,13 @@ interface Props {
 const { lang, projects, empty, action } = Astro.props;
 const t = projectsScreen[lang];
 const L = t.labels;
+const inv = inventory[lang];
 const subs = [
-  { id: 'backlog', label: L.backlog, path: 'docs/backlog/' },
-  { id: 'cambios', label: L.changes, path: '' },
-  { id: 'guias', label: L.guides, path: 'docs/user-guides/' },
+  { id: 'backlog', label: L.backlog, path: 'docs/backlog/', userPath: '' },
+  { id: 'cambios', label: L.changes, path: '', userPath: '' },
+  { id: 'guias', label: L.guides, path: 'docs/user-guides/', userPath: '' },
+  { id: 'skills', label: L.skills, path: '.claude/skills/', userPath: '~/.claude/skills/' },
+  { id: 'mcps', label: L.mcps, path: '.mcp.json', userPath: '~/.claude.json' },
 ];
 const glyph = ['○', '●', '◐', '✓'];
 // Lugar que se abre primero: el primero con cambios, como hace el panel real.
@@ -37,6 +43,12 @@ const firstPlace = (i: number) => (t.projects[i].places.find((p) => p.files.leng
         </button>
       ))
     }
+    {/* Solo con Skills o MCPs a la vista (CSS por `data-g-psub`). Va al final de la barra, separada. */}
+    <span class="pn-proj__sep" aria-hidden="true"></span>
+    <button type="button" class="pn-proj__item pn-proj__item--user" data-set="proj:user" aria-pressed="false">
+      <span class="pn-mono pn-mono--user" aria-hidden="true">~</span>
+      {L.user}
+    </button>
   </div>
 
   <div class="pn-empty" data-empty>
@@ -214,9 +226,32 @@ const firstPlace = (i: number) => (t.projects[i].places.find((p) => p.files.leng
                       ))}
                     </div>
                   ))}
+
+                {(sub.id === 'skills' || sub.id === 'mcps') && (
+                  <PanelInventory
+                    kind={sub.id}
+                    lang={lang}
+                    group={`${sub.id}${i}`}
+                    skills={inv.projects[i].skills}
+                    mcps={inv.projects[i].mcps}
+                    labels={L}
+                  />
+                )}
               </div>
             );
           })}
+          {(sub.id === 'skills' || sub.id === 'mcps') && (
+            <div class="pn-proj__pane" data-when="proj:user" hidden>
+              <div class="pn-proj__head">
+                <span class="pn-mono pn-mono--lg pn-mono--user" aria-hidden="true">
+                  ~
+                </span>
+                <span class="pn-proj__name">{L.user}</span>
+                <span class="pn-recent__meta">{sub.userPath}</span>
+              </div>
+              <PanelInventory kind={sub.id} lang={lang} group={`${sub.id}u`} skills={inv.user.skills} mcps={inv.user.mcps} labels={L} />
+            </div>
+          )}
         </div>
       ))
     }

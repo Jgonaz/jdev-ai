@@ -2044,7 +2044,7 @@ td.no {
   }
 }
 
-/* Simulación del panel: pantalla Proyectos (Backlog, Cambios y Guías) */
+/* Simulación del panel: pantalla Proyectos (Backlog, Cambios, Guías, Skills y MCPs) */
 
 .pn-proj {
   min-height: 560px;
@@ -2526,18 +2526,296 @@ td.no {
   list-style: decimal;
 }
 
+/* Pestañas Skills y MCPs: lista con lector, como Guías. «Usuario» solo con una de las dos a la vista. */
+
+.pn:not([data-g-psub='skills']):not([data-g-psub='mcps']) .pn-proj__item--user,
+.pn:not([data-g-psub='skills']):not([data-g-psub='mcps']) .pn-proj__sep {
+  display: none;
+}
+
+.pn-proj__sep {
+  height: 1px;
+  margin: auto 10px 6px;
+  background: var(--line-soft);
+}
+
+.pn-mono--user {
+  background: var(--bg-raised);
+  color: var(--fg-soft);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.pn-inv {
+  flex: 1;
+  display: flex;
+  gap: 24px;
+}
+
+.pn-inv__list {
+  flex: none;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pn-inv__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pn-inv__head {
+  min-height: 32px;
+  padding: 8px 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+button.pn-inv__head {
+  width: 100%;
+  border-radius: 6px;
+}
+
+button.pn-inv__head:hover {
+  color: var(--fg);
+}
+
+.pn-inv__chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: -2px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.12s;
+}
+
+.pn-inv__head[aria-expanded='true'] .pn-inv__chevron {
+  transform: rotate(90deg);
+}
+
+.pn-inv__item {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  border-left: 2px solid transparent;
+  border-radius: 6px;
+}
+
+.pn-inv__item:hover {
+  background: var(--bg-surface);
+}
+
+.pn-inv__item[aria-pressed='true'] {
+  border-left-color: var(--link);
+  background: var(--bg-raised);
+}
+
+.pn-inv__name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.pn-inv__desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--fg-muted);
+}
+
+.pn-inv__desc--mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.pn-inv__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding-top: 2px;
+}
+
+.pn-inv__tag,
+.pn-inv__warn {
+  padding: 1px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.pn-inv__warn {
+  border-color: var(--accent-line);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+}
+
+.pn-inv__reader {
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg-soft);
+}
+
+.pn-inv__reader .pn-hist__title,
+.pn-inv__reader .pn-hist__h {
+  color: var(--fg);
+}
+
+.pn-inv__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.pn-inv__top .pn-hist__title {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.pn-inv__top .pn-type {
+  font-size: 11.5px;
+}
+
+/* «Abrir en VS Code» es decorativo en la simulación. */
+.pn-inv__vs {
+  margin-left: auto;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.pn-inv__vs:hover {
+  background: var(--bg-surface);
+}
+
+.pn-inv__from {
+  font-size: 13px;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.pn-inv__from code {
+  color: var(--fg-soft);
+}
+
+.pn-inv__alert {
+  padding: 8px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  background: var(--accent-bg);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--accent-text);
+}
+
+.pn-inv__alert--note {
+  border-color: var(--line);
+  background: var(--bg-surface);
+  color: var(--fg-soft);
+}
+
+.pn-inv__fm {
+  margin: 0;
+  padding: 8px 14px;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.pn-inv__fm dt {
+  color: var(--fg-muted);
+}
+
+.pn-inv__fm dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.pn-inv__secret {
+  white-space: nowrap;
+}
+
+.pn-inv__md {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pn-inv__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pn-inv__copyhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pn-inv__copyhead .pn-inv__tag {
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pn-inv__chevron {
+    transition: none;
+  }
+}
+
 @container pn (max-width: 844px) {
   .pn-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .pn-diff,
-  .pn-guides {
+  .pn-guides,
+  .pn-inv {
     flex-direction: column;
   }
 
   .pn-diff__files,
-  .pn-guides__list {
+  .pn-guides__list,
+  .pn-inv__list {
     width: auto;
   }
 
@@ -2561,6 +2839,14 @@ td.no {
 
   .pn-proj__side .pn-side__title {
     width: 100%;
+  }
+
+  /* En fila, el separador de «Usuario» es una raya vertical. */
+  .pn-proj__sep {
+    width: 1px;
+    height: 20px;
+    margin: 0 4px;
+    align-self: center;
   }
 
   .pn-proj__main {

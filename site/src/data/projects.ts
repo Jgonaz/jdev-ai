@@ -1,5 +1,5 @@
 // Datos de ejemplo de la pantalla Proyectos del panel simulado (Backlog,
-// Cambios y Guías). Nada es real. Los proyectos van en el mismo orden que
+// Cambios y Guías; Skills y MCPs, en `inventory.ts`). Nada es real. Los proyectos van en el mismo orden que
 // `panel.projects` de los diccionarios.
 
 type Card = { title: string; text: string; type: string; date: string };
@@ -34,6 +34,37 @@ type ProjectsScreen = {
     noChangesHint: string;
     noGuides: string;
     guidesList: string;
+    skills: string;
+    mcps: string;
+    user: string;
+    skillsList: string;
+    mcpsList: string;
+    own: string;
+    third: string;
+    local: string;
+    remote: string;
+    localTag: string;
+    remoteTag: string;
+    ownTag: string;
+    thirdTag: string;
+    differs: string;
+    differsSkill: string;
+    differsMcp: string;
+    readsFrom: string;
+    frontmatter: string;
+    skillFile: string;
+    openVsCode: string;
+    noSkills: string;
+    noMcps: string;
+    copy: string;
+    file: string;
+    transport: string;
+    command: string;
+    url: string;
+    env: string;
+    headers: string;
+    connector: string;
+    connectorNote: string;
   };
   columns: { key: string; label: string; hint: string }[];
   projects: ProjectData[];
@@ -86,6 +117,37 @@ export const projectsScreen: Record<'es' | 'en', ProjectsScreen> = {
       noChangesHint: 'Todo está subido a origin/main y no hay cambios sin commit.',
       noGuides: 'Este proyecto no tiene guías en docs/user-guides/.',
       guidesList: 'Guías del proyecto',
+      skills: 'Skills',
+      mcps: 'MCPs',
+      user: 'Usuario',
+      skillsList: 'Skills del proyecto',
+      mcpsList: 'MCPs del proyecto',
+      own: 'Propias',
+      third: 'De terceros',
+      local: 'Locales',
+      remote: 'Remotos',
+      localTag: 'Local',
+      remoteTag: 'Remoto',
+      ownTag: 'Propia',
+      thirdTag: 'De terceros',
+      differs: 'Las copias difieren',
+      differsSkill: 'El contenido de sus copias no es igual.',
+      differsMcp: 'Lo que ejecutan o a lo que se conectan no es igual.',
+      readsFrom: 'Se lee de',
+      frontmatter: 'Frontmatter',
+      skillFile: 'SKILL.md',
+      openVsCode: 'Abrir en VS Code',
+      noSkills: 'Este proyecto no tiene skills.',
+      noMcps: 'Este proyecto no tiene MCPs.',
+      copy: 'Copia de',
+      file: 'Archivo',
+      transport: 'Transporte',
+      command: 'Comando',
+      url: 'URL',
+      env: 'Variables de entorno',
+      headers: 'Cabeceras',
+      connector: 'Conector',
+      connectorNote: 'Conector de claude.ai: solo se conoce el nombre y puede estar desconectado.',
     },
     columns: [
       { key: 'backlog', label: 'Backlog', hint: 'Por revisar antes de decidir. Aquí entra todo lo nuevo.' },
@@ -316,6 +378,37 @@ export const projectsScreen: Record<'es' | 'en', ProjectsScreen> = {
       noChangesHint: 'Everything is pushed to origin/main and there are no uncommitted changes.',
       noGuides: 'This project has no guides in docs/user-guides/.',
       guidesList: 'Project guides',
+      skills: 'Skills',
+      mcps: 'MCPs',
+      user: 'User',
+      skillsList: 'Project skills',
+      mcpsList: 'Project MCPs',
+      own: 'Own',
+      third: 'Third-party',
+      local: 'Local',
+      remote: 'Remote',
+      localTag: 'Local',
+      remoteTag: 'Remote',
+      ownTag: 'Own',
+      thirdTag: 'Third-party',
+      differs: 'Copies differ',
+      differsSkill: 'The content of its copies is not the same.',
+      differsMcp: 'What they run or connect to is not the same.',
+      readsFrom: 'Read from',
+      frontmatter: 'Frontmatter',
+      skillFile: 'SKILL.md',
+      openVsCode: 'Open in VS Code',
+      noSkills: 'This project has no skills.',
+      noMcps: 'This project has no MCPs.',
+      copy: 'Copy for',
+      file: 'File',
+      transport: 'Transport',
+      command: 'Command',
+      url: 'URL',
+      env: 'Environment variables',
+      headers: 'Headers',
+      connector: 'Connector',
+      connectorNote: 'claude.ai connector: only its name is known and it may be disconnected.',
     },
     columns: [
       { key: 'backlog', label: 'Backlog', hint: 'To review before deciding. Everything new lands here.' },
